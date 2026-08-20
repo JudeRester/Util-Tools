@@ -44,15 +44,18 @@ function renderQuickLaunchUI() {
                 </div>
             `;
         } else {
-            gridEl.innerHTML = currentQuickLaunch.map((item, idx) => `
-                <button class="tool-btn" onclick="callExecuteQuickLaunchItem(${idx})">
-                    <div class="btn-icon">${item.icon || '⚡'}</div>
-                    <div class="btn-text">
-                        <h3>${escapeHtml(item.name)}</h3>
-                        <p>${escapeHtml(item.desc || item.command)}</p>
-                    </div>
-                </button>
-            `).join('');
+            gridEl.innerHTML = currentQuickLaunch.map((item, idx) => {
+                const tooltip = `${item.name}\n${item.desc ? `설명: ${item.desc}\n` : ''}명령어: ${item.command}`;
+                return `
+                    <button class="tool-btn" onclick="callExecuteQuickLaunchItem(${idx})" title="${escapeHtml(tooltip)}">
+                        <div class="btn-icon">${item.icon || '⚡'}</div>
+                        <div class="btn-text">
+                            <h3>${escapeHtml(item.name)}</h3>
+                            <p>${escapeHtml(item.desc || item.command)}</p>
+                        </div>
+                    </button>
+                `;
+            }).join('');
         }
     }
 

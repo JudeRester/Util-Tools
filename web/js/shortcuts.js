@@ -54,15 +54,18 @@ function renderShortcutsUI() {
                 </div>
             `;
         } else {
-            gridEl.innerHTML = currentShortcuts.map(item => `
-                <button class="tool-btn" onclick="callOpenDirectory('${escapeJsString(item.path)}')">
-                    <div class="btn-icon">${item.icon || '📁'}</div>
-                    <div class="btn-text">
-                        <h3>${escapeHtml(item.name)}</h3>
-                        <p>${escapeHtml(item.path)}</p>
-                    </div>
-                </button>
-            `).join('');
+            gridEl.innerHTML = currentShortcuts.map(item => {
+                const tooltip = `${item.name}\n경로: ${item.path}`;
+                return `
+                    <button class="tool-btn" onclick="callOpenDirectory('${escapeJsString(item.path)}')" title="${escapeHtml(tooltip)}">
+                        <div class="btn-icon">${item.icon || '📁'}</div>
+                        <div class="btn-text">
+                            <h3>${escapeHtml(item.name)}</h3>
+                            <p>${escapeHtml(item.path)}</p>
+                        </div>
+                    </button>
+                `;
+            }).join('');
         }
     }
 
