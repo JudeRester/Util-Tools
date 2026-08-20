@@ -25,15 +25,55 @@ function clearConsole() {
     }
 }
 
+let isConsoleCollapsed = false;
+
+function toggleConsole() {
+    const consoleEl = document.getElementById('app-console');
+    const toggleIcon = document.getElementById('console-toggle-icon');
+    const toggleText = document.getElementById('console-toggle-text');
+    if (!consoleEl) return;
+
+    isConsoleCollapsed = !isConsoleCollapsed;
+
+    if (isConsoleCollapsed) {
+        consoleEl.classList.add('collapsed');
+        if (toggleIcon) toggleIcon.textContent = '🔼';
+        if (toggleText) toggleText.textContent = '펼치기';
+    } else {
+        consoleEl.classList.remove('collapsed');
+        if (toggleIcon) toggleIcon.textContent = '🔽';
+        if (toggleText) toggleText.textContent = '접기';
+
+        // 저장된 높이 복원
+        const savedHeight = (typeof appSettings !== 'undefined' && appSettings.console_height) || localStorage.getItem('console_height') || 180;
+        consoleEl.style.height = `${savedHeight}px`;
+    }
+
+    if (typeof saveAppSettingKey === 'function') {
+        saveAppSettingKey('console_collapsed', isConsoleCollapsed);
+    }
+}
+
 function initConsoleResizer() {
     const resizer = document.getElementById('console-resizer');
     const consoleEl = document.getElementById('app-console');
     if (!resizer || !consoleEl) return;
 
-    // 저장된 높이 복원
-    const savedHeight = (typeof appSettings !== 'undefined' && appSettings.console_height) || localStorage.getItem('console_height');
-    if (savedHeight) {
-        consoleEl.style.height = `${savedHeight}px`;
+    // 저장된 접힘 상태 복원
+    const savedCollapsed = (typeof appSettings !== 'undefined' && appSettings.console_collapsed) || false;
+    if (savedCollapsed) {
+        isConsoleCollapsed = true;
+        consoleEl.classList.add('collapsed');
+        const toggleIcon = document.getElementById('console-toggle-icon');
+        const toggleText = document.getElementById('console-toggle-text');
+        if (toggleIcon) toggleIcon.textContent = '🔼';
+        if (toggleText) toggleText.textContent = '펼치기';
+    } else {
+        // 저장된 높이 복원
+        const savedHeight = (typeof appSettings !== 'undefined' && appSettings.console_height) || localStorage.getItem('console_height');
+        if (savedHeight) {
+            consoleEl.style.height = `${savedHeight}px`;
+        }
     }
 
     let isDragging = false;
@@ -41,6 +81,19 @@ function initConsoleResizer() {
     let startHeight = 0;
 
     resizer.addEventListener('mousedown', (e) => {
+        // 접힌 상태에서 드래그 시 자동으로 펼치기
+        if (isConsoleCollapsed) {
+            isConsoleCollapsed = false;
+            consoleEl.classList.remove('collapsed');
+            const toggleIcon = document.getElementById('console-toggle-icon');
+            const toggleText = document.getElementById('console-toggle-text');
+            if (toggleIcon) toggleIcon.textContent = '🔽';
+            if (toggleText) toggleText.textContent = '접기';
+            if (typeof saveAppSettingKey === 'function') {
+                saveAppSettingKey('console_collapsed', false);
+            }
+        }
+
         isDragging = true;
         startY = e.clientY;
         startHeight = consoleEl.getBoundingClientRect().height;

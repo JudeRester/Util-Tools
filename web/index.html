@@ -385,7 +385,12 @@
         <!-- 하단 결과 및 출력 콘솔 -->
         <footer id="app-console" class="app-console">
             <div class="console-header">
-                <span>실행 결과 / 로그</span>
+                <div class="console-title-group">
+                    <span>실행 결과 / 로그</span>
+                    <button id="console-toggle-btn" class="mini-tool-btn console-toggle-btn" onclick="toggleConsole()" title="로그창 접기/펼치기">
+                        <span id="console-toggle-icon">🔽</span> <span id="console-toggle-text">접기</span>
+                    </button>
+                </div>
                 <button class="clear-btn" onclick="clearConsole()">지우기</button>
             </div>
             <pre id="console-output" class="console-body">기능 버튼을 클릭하면 여기에 결과가 표시됩니다.</pre>

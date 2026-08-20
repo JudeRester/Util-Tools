@@ -469,6 +469,16 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    transition: height 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app-console.collapsed {
+    height: 36px !important;
+    min-height: 36px !important;
+}
+
+.app-console.collapsed .console-body {
+    display: none;
 }
 
 .console-header {
@@ -480,6 +490,34 @@ body {
     border-bottom: 1px solid var(--border-color);
     font-size: 0.8rem;
     color: var(--text-secondary);
+    user-select: none;
+}
+
+.console-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.console-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.console-toggle-btn:hover {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: var(--accent-color);
 }
 
 .clear-btn {
