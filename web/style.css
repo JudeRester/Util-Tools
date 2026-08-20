@@ -1937,8 +1937,7 @@ body {
 }
 
 .toast-card.hide {
-    opacity: 0 !important;
-    transform: translateY(16px) scale(0.96) !important;
+    animation: toastFadeOut 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
     pointer-events: none;
 }
 
@@ -1950,6 +1949,17 @@ body {
     100% {
         opacity: 1;
         transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes toastFadeOut {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(16px) scale(0.94);
     }
 }
 
