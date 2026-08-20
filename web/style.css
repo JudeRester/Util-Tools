@@ -1031,6 +1031,55 @@ body {
     background: var(--primary-hover);
 }
 
+.notes-search-box {
+    position: relative;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.15);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.notes-search-input {
+    width: 100%;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 26px 6px 8px;
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    outline: none;
+    box-sizing: border-box;
+    transition: var(--transition);
+}
+
+.notes-search-input:focus {
+    border-color: var(--accent-color);
+    background: var(--bg-secondary);
+}
+
+.notes-search-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.notes-search-clear-btn {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 2px 4px;
+    line-height: 1;
+    border-radius: 50%;
+}
+
+.notes-search-clear-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.1);
+}
+
 .notes-list {
     flex: 1;
     overflow-y: auto;

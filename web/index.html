@@ -226,6 +226,11 @@
                             <span>메모 목록 (<span id="notes-count-badge">0</span>)</span>
                             <button class="mini-btn add-note-btn" onclick="addNewNote()" title="새 메모 추가">➕ 새 메모</button>
                         </div>
+                        <!-- 실시간 검색 박스 -->
+                        <div class="notes-search-box">
+                            <input type="text" id="notes-search-input" class="notes-search-input" placeholder="🔍 제목/내용 검색..." oninput="onNoteSearch(this.value)">
+                            <button id="notes-search-clear-btn" class="notes-search-clear-btn" onclick="clearNoteSearch()" title="검색어 초기화" style="display: none;">✕</button>
+                        </div>
                         <div class="notes-list" id="notes-list-items">
                             <!-- JavaScript로 동적 렌더링 -->
                         </div>

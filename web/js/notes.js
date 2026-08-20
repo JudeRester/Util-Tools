@@ -5,6 +5,7 @@
 let currentNotes = [];
 let activeNoteId = null;
 let noteSaveTimeout = null;
+let noteSearchKeyword = '';
 
 const DEFAULT_NOTES_FALLBACK = [
     {
@@ -20,6 +21,27 @@ const DEFAULT_NOTES_FALLBACK = [
         "updatedAt": "2026-08-20 12:00:00"
     }
 ];
+
+// 실시간 검색 처리
+function onNoteSearch(keyword) {
+    noteSearchKeyword = (keyword || '').trim().toLowerCase();
+
+    const clearBtn = document.getElementById('notes-search-clear-btn');
+    if (clearBtn) {
+        clearBtn.style.display = noteSearchKeyword ? 'block' : 'none';
+    }
+
+    renderNotesUI();
+}
+
+function clearNoteSearch() {
+    const searchInput = document.getElementById('notes-search-input');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+    }
+    onNoteSearch('');
+}
 
 // 초기 로드
 async function loadNotes() {
@@ -47,17 +69,37 @@ async function loadNotes() {
 }
 
 function renderNotesUI() {
+    // 0. 검색 필터링 적용
+    const filteredNotes = noteSearchKeyword
+        ? currentNotes.filter(n =>
+            (n.title || '').toLowerCase().includes(noteSearchKeyword) ||
+            (n.content || '').toLowerCase().includes(noteSearchKeyword)
+        )
+        : currentNotes;
+
     // 1. 메모 수 뱃지
     const countBadge = document.getElementById('notes-count-badge');
-    if (countBadge) countBadge.textContent = currentNotes.length;
+    if (countBadge) {
+        countBadge.textContent = noteSearchKeyword
+            ? `${filteredNotes.length}/${currentNotes.length}`
+            : currentNotes.length;
+    }
 
     // 2. 좌측 목록 렌더링
     const listEl = document.getElementById('notes-list-items');
     if (listEl) {
-        if (currentNotes.length === 0) {
-            listEl.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:20px; font-size:0.85rem;">메모가 없습니다.<br>상단 [+ 새 메모]를 눌러보세요.</div>';
+        if (filteredNotes.length === 0) {
+            if (noteSearchKeyword) {
+                listEl.innerHTML = `
+                    <div style="color:var(--text-secondary); text-align:center; padding:20px; font-size:0.82rem;">
+                        '${escapeHtml(noteSearchKeyword)}' 검색 결과가 없습니다.
+                    </div>
+                `;
+            } else {
+                listEl.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:20px; font-size:0.85rem;">메모가 없습니다.<br>상단 [+ 새 메모]를 눌러보세요.</div>';
+            }
         } else {
-            listEl.innerHTML = currentNotes.map(note => {
+            listEl.innerHTML = filteredNotes.map(note => {
                 const isActive = note.id === activeNoteId;
                 const preview = (note.content || '').trim().split('\n')[0] || '(빈 내용)';
                 return `
