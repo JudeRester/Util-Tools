@@ -100,32 +100,50 @@ async function syncCalendarEvents(force = false) {
         syncStatusEl.className = 'cal-sync-status syncing';
     }
 
+    if (force) {
+        logToConsole('캘린더 동기화 요청', '구독된 구글 캘린더 iCal 일정을 동기화하는 중입니다...');
+    }
+
     try {
-        if (window.eel && eel.fetch_calendar_events) {
+        if (window.eel && typeof eel.fetch_calendar_events === 'function') {
             const res = await eel.fetch_calendar_events(force)();
             if (res.status === 'success' || res.status === 'partial') {
                 calendarEvents = res.events || [];
+                const updatedTime = res.lastUpdated ? res.lastUpdated.slice(11) : '완료';
                 if (syncStatusEl) {
-                    syncStatusEl.textContent = `동기화: ${res.lastUpdated ? res.lastUpdated.slice(11) : '완료'} (${calendarEvents.length}개)`;
+                    syncStatusEl.textContent = `동기화: ${updatedTime} (${calendarEvents.length}개)`;
                     syncStatusEl.className = 'cal-sync-status';
                 }
+
+                // 캘린더별 통계 집계
+                const calStats = {};
+                calendarEvents.forEach(e => {
+                    const cName = e.calendarName || '기타';
+                    calStats[cName] = (calStats[cName] || 0) + 1;
+                });
+
                 logToConsole('캘린더 동기화 완료', {
-                    가져온일정수: calendarEvents.length,
-                    구독캘린더수: (calendarConfig.ics_urls || []).length,
-                    오류: res.errors && res.errors.length > 0 ? res.errors : '없음'
+                    총일정수: `${calendarEvents.length}개`,
+                    캘린더별일정: calStats,
+                    동기화시각: res.lastUpdated || new Date().toLocaleString(),
+                    오류: res.errors && res.errors.length > 0 ? res.errors : '없음 (정상)'
                 });
             } else {
                 if (syncStatusEl) {
                     syncStatusEl.textContent = '⚠️ 동기화 실패';
                     syncStatusEl.className = 'cal-sync-status error';
                 }
-                logToConsole('캘린더 동기화 오류', res.message);
+                logToConsole('캘린더 동기화 오류', res.message || '일정을 가져오지 못했습니다.');
             }
         } else {
             if (syncStatusEl) {
-                syncStatusEl.textContent = '로컬 모드';
-                syncStatusEl.className = 'cal-sync-status';
+                syncStatusEl.textContent = '⚠️ 앱 재실행 필요';
+                syncStatusEl.className = 'cal-sync-status error';
             }
+            logToConsole('캘린더 동기화 실패 (앱 재실행 필요)', 
+                '⚠️ Python 백엔드 서비스(calendar_service)가 아직 로드되지 않았습니다.\n' +
+                '시스템 트레이(시계 옆)에서 앱을 우클릭하여 [종료]한 후, 다시 실행해 주세요.'
+            );
         }
     } catch (err) {
         console.error("일정 동기화 오류:", err);
@@ -133,6 +151,7 @@ async function syncCalendarEvents(force = false) {
             syncStatusEl.textContent = '⚠️ 연결 실패';
             syncStatusEl.className = 'cal-sync-status error';
         }
+        logToConsole('캘린더 통신 예외 발생', err.message || String(err));
     }
 
     renderCalendarUI();
