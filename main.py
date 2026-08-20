@@ -21,6 +21,7 @@ import services.shortcuts_service
 import services.quick_launch_service
 import services.generator_service
 import services.dialog_service
+import services.notes_service
 
 # 3. 코어 트레이 관리자 모듈 로드
 from core.tray import TrayManager

@@ -22,9 +22,14 @@ dist/
 Thumbs.db
 Desktop.ini
 
-# User Personal Data & Configurations (민감한 로컬 경로, 계정 및 사내망 정보)
+# User Personal Data & Configurations (민감한 로컬 경로, 계정 및 사내망 정보, 메모 데이터)
 shortcuts.json
 quick_launch.json
+notes.json
+notes.txt
 *.local.json
 *.log
+
+# Allow public templates
+!*.example.json
 

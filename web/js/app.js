@@ -55,4 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 4) JS 실행기(Playground) 초기화
     initJsPlayground();
+
+    // 5) 빠른 메모(Notes) 로드
+    loadNotes();
 });
