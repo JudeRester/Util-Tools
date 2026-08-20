@@ -162,15 +162,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 2) 빠른 실행 항목 로드
     loadQuickLaunchItems();
 
-    // 3) 콘솔 높이 드래그 조절기 초기화
+    // 3) 동적 데이터 생성기 스튜디오 로드
+    loadGenerators();
+
+    // 4) 콘솔 높이 드래그 조절기 초기화
     initConsoleResizer();
 
-    // 4) JS 실행기(Playground) 초기화
+    // 5) JS 실행기(Playground) 초기화
     initJsPlayground();
 
-    // 5) 빠른 메모(Notes) 로드
+    // 6) 빠른 메모(Notes) 로드
     loadNotes();
 
-    // 6) 캘린더(Calendar) 로드
+    // 7) 캘린더(Calendar) 로드
     initCalendar();
 });

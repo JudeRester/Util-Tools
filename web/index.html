@@ -129,30 +129,27 @@
                 </div>
             </section>
 
-            <!-- 4. 데이터 생성 탭 -->
+            <!-- 4. 데이터 생성 (Custom Data Generator Studio) 탭 -->
             <section id="tab-generator" class="tab-pane">
-                <div class="button-grid">
-                    <button class="tool-btn" onclick="callGenerateBizID(true)">
-                        <div class="btn-icon">🏢</div>
-                        <div class="btn-text">
-                            <h3>사업자번호 생성 (포맷)</h3>
-                            <p>XXX-XX-XXXXX 형식 유효 번호 생성 및 복사</p>
-                        </div>
-                    </button>
-                    <button class="tool-btn" onclick="callGenerateBizID(false)">
-                        <div class="btn-icon">🔢</div>
-                        <div class="btn-text">
-                            <h3>사업자번호 생성 (숫자만)</h3>
-                            <p>XXXXXXXXXX 10자리 유효 번호 생성 및 복사</p>
-                        </div>
-                    </button>
-                    <button class="tool-btn" onclick="callGenerateBizIDBulk(5)">
-                        <div class="btn-icon">📋</div>
-                        <div class="btn-text">
-                            <h3>사업자번호 대량 생성</h3>
-                            <p>유효한 번호 5개 일괄 생성</p>
-                        </div>
-                    </button>
+                <!-- 상단 도구 모음 -->
+                <div class="shortcuts-top-bar">
+                    <div class="top-bar-left">
+                        <span class="section-badge">동적 데이터 생성기</span>
+                        <span class="count-text">총 <b id="generator-total-count">0</b>개 등록됨</span>
+                    </div>
+                    <div class="top-bar-actions">
+                        <button class="compact-btn add" onclick="openAddGeneratorModal()" title="새로운 데이터 생성기 추가">
+                            <span>➕</span> 생성기 추가
+                        </button>
+                        <button class="compact-btn edit" onclick="openGeneratorsModal()" title="생성기 목록 관리 및 JS 스크립트 수정">
+                            <span>⚙️</span> 관리
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 데이터 생성기 카드 목록 (동적 렌더링 컨테이너) -->
+                <div class="generators-grid" id="generators-grid">
+                    <!-- JavaScript로 실시간 동적 렌더링 -->
                 </div>
             </section>
 
@@ -536,6 +533,60 @@
             <div class="modal-footer">
                 <button class="form-btn danger-btn" onclick="resetDefaultCalendarConfig()">기본값 복원</button>
                 <button class="form-btn close-btn" onclick="closeCalendarModal()">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 데이터 생성기 실시간 관리 모달 -->
+    <div id="generators-modal" class="modal-overlay">
+        <div class="modal-card modal-card-lg">
+            <div class="modal-header">
+                <h3>⚙️ 데이터 생성기 스튜디오 관리</h3>
+                <button class="modal-close-btn" onclick="closeGeneratorsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 신규 추가 / 수정 폼 -->
+                <div class="shortcut-add-box">
+                    <div id="generator-form-title" class="form-title">➕ 새로운 데이터 생성기 추가</div>
+                    <div class="form-row">
+                        <input type="text" id="gen-icon-input" placeholder="아이콘 (예: 🎲, 🔑)" class="form-input" style="width: 140px;" value="🎲">
+                        <input type="text" id="gen-name-input" placeholder="생성기 이름 (예: 임의 회원번호)" class="form-input" style="flex: 1;">
+                        <input type="text" id="gen-category-input" placeholder="카테고리 (예: 테스트 데이터)" class="form-input" style="width: 150px;">
+                    </div>
+                    <div class="form-row">
+                        <input type="text" id="gen-desc-input" placeholder="설명 (예: 8자리 난수 회원 식별자 생성)" class="form-input" style="flex: 1;">
+                    </div>
+                    <div class="form-row" style="flex-direction: column; align-items: stretch; gap: 4px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <label style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">
+                                📜 JavaScript 생성 스크립트 (return 값으로 생성될 데이터를 반환하세요)
+                            </label>
+                            <div class="code-template-chips">
+                                <button type="button" class="mini-chip-btn" onclick="insertGenCodeTemplate('uuid')">UUID</button>
+                                <button type="button" class="mini-chip-btn" onclick="insertGenCodeTemplate('randomNum')">랜덤 숫자</button>
+                                <button type="button" class="mini-chip-btn" onclick="insertGenCodeTemplate('randomStr')">랜덤 문자열</button>
+                                <button type="button" class="mini-chip-btn" onclick="insertGenCodeTemplate('timestamp')">타임스탬프</button>
+                            </div>
+                        </div>
+                        <textarea id="gen-code-input" class="notes-textarea" style="height: 110px; font-family: 'Consolas', monospace; font-size: 0.82rem;" placeholder="// JavaScript 코드를 작성하세요. 예:&#10;const rand = Math.floor(Math.random() * 900000) + 100000;&#10;return 'USER_' + rand;"></textarea>
+                    </div>
+                    <div class="form-actions-row">
+                        <button type="button" id="gen-submit-btn" class="form-btn add-btn" onclick="submitGeneratorForm()">추가</button>
+                        <button type="button" id="gen-cancel-btn" class="form-btn cancel-btn" style="display:none;" onclick="cancelEditGenerator()">취소</button>
+                    </div>
+                </div>
+
+                <!-- 등록된 생성기 목록 -->
+                <div class="list-section-header">
+                    <span>등록된 생성기 목록 (<span id="gen-count-badge">0</span>개) - 드래그하여 순서 변경</span>
+                </div>
+                <div id="generators-manage-list" class="shortcuts-manage-list">
+                    <!-- 동적 생성 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="form-btn danger-btn" onclick="resetDefaultGenerators()">기본값 복원</button>
+                <button class="form-btn close-btn" onclick="closeGeneratorsModal()">닫기</button>
             </div>
         </div>
     </div>

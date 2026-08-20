@@ -25,6 +25,7 @@ Desktop.ini
 # User Personal Data & Configurations (민감한 로컬 경로, 계정 및 사내망 정보, 메모 데이터, 캘린더 URL)
 shortcuts.json
 quick_launch.json
+generators.json
 notes.json
 notes.txt
 calendar_config.json
