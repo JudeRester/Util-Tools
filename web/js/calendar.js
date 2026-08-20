@@ -8,6 +8,8 @@ let currentCalendarYear = new Date().getFullYear();
 let currentCalendarMonth = new Date().getMonth(); // 0-indexed (0: 1월, 11: 12월)
 let selectedDateStr = new Date().toISOString().slice(0, 10);
 let editingCalendarUrlId = null;
+let midnightTimer = null;
+let periodicSyncInterval = null;
 
 const DEFAULT_CALENDAR_CONFIG_FALLBACK = {
     "ics_urls": [
@@ -25,8 +27,50 @@ const DEFAULT_CALENDAR_CONFIG_FALLBACK = {
 async function initCalendar() {
     await loadCalendarConfig();
     renderCalendarUI();
-    // 백그라운드 일정 동기화 실행
+    
+    // 백그라운드 최초 1회 일정 동기화 실행
     syncCalendarEvents(false);
+
+    // 자정(00:00) 자동 배치 동기화 및 주기적 백그라운드 동기화 스케줄링
+    setupMidnightAndPeriodicSync();
+}
+
+// 매일 자정(00:00:05) 자동 배치 동기화 및 주기적 새로고침 등록
+function setupMidnightAndPeriodicSync() {
+    // 1) 자정 정각 배치 타이머 스케줄링
+    scheduleNextMidnightSync();
+
+    // 2) 주기적 백그라운드 동기화 (기본 30분)
+    const refreshMinutes = calendarConfig.auto_refresh_minutes || 30;
+    if (periodicSyncInterval) clearInterval(periodicSyncInterval);
+    periodicSyncInterval = setInterval(() => {
+        syncCalendarEvents(false);
+    }, refreshMinutes * 60 * 1000);
+}
+
+function scheduleNextMidnightSync() {
+    if (midnightTimer) clearTimeout(midnightTimer);
+
+    const now = new Date();
+    // 다음 날 00:00:05 (자정 5초 뒤)
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+    const msUntilMidnight = nextMidnight.getTime() - now.getTime();
+
+    midnightTimer = setTimeout(async () => {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        logToConsole('자정 배치 동기화', `${todayStr} 자정 자동 일정 동기화 및 오늘 날짜 갱신 완료.`);
+
+        // 자정이 지나 날짜가 바뀌었으므로 달력과 일정 화면 자동 갱신
+        selectedDateStr = todayStr;
+        currentCalendarYear = new Date().getFullYear();
+        currentCalendarMonth = new Date().getMonth();
+
+        await syncCalendarEvents(true);
+        renderCalendarUI();
+
+        // 다음 날 자정을 위해 재귀 스케줄링
+        scheduleNextMidnightSync();
+    }, msUntilMidnight);
 }
 
 // 설정 불러오기
