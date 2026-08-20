@@ -1,9 +1,10 @@
 /**
  * 커스텀 데이터 생성기 스튜디오 (Custom Data Generator Studio) 모듈
+ * 2-Column 인터랙티브 스튜디오 (좌측 목록 사이드바 + 우측 전문 코드 에디터)
  */
 
 let currentGenerators = [];
-let editingGeneratorId = null;
+let selectedStudioGenId = null;
 
 const DEFAULT_GENERATORS_FALLBACK = [
     {
@@ -129,6 +130,7 @@ async function loadGenerators() {
     }
 
     renderGeneratorsUI();
+    initGenCodeEditorTabKey();
 }
 
 // 2. 메인 카드 그리드 렌더링
@@ -226,25 +228,86 @@ function copyTextToClipboard(text) {
     }
 }
 
-// 4. 모달 관리 및 폼 제어
+// ==========================================
+// 4. 2컬럼 스튜디오 모달 제어 (좌측 목록 + 우측 에디터)
+// ==========================================
+
 function openGeneratorsModal() {
     const modal = document.getElementById('generators-modal');
     if (!modal) return;
-    cancelEditGenerator();
+
+    if (!selectedStudioGenId && currentGenerators.length > 0) {
+        selectedStudioGenId = currentGenerators[0].id;
+    }
+
     renderGeneratorsManageList();
+    selectGeneratorInStudio(selectedStudioGenId);
     modal.classList.add('show');
 }
 
 function openAddGeneratorModal() {
     openGeneratorsModal();
-    const nameInput = document.getElementById('gen-name-input');
-    if (nameInput) nameInput.focus();
+    selectGeneratorInStudio(null);
 }
 
 function closeGeneratorsModal() {
     const modal = document.getElementById('generators-modal');
     if (modal) modal.classList.remove('show');
-    cancelEditGenerator();
+    hideTestOutput();
+}
+
+function selectGeneratorInStudio(id) {
+    selectedStudioGenId = id;
+    hideTestOutput();
+
+    // 1) 좌측 목록 active 클래스 갱신
+    const items = document.querySelectorAll('.gen-studio-item');
+    items.forEach(item => {
+        if (id && item.getAttribute('data-id') === String(id)) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+
+    // 2) 우측 에디터 필드 채우기
+    const formTitle = document.getElementById('generator-form-title');
+    const modeIcon = document.getElementById('gen-form-mode-icon');
+    const iconIn = document.getElementById('gen-icon-input');
+    const nameIn = document.getElementById('gen-name-input');
+    const catIn = document.getElementById('gen-category-input');
+    const descIn = document.getElementById('gen-desc-input');
+    const codeIn = document.getElementById('gen-code-input');
+    const deleteBtn = document.getElementById('gen-delete-btn');
+    const submitBtn = document.getElementById('gen-submit-btn');
+
+    if (id) {
+        // 기존 생성기 수정 모드
+        const gen = currentGenerators.find(g => String(g.id) === String(id));
+        if (gen) {
+            if (formTitle) formTitle.textContent = `생성기 편집: ${gen.name}`;
+            if (modeIcon) modeIcon.textContent = '✏️';
+            if (iconIn) iconIn.value = gen.icon || '🎲';
+            if (nameIn) nameIn.value = gen.name || '';
+            if (catIn) catIn.value = gen.category || '';
+            if (descIn) descIn.value = gen.description || '';
+            if (codeIn) codeIn.value = gen.code || '';
+            if (deleteBtn) deleteBtn.style.display = 'inline-block';
+            if (submitBtn) submitBtn.textContent = '💾 저장하기';
+        }
+    } else {
+        // 새 생성기 추가 모드
+        if (formTitle) formTitle.textContent = '➕ 새로운 데이터 생성기 추가';
+        if (modeIcon) modeIcon.textContent = '➕';
+        if (iconIn) iconIn.value = '🎲';
+        if (nameIn) nameIn.value = '';
+        if (catIn) catIn.value = '사용자 정의';
+        if (descIn) descIn.value = '';
+        if (codeIn) codeIn.value = `// JavaScript 생성 코드를 작성하세요 (return 값으로 데이터 반환)\nconst rand = Math.floor(Math.random() * 900000) + 100000;\nreturn 'DATA_' + rand;`;
+        if (deleteBtn) deleteBtn.style.display = 'none';
+        if (submitBtn) submitBtn.textContent = '➕ 새 생성기 등록';
+        if (nameIn) nameIn.focus();
+    }
 }
 
 function renderGeneratorsManageList() {
@@ -254,27 +317,26 @@ function renderGeneratorsManageList() {
     if (!listEl) return;
 
     if (currentGenerators.length === 0) {
-        listEl.innerHTML = '<div style="padding:15px; text-align:center; color:var(--text-secondary);">등록된 생성기가 없습니다.</div>';
+        listEl.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-secondary); font-size:0.8rem;">등록된 생성기가 없습니다.</div>';
         return;
     }
 
-    listEl.innerHTML = currentGenerators.map((gen, idx) => `
-        <div class="manage-item" draggable="true" data-index="${idx}" data-id="${gen.id}">
-            <div class="drag-handle" title="드래그하여 순서 변경">⋮⋮</div>
-            <div style="font-size: 1.4rem; padding: 4px; line-height: 1;">${escapeHtml(gen.icon || '🎲')}</div>
-            <div class="manage-item-info">
-                <div class="manage-item-name">
-                    ${escapeHtml(gen.name || '생성기')} 
-                    <span class="gen-card-cat">${escapeHtml(gen.category || '기타')}</span>
+    listEl.innerHTML = currentGenerators.map((gen, idx) => {
+        const isActive = selectedStudioGenId && String(gen.id) === String(selectedStudioGenId);
+        return `
+            <div class="gen-studio-item ${isActive ? 'active' : ''}" draggable="true" data-index="${idx}" data-id="${gen.id}" onclick="selectGeneratorInStudio('${gen.id}')">
+                <div class="drag-handle" title="드래그하여 순서 변경" onclick="event.stopPropagation()">⋮⋮</div>
+                <div style="font-size: 1.3rem; padding: 2px; line-height: 1;">${escapeHtml(gen.icon || '🎲')}</div>
+                <div class="gen-item-info">
+                    <div class="gen-item-title-line">
+                        <span class="gen-item-title">${escapeHtml(gen.name || '생성기')}</span>
+                        <span class="gen-card-cat" style="font-size:0.6rem; padding:1px 4px;">${escapeHtml(gen.category || '기타')}</span>
+                    </div>
+                    <div class="gen-item-sub">${escapeHtml(gen.description || '')}</div>
                 </div>
-                <div class="manage-item-path">${escapeHtml(gen.description || '')}</div>
             </div>
-            <div class="manage-item-actions">
-                <button class="item-edit-btn" onclick="editGenerator('${gen.id}')" title="생성기 스크립트 수정">✏️ 수정</button>
-                <button class="item-delete-btn" onclick="deleteGenerator('${gen.id}')" title="생성기 삭제">🗑️ 삭제</button>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 
     initGeneratorsDragAndDrop();
 }
@@ -284,7 +346,7 @@ function initGeneratorsDragAndDrop() {
     if (!listEl) return;
 
     let dragSrcEl = null;
-    const items = listEl.querySelectorAll('.manage-item');
+    const items = listEl.querySelectorAll('.gen-studio-item');
 
     items.forEach(item => {
         item.addEventListener('dragstart', (e) => {
@@ -326,49 +388,46 @@ function initGeneratorsDragAndDrop() {
     });
 }
 
-function editGenerator(id) {
-    const gen = currentGenerators.find(g => String(g.id) === String(id));
-    if (!gen) return;
-
-    editingGeneratorId = id;
-    document.getElementById('generator-form-title').textContent = '✏️ 생성기 스크립트 수정';
-    document.getElementById('gen-icon-input').value = gen.icon || '🎲';
-    document.getElementById('gen-name-input').value = gen.name || '';
-    document.getElementById('gen-category-input').value = gen.category || '';
-    document.getElementById('gen-desc-input').value = gen.description || '';
-    document.getElementById('gen-code-input').value = gen.code || '';
-
-    const submitBtn = document.getElementById('gen-submit-btn');
-    const cancelBtn = document.getElementById('gen-cancel-btn');
-    if (submitBtn) submitBtn.textContent = '수정 완료';
-    if (cancelBtn) cancelBtn.style.display = 'inline-block';
-
-    document.getElementById('gen-name-input').focus();
-}
-
-function cancelEditGenerator() {
-    editingGeneratorId = null;
-    const formTitle = document.getElementById('generator-form-title');
-    if (formTitle) formTitle.textContent = '➕ 새로운 데이터 생성기 추가';
-
-    const iconIn = document.getElementById('gen-icon-input');
-    const nameIn = document.getElementById('gen-name-input');
-    const catIn = document.getElementById('gen-category-input');
-    const descIn = document.getElementById('gen-desc-input');
+// 5. 작성 중인 스크립트 즉시 테스트 실행
+async function testGeneratorCode() {
     const codeIn = document.getElementById('gen-code-input');
+    const outputBar = document.getElementById('gen-test-output-bar');
+    const outputText = document.getElementById('gen-test-output-text');
+    const timeText = document.getElementById('gen-test-time');
+    if (!codeIn || !outputBar || !outputText) return;
 
-    if (iconIn) iconIn.value = '🎲';
-    if (nameIn) nameIn.value = '';
-    if (catIn) catIn.value = '';
-    if (descIn) descIn.value = '';
-    if (codeIn) codeIn.value = '';
+    const code = codeIn.value.trim();
+    if (!code) {
+        alert('테스트할 JavaScript 코드가 비어있습니다.');
+        return;
+    }
 
-    const submitBtn = document.getElementById('gen-submit-btn');
-    const cancelBtn = document.getElementById('gen-cancel-btn');
-    if (submitBtn) submitBtn.textContent = '추가';
-    if (cancelBtn) cancelBtn.style.display = 'none';
+    outputBar.style.display = 'block';
+    const startTime = performance.now();
+
+    try {
+        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+        const fn = new AsyncFunction(code);
+        const result = await fn();
+        const duration = (performance.now() - startTime).toFixed(2);
+
+        outputBar.className = 'gen-test-output-bar';
+        if (timeText) timeText.textContent = `⏱️ ${duration}ms (정상 반환)`;
+        outputText.textContent = typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result);
+    } catch (err) {
+        const duration = (performance.now() - startTime).toFixed(2);
+        outputBar.className = 'gen-test-output-bar error';
+        if (timeText) timeText.textContent = `⏱️ ${duration}ms (오류 발생)`;
+        outputText.textContent = `🚨 ${err.name}: ${err.message}`;
+    }
 }
 
+function hideTestOutput() {
+    const outputBar = document.getElementById('gen-test-output-bar');
+    if (outputBar) outputBar.style.display = 'none';
+}
+
+// 6. 생성기 저장 (추가 또는 수정)
 async function submitGeneratorForm() {
     const icon = (document.getElementById('gen-icon-input')?.value || '🎲').trim();
     const name = (document.getElementById('gen-name-input')?.value || '').trim();
@@ -388,8 +447,11 @@ async function submitGeneratorForm() {
         return;
     }
 
-    if (editingGeneratorId) {
-        const gen = currentGenerators.find(g => String(g.id) === String(editingGeneratorId));
+    let targetId = selectedStudioGenId;
+
+    if (selectedStudioGenId) {
+        // 기존 수정
+        const gen = currentGenerators.find(g => String(g.id) === String(selectedStudioGenId));
         if (gen) {
             gen.icon = icon;
             gen.name = name;
@@ -398,8 +460,10 @@ async function submitGeneratorForm() {
             gen.code = code;
         }
     } else {
+        // 신규 추가
+        targetId = Date.now().toString();
         const newGen = {
-            id: Date.now().toString(),
+            id: targetId,
             name,
             icon,
             category,
@@ -407,24 +471,35 @@ async function submitGeneratorForm() {
             code
         };
         currentGenerators.unshift(newGen);
+        selectedStudioGenId = targetId;
     }
 
     await saveGeneratorsToServer();
-    cancelEditGenerator();
     renderGeneratorsManageList();
     renderGeneratorsUI();
+    selectGeneratorInStudio(targetId);
+
+    logToConsole('데이터 생성기 저장 완료', `"${name}" 생성기가 성공적으로 저장되었습니다.`);
 }
 
-async function deleteGenerator(id) {
-    const gen = currentGenerators.find(g => String(g.id) === String(id));
+// 7. 현재 선택된 생성기 삭제
+async function deleteCurrentGenerator() {
+    if (!selectedStudioGenId) return;
+
+    const gen = currentGenerators.find(g => String(g.id) === String(selectedStudioGenId));
     if (!gen) return;
 
     if (!confirm(`'${gen.name}' 생성기를 정말 삭제하시겠습니까?`)) return;
 
-    currentGenerators = currentGenerators.filter(g => String(g.id) !== String(id));
+    currentGenerators = currentGenerators.filter(g => String(g.id) !== String(selectedStudioGenId));
     await saveGeneratorsToServer();
+
+    selectedStudioGenId = currentGenerators.length > 0 ? currentGenerators[0].id : null;
     renderGeneratorsManageList();
     renderGeneratorsUI();
+    selectGeneratorInStudio(selectedStudioGenId);
+
+    logToConsole('데이터 생성기 삭제 완료', `"${gen.name}" 생성기가 삭제되었습니다.`);
 }
 
 async function resetDefaultGenerators() {
@@ -443,9 +518,11 @@ async function resetDefaultGenerators() {
         currentGenerators = JSON.parse(JSON.stringify(DEFAULT_GENERATORS_FALLBACK));
     }
 
+    selectedStudioGenId = currentGenerators.length > 0 ? currentGenerators[0].id : null;
     await saveGeneratorsToServer();
     renderGeneratorsManageList();
     renderGeneratorsUI();
+    selectGeneratorInStudio(selectedStudioGenId);
 }
 
 async function saveGeneratorsToServer() {
@@ -475,6 +552,22 @@ function insertGenCodeTemplate(type) {
         codeArea.value = templates[type];
         codeArea.focus();
     }
+}
+
+// 에디터 Tab 키 4칸 들여쓰기 지원
+function initGenCodeEditorTabKey() {
+    const editor = document.getElementById('gen-code-input');
+    if (!editor) return;
+
+    editor.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            editor.value = editor.value.substring(0, start) + '    ' + editor.value.substring(end);
+            editor.selectionStart = editor.selectionEnd = start + 4;
+        }
+    });
 }
 
 // 하위 호환용 기존 함수 바인딩

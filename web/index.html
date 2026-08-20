@@ -534,56 +534,108 @@
         </div>
     </div>
 
-    <!-- 데이터 생성기 실시간 관리 모달 -->
+    <!-- 데이터 생성기 스튜디오 (좌우 분할 관리 모달) -->
     <div id="generators-modal" class="modal-overlay">
-        <div class="modal-card modal-card-lg">
+        <div class="modal-card modal-card-studio">
             <div class="modal-header">
-                <h3>⚙️ 데이터 생성기 스튜디오 관리</h3>
+                <h3>⚙️ 데이터 생성기 스튜디오</h3>
                 <button class="modal-close-btn" onclick="closeGeneratorsModal()">&times;</button>
             </div>
-            <div class="modal-body">
-                <!-- 신규 추가 / 수정 폼 -->
-                <div class="shortcut-add-box">
-                    <div id="generator-form-title" class="form-title">➕ 새로운 데이터 생성기 추가</div>
-                    <div class="form-row">
-                        <input type="text" id="gen-icon-input" placeholder="아이콘 (예: 🎲, 🔑)" class="form-input" style="width: 140px;" value="🎲">
-                        <input type="text" id="gen-name-input" placeholder="생성기 이름 (예: 임의 회원번호)" class="form-input" style="flex: 1;">
-                        <input type="text" id="gen-category-input" placeholder="카테고리 (예: 테스트 데이터)" class="form-input" style="width: 150px;">
+            
+            <div class="gen-studio-body">
+                <!-- 좌측: 생성기 목록 사이드바 -->
+                <aside class="gen-studio-sidebar">
+                    <div class="gen-sidebar-top">
+                        <button class="gen-add-new-btn" onclick="selectGeneratorInStudio(null)">
+                            <span>➕</span> 새 생성기 추가
+                        </button>
                     </div>
-                    <div class="form-row">
-                        <input type="text" id="gen-desc-input" placeholder="설명 (예: 8자리 난수 회원 식별자 생성)" class="form-input" style="flex: 1;">
+                    <div class="gen-sidebar-header">
+                        <span>등록된 목록 (<span id="gen-count-badge">0</span>개)</span>
+                        <span class="drag-guide-tip">드래그 순서변경</span>
                     </div>
-                    <div class="form-row" style="flex-direction: column; align-items: stretch; gap: 4px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <label style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">
-                                📜 JavaScript 생성 스크립트 (return 값으로 생성될 데이터를 반환하세요)
-                            </label>
-                            <div class="code-template-chips">
-                                <button type="button" class="mini-chip-btn" onclick="insertGenCodeTemplate('uuid')">UUID</button>
-                                <button type="button" class="mini-chip-btn" onclick="insertGenCodeTemplate('randomNum')">랜덤 숫자</button>
-                                <button type="button" class="mini-chip-btn" onclick="insertGenCodeTemplate('randomStr')">랜덤 문자열</button>
-                                <button type="button" class="mini-chip-btn" onclick="insertGenCodeTemplate('timestamp')">타임스탬프</button>
+                    <div id="generators-manage-list" class="gen-studio-list">
+                        <!-- 동적 렌더링 -->
+                    </div>
+                    <div class="gen-sidebar-footer">
+                        <button class="mini-tool-btn danger" onclick="resetDefaultGenerators()" title="처음 기본 템플릿으로 복원">
+                            🔄 기본값 복원
+                        </button>
+                    </div>
+                </aside>
+
+                <!-- 우측: 대화형 코드 에디터 패널 -->
+                <main class="gen-studio-editor-pane">
+                    <div class="gen-editor-header">
+                        <div class="gen-editor-title-group">
+                            <span id="gen-form-mode-icon">✏️</span>
+                            <h4 id="generator-form-title">생성기 편집</h4>
+                        </div>
+                        <button class="gen-test-btn" onclick="testGeneratorCode()" title="작성한 스크립트를 즉시 실행해 봅니다">
+                            <span>▶️</span> 코드 테스트
+                        </button>
+                    </div>
+
+                    <div class="gen-editor-fields">
+                        <div class="gen-field-row">
+                            <div class="gen-field icon-field">
+                                <label>아이콘</label>
+                                <input type="text" id="gen-icon-input" placeholder="🎲" class="form-input" value="🎲">
+                            </div>
+                            <div class="gen-field name-field">
+                                <label>생성기 이름 <span class="req-star">*</span></label>
+                                <input type="text" id="gen-name-input" placeholder="예: 무작위 주문번호" class="form-input">
+                            </div>
+                            <div class="gen-field cat-field">
+                                <label>카테고리</label>
+                                <input type="text" id="gen-category-input" placeholder="예: 결제/주문" class="form-input">
                             </div>
                         </div>
-                        <textarea id="gen-code-input" class="notes-textarea" style="height: 110px; font-family: 'Consolas', monospace; font-size: 0.82rem;" placeholder="// JavaScript 코드를 작성하세요. 예:&#10;const rand = Math.floor(Math.random() * 900000) + 100000;&#10;return 'USER_' + rand;"></textarea>
-                    </div>
-                    <div class="form-actions-row">
-                        <button type="button" id="gen-submit-btn" class="form-btn add-btn" onclick="submitGeneratorForm()">추가</button>
-                        <button type="button" id="gen-cancel-btn" class="form-btn cancel-btn" style="display:none;" onclick="cancelEditGenerator()">취소</button>
-                    </div>
-                </div>
 
-                <!-- 등록된 생성기 목록 -->
-                <div class="list-section-header">
-                    <span>등록된 생성기 목록 (<span id="gen-count-badge">0</span>개) - 드래그하여 순서 변경</span>
-                </div>
-                <div id="generators-manage-list" class="shortcuts-manage-list">
-                    <!-- 동적 생성 -->
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="form-btn danger-btn" onclick="resetDefaultGenerators()">기본값 복원</button>
-                <button class="form-btn close-btn" onclick="closeGeneratorsModal()">닫기</button>
+                        <div class="gen-field-row">
+                            <div class="gen-field full-field">
+                                <label>설명</label>
+                                <input type="text" id="gen-desc-input" placeholder="예: ORD- + 12자리 난수 주문 식별자 생성" class="form-input">
+                            </div>
+                        </div>
+
+                        <!-- 자바스크립트 코드 에디터 -->
+                        <div class="gen-code-section">
+                            <div class="gen-code-header">
+                                <label>📜 JavaScript 생성 로직 (return 값으로 데이터 반환) <span class="req-star">*</span></label>
+                                <div class="code-template-chips">
+                                    <span class="chip-label">템플릿:</span>
+                                    <button type="button" class="mini-chip-btn" onclick="insertGenCodeTemplate('uuid')">UUID</button>
+                                    <button type="button" class="mini-chip-btn" onclick="insertGenCodeTemplate('randomNum')">랜덤숫자</button>
+                                    <button type="button" class="mini-chip-btn" onclick="insertGenCodeTemplate('randomStr')">랜덤문자열</button>
+                                    <button type="button" class="mini-chip-btn" onclick="insertGenCodeTemplate('timestamp')">타임스탬프</button>
+                                </div>
+                            </div>
+                            <textarea id="gen-code-input" class="gen-code-editor" spellcheck="false" placeholder="// JavaScript 코드를 작성하세요. (Tab 들여쓰기 지원)&#10;const rand = Math.floor(Math.random() * 900000) + 100000;&#10;return 'USER_' + rand;"></textarea>
+                        </div>
+
+                        <!-- 실시간 테스트 결과 출력 바 -->
+                        <div id="gen-test-output-bar" class="gen-test-output-bar" style="display: none;">
+                            <div class="test-bar-header">
+                                <span>⚡ 테스트 실행 결과:</span>
+                                <span id="gen-test-time" class="test-time"></span>
+                            </div>
+                            <pre id="gen-test-output-text" class="test-output-text"></pre>
+                        </div>
+                    </div>
+
+                    <div class="gen-editor-footer">
+                        <button type="button" id="gen-delete-btn" class="form-btn danger-btn" onclick="deleteCurrentGenerator()" style="display: none;">
+                            🗑️ 이 생성기 삭제
+                        </button>
+                        <div class="gen-footer-right">
+                            <button type="button" class="form-btn close-btn" onclick="closeGeneratorsModal()">닫기</button>
+                            <button type="button" id="gen-submit-btn" class="form-btn add-btn" onclick="submitGeneratorForm()">
+                                💾 저장하기
+                            </button>
+                        </div>
+                    </div>
+                </main>
             </div>
         </div>
     </div>
