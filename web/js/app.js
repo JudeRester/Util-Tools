@@ -48,8 +48,48 @@ function closeMobileNav() {
 
 
 // ==========================================
-// 3. 탭 전환 및 마지막 탭 기억(LocalStorage)
+// 3. 통합 앱 설정(app_settings.json) 및 탭 영속화
 // ==========================================
+let appSettings = {
+    active_tab_id: 'system',
+    console_height: 180,
+    calendar_month_width: null,
+    notes_sidebar_width: null
+};
+
+async function loadAppSettings() {
+    try {
+        if (window.eel && typeof eel.get_app_settings === 'function') {
+            const res = await eel.get_app_settings()();
+            if (res.status === 'success' && res.data) {
+                appSettings = Object.assign({}, appSettings, res.data);
+                // 로컬스토리지에도 동기화
+                Object.keys(appSettings).forEach(k => {
+                    if (appSettings[k] !== null && appSettings[k] !== undefined) {
+                        localStorage.setItem(k, appSettings[k]);
+                    }
+                });
+            }
+        }
+    } catch (e) {
+        console.warn('앱 설정 로드 실패 (로컬스토리지 fallback 사용):', e);
+    }
+}
+
+function saveAppSettingKey(key, value) {
+    appSettings[key] = value;
+    try {
+        localStorage.setItem(key, value);
+    } catch (e) {}
+
+    // 백엔드 app_settings.json 파일에 비동기 영구 저장
+    if (window.eel && typeof eel.save_app_settings === 'function') {
+        eel.save_app_settings({ [key]: value })().catch(err => {
+            console.warn(`설정 ${key} 저장 오류:`, err);
+        });
+    }
+}
+
 function switchTab(targetTab) {
     if (!targetTab) return;
     const tabButtons = document.querySelectorAll('.tab-btn');
@@ -78,8 +118,8 @@ function switchTab(targetTab) {
         }
     });
 
-    // 4) 로컬 스토리지에 마지막 활성 탭 영구 저장
-    localStorage.setItem('active_tab_id', targetTab);
+    // 4) 백엔드 파일 및 로컬스토리지에 마지막 활성 탭 영구 저장
+    saveAppSettingKey('active_tab_id', targetTab);
 
     // 5) 모바일 드롭다운 메뉴 자동 닫기
     closeMobileNav();
@@ -89,7 +129,10 @@ function switchTab(targetTab) {
 // ==========================================
 // 4. DOMContentLoaded 앱 초기화
 // ==========================================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // 백엔드 app_settings.json 영구 설정 로드
+    await loadAppSettings();
+
     // 탭 버튼 클릭 이벤트 바인딩
     const tabButtons = document.querySelectorAll('.tab-btn');
     tabButtons.forEach(btn => {
@@ -107,8 +150,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 마지막으로 사용했던 탭 복원 (기본값: 'system')
-    const savedTab = localStorage.getItem('active_tab_id') || 'system';
+    // 마지막으로 사용했던 탭 복원 (파일 설정 -> 로컬스토리지 -> 기본값 순)
+    const savedTab = appSettings.active_tab_id || localStorage.getItem('active_tab_id') || 'system';
     switchTab(savedTab);
 
     // 1) 폴더 바로가기 로드

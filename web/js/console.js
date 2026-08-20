@@ -31,7 +31,7 @@ function initConsoleResizer() {
     if (!resizer || !consoleEl) return;
 
     // 저장된 높이 복원
-    const savedHeight = localStorage.getItem('console_height');
+    const savedHeight = (typeof appSettings !== 'undefined' && appSettings.console_height) || localStorage.getItem('console_height');
     if (savedHeight) {
         consoleEl.style.height = `${savedHeight}px`;
     }
@@ -69,9 +69,13 @@ function initConsoleResizer() {
                 document.body.style.cursor = '';
                 document.body.style.userSelect = '';
 
-                // 최종 높이 로컬 저장
-                const finalHeight = consoleEl.getBoundingClientRect().height;
-                localStorage.setItem('console_height', finalHeight);
+                // 최종 높이 백엔드 파일 및 로컬 저장
+                const finalHeight = Math.round(consoleEl.getBoundingClientRect().height);
+                if (typeof saveAppSettingKey === 'function') {
+                    saveAppSettingKey('console_height', finalHeight);
+                } else {
+                    localStorage.setItem('console_height', finalHeight);
+                }
 
                 document.removeEventListener('mousemove', onMouseMove);
                 document.removeEventListener('mouseup', onMouseUp);

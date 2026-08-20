@@ -29,6 +29,7 @@ notes.json
 notes.txt
 calendar_config.json
 calendar_cache.json
+app_settings.json
 *.local.json
 *.log
 

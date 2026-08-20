@@ -77,7 +77,7 @@ function initNotesResizer() {
     if (!resizer || !sidebar || !container) return;
 
     // 저장된 좌측 너비 복원
-    const savedWidth = localStorage.getItem('notes_sidebar_width');
+    const savedWidth = (typeof appSettings !== 'undefined' && appSettings.notes_sidebar_width) || localStorage.getItem('notes_sidebar_width');
     if (savedWidth) {
         sidebar.style.flex = 'none';
         sidebar.style.width = `${savedWidth}px`;
@@ -119,8 +119,12 @@ function initNotesResizer() {
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
 
-            const finalWidth = sidebar.getBoundingClientRect().width;
-            localStorage.setItem('notes_sidebar_width', Math.round(finalWidth));
+            const finalWidth = Math.round(sidebar.getBoundingClientRect().width);
+            if (typeof saveAppSettingKey === 'function') {
+                saveAppSettingKey('notes_sidebar_width', finalWidth);
+            } else {
+                localStorage.setItem('notes_sidebar_width', finalWidth);
+            }
 
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);

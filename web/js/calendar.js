@@ -62,7 +62,7 @@ function initCalendarResizer() {
     if (!resizer || !monthView || !container) return;
 
     // 저장된 좌측 너비 복원
-    const savedWidth = localStorage.getItem('calendar_month_width');
+    const savedWidth = (typeof appSettings !== 'undefined' && appSettings.calendar_month_width) || localStorage.getItem('calendar_month_width');
     if (savedWidth) {
         monthView.style.flex = 'none';
         monthView.style.width = `${savedWidth}px`;
@@ -104,8 +104,12 @@ function initCalendarResizer() {
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
 
-            const finalWidth = monthView.getBoundingClientRect().width;
-            localStorage.setItem('calendar_month_width', Math.round(finalWidth));
+            const finalWidth = Math.round(monthView.getBoundingClientRect().width);
+            if (typeof saveAppSettingKey === 'function') {
+                saveAppSettingKey('calendar_month_width', finalWidth);
+            } else {
+                localStorage.setItem('calendar_month_width', finalWidth);
+            }
 
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
