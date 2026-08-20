@@ -1,0 +1,30 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# User Personal Data & Configurations (민감한 로컬 경로, 계정 및 사내망 정보)
+shortcuts.json
+quick_launch.json
+*.local.json
+*.log
+

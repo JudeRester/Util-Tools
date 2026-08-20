@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>유틸리티 도구 모음 (Utility Toolkit)</title>
+    <link rel="icon" type="image/x-icon" href="utiltools.ico">
+    <link rel="stylesheet" href="style.css">
+    <!-- Eel 필수 스크립트 (런타임에 동적으로 제공됨) -->
+    <script type="text/javascript" src="/eel.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 상단 헤더 -->
+        <header class="app-header">
+            <div class="logo-area">
+                <span class="logo-icon">🛠️</span>
+                <h1>Utility Toolkit</h1>
+            </div>
+            <div class="header-status" id="header-status">준비 완료</div>
+        </header>
+
+        <!-- 카테고리 탭 네비게이션 -->
+        <nav class="tab-nav">
+            <button class="tab-btn active" data-tab="system">
+                <span class="tab-icon">🖥️</span> 시스템 정보
+            </button>
+            <button class="tab-btn" data-tab="launch">
+                <span class="tab-icon">⚡</span> 빠른 실행
+            </button>
+            <button class="tab-btn" data-tab="files">
+                <span class="tab-icon">📁</span> 파일 / 폴더
+            </button>
+            <button class="tab-btn" data-tab="generator">
+                <span class="tab-icon">🔢</span> 데이터 생성
+            </button>
+            <button class="tab-btn" data-tab="jsrunner">
+                <span class="tab-icon">🧪</span> JS 실행기
+            </button>
+            <button class="tab-btn" data-tab="network">
+                <span class="tab-icon">🌐</span> 네트워크 & 기타
+            </button>
+        </nav>
+
+        <!-- 메인 콘텐츠 (카테고리별 기능 버튼 그리드) -->
+        <main class="tab-content-area">
+            
+            <!-- 1. 시스템 정보 탭 -->
+            <section id="tab-system" class="tab-pane active">
+                <div class="button-grid">
+                    <button class="tool-btn" onclick="callGetSystemInfo()">
+                        <div class="btn-icon">💻</div>
+                        <div class="btn-text">
+                            <h3>시스템 사양 조회</h3>
+                            <p>OS, CPU, IP 등 기본 정보 확인</p>
+                        </div>
+                    </button>
+                    <button class="tool-btn" onclick="callGetTimestamp()">
+                        <div class="btn-icon">⏱️</div>
+                        <div class="btn-text">
+                            <h3>현재 타임스탬프</h3>
+                            <p>현재 날짜, ISO 및 유닉스 시간</p>
+                        </div>
+                    </button>
+                </div>
+            </section>
+
+            <!-- 2. 빠른 실행 탭 -->
+            <section id="tab-launch" class="tab-pane">
+                <div class="pane-toolbar-header">
+                    <div class="group-title-inline">
+                        <span class="title-icon">⚡</span> 빠른 실행 목록
+                        <button class="edit-shortcuts-btn" onclick="openQuickLaunchModal()" title="빠른 실행 항목 실시간 커스텀">
+                            ⚙️ 편집
+                        </button>
+                    </div>
+                </div>
+                <div class="button-grid" id="quick-launch-grid">
+                    <!-- JavaScript로 실시간 동적 렌더링 -->
+                </div>
+            </section>
+
+            <!-- 3. 파일 / 폴더 탭 -->
+            <section id="tab-files" class="tab-pane">
+                <!-- 상단 타이틀 및 우측 컴팩트 터미널 런처 바 -->
+                <div class="pane-toolbar-header">
+                    <div class="group-title-inline">
+                        <span class="title-icon">📂</span> 폴더 바로가기
+                        <button class="edit-shortcuts-btn" onclick="openShortcutsModal()" title="폴더 바로가기 실시간 편집">
+                            ⚙️ 편집
+                        </button>
+                    </div>
+                    <div class="compact-terminal-launcher">
+                        <span class="launcher-label">터미널:</span>
+                        <select id="terminal-path-select" class="compact-path-select">
+                            <!-- 동적 렌더링 -->
+                        </select>
+                        <button class="compact-btn powershell" onclick="launchSelectedTerminal('powershell')" title="선택한 위치에서 PowerShell 실행">
+                            <span>🟦</span> PowerShell
+                        </button>
+                        <button class="compact-btn cmd" onclick="launchSelectedTerminal('cmd')" title="선택한 위치에서 CMD 실행">
+                            <span>💻</span> CMD
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 폴더 바로가기 나열 (동적 렌더링 컨테이너) -->
+                <div class="button-grid" id="folder-shortcuts-grid">
+                    <!-- JavaScript로 실시간 렌더링 -->
+                </div>
+            </section>
+
+            <!-- 4. 데이터 생성 탭 -->
+            <section id="tab-generator" class="tab-pane">
+                <div class="button-grid">
+                    <button class="tool-btn" onclick="callGenerateBizID(true)">
+                        <div class="btn-icon">🏢</div>
+                        <div class="btn-text">
+                            <h3>사업자번호 생성 (포맷)</h3>
+                            <p>XXX-XX-XXXXX 형식 유효 번호 생성 및 복사</p>
+                        </div>
+                    </button>
+                    <button class="tool-btn" onclick="callGenerateBizID(false)">
+                        <div class="btn-icon">🔢</div>
+                        <div class="btn-text">
+                            <h3>사업자번호 생성 (숫자만)</h3>
+                            <p>XXXXXXXXXX 10자리 유효 번호 생성 및 복사</p>
+                        </div>
+                    </button>
+                    <button class="tool-btn" onclick="callGenerateBizIDBulk(5)">
+                        <div class="btn-icon">📋</div>
+                        <div class="btn-text">
+                            <h3>사업자번호 대량 생성</h3>
+                            <p>유효한 번호 5개 일괄 생성</p>
+                        </div>
+                    </button>
+                </div>
+            </section>
+
+            <!-- 5. 네트워크 탭 -->
+            <section id="tab-network" class="tab-pane">
+                <div class="button-grid">
+                    <button class="tool-btn" onclick="callCheckPing('8.8.8.8')">
+                        <div class="btn-icon">🌐</div>
+                        <div class="btn-text">
+                            <h3>Google DNS Ping</h3>
+                            <p>8.8.8.8 연결 상태 테스트</p>
+                        </div>
+                    </button>
+                    <button class="tool-btn" onclick="callCheckPing('1.1.1.1')">
+                        <div class="btn-icon">☁️</div>
+                        <div class="btn-text">
+                            <h3>Cloudflare DNS Ping</h3>
+                            <p>1.1.1.1 연결 상태 테스트</p>
+                        </div>
+                    </button>
+                    <button class="tool-btn" onclick="callCheckPing('168.126.63.1')">
+                        <div class="btn-icon">📡</div>
+                        <div class="btn-text">
+                            <h3>KT DNS Ping</h3>
+                            <p>168.126.63.1 국내망 연결 테스트</p>
+                        </div>
+                    </button>
+                </div>
+            </section>
+
+            <!-- 6. JS 실행기 (Playground) 탭 -->
+            <section id="tab-jsrunner" class="tab-pane">
+                <div class="playground-container">
+                    <!-- 상단 툴바 -->
+                    <div class="playground-toolbar">
+                        <div class="toolbar-left">
+                            <span class="toolbar-title">🧪 JS Sandbox</span>
+                            <select id="js-template-select" class="template-select" onchange="loadJsTemplate(this.value)">
+                                <option value="basic">기본 예제 (Console & Return)</option>
+                                <option value="array">배열 조작 & 고차함수</option>
+                                <option value="async">비동기 (Async/Await & Promise)</option>
+                                <option value="json">JSON 파싱 & 직렬화</option>
+                                <option value="regex">정규식 매칭 테스트</option>
+                            </select>
+                        </div>
+                        <div class="toolbar-right">
+                            <button class="play-btn clear" onclick="clearJsEditor()" title="에디터 내용 비우기">
+                                <span>🧹</span> 비우기
+                            </button>
+                            <button class="play-btn run" onclick="runJsCode()" title="코드 실행 (단축키: Ctrl + Enter)">
+                                <span>▶️</span> 실행 (Ctrl+Enter)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 좌우 분할 에디터 & 결과 패널 -->
+                    <div class="playground-split">
+                        <!-- 좌측: 코드 에디터 -->
+                        <div class="editor-pane">
+                            <div class="pane-label">
+                                <span>JavaScript Code</span>
+                                <span class="shortcut-tip">Ctrl+Enter 로 즉시 실행</span>
+                            </div>
+                            <textarea id="js-code-editor" class="code-textarea" spellcheck="false" placeholder="// 여기에 JavaScript 코드를 작성하세요..."></textarea>
+                        </div>
+
+                        <!-- 우측: 실행 결과 콘솔 -->
+                        <div class="result-pane">
+                            <div class="pane-label">
+                                <span>Console Output</span>
+                                <button class="mini-copy-btn" onclick="copyJsOutput()">📋 결과 복사</button>
+                            </div>
+                            <div id="js-runner-output" class="output-console">
+                                <div class="output-placeholder">코드를 입력하고 [▶️ 실행] 버튼을 눌러보세요.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- 콘솔 높이 드래그 조절 바 -->
+        <div id="console-resizer" class="console-resizer" title="드래그하여 로그창 크기 조절">
+            <div class="resizer-handle"></div>
+        </div>
+
+        <!-- 하단 결과 및 출력 콘솔 -->
+        <footer id="app-console" class="app-console">
+            <div class="console-header">
+                <span>실행 결과 / 로그</span>
+                <button class="clear-btn" onclick="clearConsole()">지우기</button>
+            </div>
+            <pre id="console-output" class="console-body">기능 버튼을 클릭하면 여기에 결과가 표시됩니다.</pre>
+        </footer>
+    </div>
+
+    <!-- 폴더 바로가기 실시간 관리 모달 -->
+    <div id="shortcuts-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>⚙️ 폴더 바로가기 관리</h3>
+                <button class="modal-close-btn" onclick="closeShortcutsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 신규 추가 / 수정 폼 -->
+                <div class="shortcut-add-box">
+                    <div id="shortcut-form-title" class="form-title">➕ 새로운 바로가기 추가</div>
+                    <div class="form-row">
+                        <input type="text" id="new-name-input" placeholder="이름 (예: my-project)" class="form-input name-input">
+                    </div>
+                    <div class="form-row path-row">
+                        <input type="text" id="new-path-input" placeholder="폴더 경로 (예: D:\workspace\my-project)" class="form-input path-input">
+                        <button type="button" class="form-btn browse-btn" onclick="pickFolderFromExplorer()">📂 폴더 찾기</button>
+                        <button type="button" id="shortcut-submit-btn" class="form-btn add-btn" onclick="addNewShortcut()">추가</button>
+                        <button type="button" id="shortcut-cancel-btn" class="form-btn cancel-btn" style="display:none;" onclick="cancelEditShortcut()">취소</button>
+                    </div>
+                </div>
+
+                <!-- 등록된 목록 -->
+                <div class="list-section-header">
+                    <span>현재 등록된 바로가기 목록 (<span id="shortcut-count-badge">0</span>개)</span>
+                </div>
+                <div id="shortcuts-manage-list" class="shortcuts-manage-list">
+                    <!-- 동적 생성 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="form-btn danger-btn" onclick="resetDefaultShortcuts()">기본값으로 복원</button>
+                <button class="form-btn close-btn" onclick="closeShortcutsModal()">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 빠른 실행 커스텀 관리 모달 -->
+    <div id="quick-launch-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>⚡ 빠른 실행 항목 관리</h3>
+                <button class="modal-close-btn" onclick="closeQuickLaunchModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 신규 추가 / 수정 폼 -->
+                <div class="shortcut-add-box">
+                    <div id="ql-form-title" class="form-title">➕ 새로운 빠른 실행 항목 추가</div>
+                    <div class="form-row">
+                        <input type="text" id="new-ql-icon" placeholder="아이콘 (예: 🚀)" style="max-width: 90px;" class="form-input" value="🚀">
+                        <input type="text" id="new-ql-name" placeholder="이름 (예: VS Code, DBeaver, 사내서버)" class="form-input">
+                        <select id="new-ql-type" class="form-input" style="max-width: 150px;" onchange="onQuickLaunchTypeChange(this.value)">
+                            <option value="cmd">시스템 명령 / 파일</option>
+                            <option value="ssh">SSH 접속</option>
+                            <option value="url">웹 URL</option>
+                            <option value="powershell_cmd">PowerShell 명령</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <input type="text" id="new-ql-desc" placeholder="설명 (예: 코드 에디터, 원격 접속)" class="form-input">
+                    </div>
+                    <div class="form-row path-row">
+                        <input type="text" id="new-ql-command" placeholder="명령어 또는 파일 경로 / IP / URL" class="form-input path-input">
+                        <button type="button" id="ql-browse-btn" class="form-btn browse-btn" onclick="pickExecutableFromExplorer()">📂 파일 찾기</button>
+                        <button type="button" id="ql-submit-btn" class="form-btn add-btn" onclick="addNewQuickLaunchItem()">추가</button>
+                        <button type="button" id="ql-cancel-btn" class="form-btn cancel-btn" style="display:none;" onclick="cancelEditQuickLaunch()">취소</button>
+                    </div>
+                </div>
+
+                <!-- 등록된 목록 -->
+                <div class="list-section-header">
+                    <span>현재 등록된 빠른 실행 목록 (<span id="ql-count-badge">0</span>개)</span>
+                </div>
+                <div id="ql-manage-list" class="shortcuts-manage-list">
+                    <!-- 동적 생성 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="form-btn danger-btn" onclick="resetDefaultQuickLaunch()">기본값으로 복원</button>
+                <button class="form-btn close-btn" onclick="closeQuickLaunchModal()">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 기능별 JS 모듈 로드 -->
+    <script src="js/console.js"></script>
+    <script src="js/drag_drop.js"></script>
+    <script src="js/system.js"></script>
+    <script src="js/generator.js"></script>
+    <script src="js/shortcuts.js"></script>
+    <script src="js/quick_launch.js"></script>
+    <script src="js/js_runner.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

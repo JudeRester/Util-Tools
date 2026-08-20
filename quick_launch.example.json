@@ -1,0 +1,58 @@
+[
+  {
+    "id": "1",
+    "name": "계산기",
+    "desc": "Windows 기본 계산기",
+    "icon": "🔢",
+    "type": "cmd",
+    "command": "calc.exe"
+  },
+  {
+    "id": "2",
+    "name": "메모장",
+    "desc": "간단한 텍스트 편집기",
+    "icon": "📝",
+    "type": "cmd",
+    "command": "notepad.exe"
+  },
+  {
+    "id": "3",
+    "name": "작업 관리자",
+    "desc": "프로세스 및 성능 모니터링",
+    "icon": "📊",
+    "type": "cmd",
+    "command": "taskmgr.exe"
+  },
+  {
+    "id": "4",
+    "name": "명령 프롬프트",
+    "desc": "CMD 콘솔 창 열기",
+    "icon": "💻",
+    "type": "cmd",
+    "command": "cmd.exe"
+  },
+  {
+    "id": "5",
+    "name": "PowerShell",
+    "desc": "파워쉘 콘솔 창 열기",
+    "icon": "🟦",
+    "type": "cmd",
+    "command": "powershell.exe"
+  },
+  {
+    "id": "6",
+    "name": "레지스트리 편집기",
+    "desc": "Windows Registry Editor",
+    "icon": "⚙️",
+    "type": "cmd",
+    "command": "regedit.exe"
+  },
+  {
+    "id": "7",
+    "name": "SSH 서버 예시",
+    "desc": "원격 SSH 접속 예시",
+    "icon": "🔒",
+    "type": "ssh",
+    "command": "user@192.168.1.100"
+  }
+]
