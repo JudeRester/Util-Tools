@@ -4,7 +4,9 @@
 import os
 import re
 import json
+import base64
 import urllib.request
+import urllib.parse
 import datetime
 import eel
 
@@ -26,6 +28,44 @@ DEFAULT_CONFIG = {
 }
 
 
+def normalize_calendar_url(url_str):
+    """
+    다양한 구글 캘린더 링크 형식(?cid=Base64..., webcal://, embed?src=...)을
+    표준 iCal(basic.ics) 주소로 자동 변환/정규화
+    """
+    url_str = (url_str or "").strip()
+    if not url_str:
+        return ""
+
+    # 1. webcal:// -> https://
+    if url_str.startswith("webcal://"):
+        url_str = "https://" + url_str[9:]
+
+    # 2. 구글 캘린더 웹 링크 감지 (?cid=... 또는 ?src=...)
+    if "calendar.google.com" in url_str and not url_str.endswith(".ics"):
+        try:
+            parsed = urllib.parse.urlparse(url_str)
+            qs = urllib.parse.parse_qs(parsed.query)
+            cid = qs.get("cid", [None])[0] or qs.get("src", [None])[0]
+            if cid:
+                # Base64 인코딩된 CID일 경우 자동 디코딩
+                if "@" not in cid:
+                    try:
+                        padded = cid + "=" * ((4 - len(cid) % 4) % 4)
+                        decoded = base64.b64decode(padded).decode("utf-8", errors="ignore")
+                        if "@" in decoded:
+                            cid = decoded
+                    except Exception:
+                        pass
+
+                encoded_cid = urllib.parse.quote(cid)
+                return f"https://calendar.google.com/calendar/ical/{encoded_cid}/public/basic.ics"
+        except Exception:
+            pass
+
+    return url_str
+
+
 def _parse_ics_datetime(dt_str):
     """ICS 날짜/시간 문자열(YYYYMMDD 또는 YYYYMMDDTHHMMSSZ)을 포맷팅된 문자열로 변환"""
     dt_str = dt_str.strip()
@@ -36,7 +76,7 @@ def _parse_ics_datetime(dt_str):
             "time": None,
             "allDay": True
         }
-    
+
     # 일시 (YYYYMMDDTHHMMSS or YYYYMMDDTHHMMSSZ)
     match = re.match(r'(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?', dt_str)
     if match:
@@ -50,7 +90,7 @@ def _parse_ics_datetime(dt_str):
             "time": dt.strftime("%H:%M"),
             "allDay": False
         }
-    
+
     # 기본 반환
     if len(dt_str) >= 8:
         return {
@@ -64,10 +104,22 @@ def _parse_ics_datetime(dt_str):
 def parse_ics_content(ics_text, calendar_info):
     """ICS 텍스트 파싱하여 이벤트 목록 추출"""
     events = []
-    
+
     # RFC 5545 라인 언폴딩 (줄바꿈 후 공백으로 이어지는 긴 라인 합치기)
     unfolded_text = re.sub(r'\r?\n[ \t]', '', ics_text)
     lines = unfolded_text.splitlines()
+
+    # 캘린더 원본 이름 감지 (X-WR-CALNAME)
+    cal_detected_name = calendar_info.get("name")
+    for l in lines[:20]:
+        if l.startswith("X-WR-CALNAME:"):
+            detected = l.split(":", 1)[1].strip()
+            if detected and (not cal_detected_name or cal_detected_name == "캘린더"):
+                cal_detected_name = detected
+            break
+
+    cal_name = cal_detected_name or "캘린더"
+    cal_color = calendar_info.get("color", "#6366f1")
 
     current_event = None
     in_event = False
@@ -81,8 +133,8 @@ def parse_ics_content(ics_text, calendar_info):
             in_event = True
             current_event = {
                 "id": str(len(events) + 1),
-                "calendarName": calendar_info.get("name", "캘린더"),
-                "color": calendar_info.get("color", "#6366f1"),
+                "calendarName": cal_name,
+                "color": cal_color,
                 "title": "(제목 없음)",
                 "startDate": "",
                 "startTime": None,
@@ -156,6 +208,11 @@ def get_calendar_config():
 def save_calendar_config(config):
     """캘린더 설정 저장하기 (로컬 calendar_config.json)"""
     try:
+        # 저장 시 모든 url 정규화
+        if "ics_urls" in config:
+            for item in config["ics_urls"]:
+                item["url"] = normalize_calendar_url(item.get("url", ""))
+
         with open(CALENDAR_CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
         return {"status": "success", "message": "캘린더 설정이 저장되었습니다."}
@@ -182,18 +239,16 @@ def fetch_calendar_events(force_refresh=False):
         }
 
         for cal in ics_urls:
-            url = cal.get("url", "").strip()
+            raw_url = cal.get("url", "").strip()
             name = cal.get("name", "캘린더")
-            if not url:
+            if not raw_url:
                 continue
 
-            # webcal:// 프로토콜을 https://로 변환
-            if url.startswith("webcal://"):
-                url = "https://" + url[9:]
+            url = normalize_calendar_url(raw_url)
 
             try:
                 req = urllib.request.Request(url, headers=headers)
-                with urllib.request.urlopen(req, timeout=5) as response:
+                with urllib.request.urlopen(req, timeout=6) as response:
                     ics_data = response.read().decode('utf-8', errors='ignore')
                     cal_events = parse_ics_content(ics_data, cal)
                     all_events.extend(cal_events)

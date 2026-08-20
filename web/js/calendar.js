@@ -363,15 +363,46 @@ function cancelEditCalendarUrl() {
     renderCalendarManageList();
 }
 
+function normalizeCalendarUrl(url) {
+    url = (url || '').trim();
+    if (!url) return '';
+
+    if (url.startsWith('webcal://')) {
+        url = 'https://' + url.slice(9);
+    }
+
+    if (url.includes('calendar.google.com') && !url.endsWith('.ics')) {
+        try {
+            const urlObj = new URL(url);
+            let cid = urlObj.searchParams.get('cid') || urlObj.searchParams.get('src');
+            if (cid) {
+                if (!cid.includes('@')) {
+                    try {
+                        const decoded = atob(cid);
+                        if (decoded.includes('@')) {
+                            cid = decoded;
+                        }
+                    } catch (e) {}
+                }
+                return `https://calendar.google.com/calendar/ical/${encodeURIComponent(cid)}/public/basic.ics`;
+            }
+        } catch (e) {}
+    }
+
+    return url;
+}
+
 async function addNewCalendarUrl() {
     const name = document.getElementById('new-cal-name').value.trim();
     const color = document.getElementById('new-cal-color').value;
-    const url = document.getElementById('new-cal-url').value.trim();
+    const rawUrl = document.getElementById('new-cal-url').value.trim();
 
-    if (!name || !url) {
-        alert('캘린더 이름과 iCal 주소를 모두 입력해 주세요.');
+    if (!name || !rawUrl) {
+        alert('캘린더 이름과 구글 캘린더 주소를 모두 입력해 주세요.');
         return;
     }
+
+    const url = normalizeCalendarUrl(rawUrl);
 
     if (!calendarConfig.ics_urls) {
         calendarConfig.ics_urls = [];
