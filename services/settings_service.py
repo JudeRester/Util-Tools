@@ -9,8 +9,10 @@ EXAMPLE_FILE = os.path.join(BASE_DIR, "app_settings.example.json")
 DEFAULT_SETTINGS = {
     "active_tab_id": "system",
     "console_height": 180,
+    "console_collapsed": False,
     "calendar_month_width": None,
-    "notes_sidebar_width": None
+    "notes_sidebar_width": None,
+    "js_editor_width": None
 }
 
 def load_settings_from_file():

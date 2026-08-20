@@ -211,10 +211,10 @@
                         </div>
                     </div>
 
-                    <!-- 좌우 분할 에디터 & 결과 패널 -->
-                    <div class="playground-split">
+                    <!-- 좌우 분할 에디터 & 스플리터 & 결과 패널 -->
+                    <div class="playground-split" id="playground-split">
                         <!-- 좌측: 코드 에디터 -->
-                        <div class="editor-pane">
+                        <div class="editor-pane" id="js-editor-pane">
                             <div class="pane-label">
                                 <span>JavaScript Code</span>
                                 <span class="shortcut-tip">Ctrl+Enter 로 즉시 실행</span>
@@ -222,8 +222,13 @@
                             <textarea id="js-code-editor" class="code-textarea" spellcheck="false" placeholder="// 여기에 JavaScript 코드를 작성하세요..."></textarea>
                         </div>
 
+                        <!-- 좌우 너비 드래그 스플리터 -->
+                        <div id="js-runner-resizer" class="calendar-v-resizer" title="좌우로 드래그하여 코드 에디터와 콘솔 크기 조절">
+                            <div class="v-resizer-handle"></div>
+                        </div>
+
                         <!-- 우측: 실행 결과 콘솔 -->
-                        <div class="result-pane">
+                        <div class="result-pane" id="js-result-pane">
                             <div class="pane-label">
                                 <span>Console Output</span>
                                 <button class="mini-copy-btn" onclick="copyJsOutput()">📋 결과 복사</button>

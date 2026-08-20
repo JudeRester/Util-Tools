@@ -53,8 +53,10 @@ function closeMobileNav() {
 let appSettings = {
     active_tab_id: 'system',
     console_height: 180,
+    console_collapsed: false,
     calendar_month_width: null,
-    notes_sidebar_width: null
+    notes_sidebar_width: null,
+    js_editor_width: null
 };
 
 async function loadAppSettings() {

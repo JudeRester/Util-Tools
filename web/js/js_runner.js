@@ -94,6 +94,7 @@ return { emails, phones };`
 };
 
 function initJsPlayground() {
+    initJsRunnerResizer();
     const editor = document.getElementById('js-code-editor');
     if (!editor) return;
 
@@ -121,6 +122,72 @@ function initJsPlayground() {
     });
 
     editor.addEventListener('input', saveJsCodeToStorage);
+}
+
+// JS 실행기 좌우 스플리터(Resizer) 초기화 및 너비 드래그 제어
+function initJsRunnerResizer() {
+    const resizer = document.getElementById('js-runner-resizer');
+    const editorPane = document.getElementById('js-editor-pane');
+    const container = document.getElementById('playground-split');
+    if (!resizer || !editorPane || !container) return;
+
+    // 저장된 좌측 에디터 너비 복원
+    const savedWidth = (typeof appSettings !== 'undefined' && appSettings.js_editor_width) || localStorage.getItem('js_editor_width');
+    if (savedWidth) {
+        editorPane.style.flex = 'none';
+        editorPane.style.width = `${savedWidth}px`;
+    }
+
+    let isDragging = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    resizer.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startX = e.clientX;
+        startWidth = editorPane.getBoundingClientRect().width;
+
+        resizer.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        const onMouseMove = (moveEvent) => {
+            if (!isDragging) return;
+            const deltaX = moveEvent.clientX - startX;
+            let newWidth = startWidth + deltaX;
+
+            const containerWidth = container.getBoundingClientRect().width;
+            const minWidth = 200;
+            const maxWidth = containerWidth - 200; // 우측 결과 콘솔 최소 200px 확보
+
+            if (newWidth < minWidth) newWidth = minWidth;
+            if (newWidth > maxWidth) newWidth = maxWidth;
+
+            editorPane.style.flex = 'none';
+            editorPane.style.width = `${newWidth}px`;
+        };
+
+        const onMouseUp = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            resizer.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+
+            const finalWidth = Math.round(editorPane.getBoundingClientRect().width);
+            if (typeof saveAppSettingKey === 'function') {
+                saveAppSettingKey('js_editor_width', finalWidth);
+            } else {
+                localStorage.setItem('js_editor_width', finalWidth);
+            }
+
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    });
 }
 
 function saveJsCodeToStorage() {
