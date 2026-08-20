@@ -214,12 +214,16 @@ function selectNote(id) {
 }
 
 async function addNewNote() {
+    return await createNoteWithContent(`📝 새 메모 ${currentNotes.length + 1}`, "");
+}
+
+async function createNoteWithContent(title, content) {
     const newId = Date.now().toString();
     const nowStr = new Date().toLocaleString();
     const newNote = {
         id: newId,
-        title: `📝 새 메모 ${currentNotes.length + 1}`,
-        content: "",
+        title: title || `📝 새 메모 ${currentNotes.length + 1}`,
+        content: content || "",
         updatedAt: nowStr
     };
     currentNotes.unshift(newNote);
@@ -233,6 +237,7 @@ async function addNewNote() {
         titleInput.focus();
         titleInput.select();
     }
+    return newNote;
 }
 
 function onNoteTitleChange(newTitle) {

@@ -141,6 +141,35 @@ function loadJsTemplate(key) {
     }
 }
 
+// 현재 작성된 JS 코드를 [빠른 메모] 탭의 새 메모로 영구 저장
+async function saveJsCodeToNotes() {
+    const editor = document.getElementById('js-code-editor');
+    if (!editor) return;
+
+    const code = editor.value.trim();
+    if (!code) {
+        alert('저장할 JavaScript 코드가 비어있습니다.');
+        return;
+    }
+
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const noteTitle = `🧪 JS 코드 (${dateStr} ${timeStr})`;
+
+    if (typeof createNoteWithContent === 'function') {
+        await createNoteWithContent(noteTitle, editor.value);
+        logToConsole('빠른 메모 저장 완료', `현재 JS 코드가 [빠른 메모] 탭에 "${noteTitle}"(으)로 안전하게 보관되었습니다.`);
+        
+        // 메모 탭으로 즉시 전환하여 확인
+        if (typeof switchTab === 'function') {
+            switchTab('notes');
+        }
+    } else {
+        alert('메모 저장 기능을 찾을 수 없습니다.');
+    }
+}
+
 function clearJsEditor() {
     const editor = document.getElementById('js-code-editor');
     if (editor) {
