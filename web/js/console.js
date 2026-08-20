@@ -62,17 +62,35 @@ function showToast(title, content) {
         removeToast(toast);
     });
 
+    // 자동 소멸 타이머 관리 (마우스 오버 시 일시 정지, 벗어나면 재개)
+    let autoRemoveTimer = null;
+    const DURATION = 3800;
+
+    function startTimer() {
+        if (autoRemoveTimer) clearTimeout(autoRemoveTimer);
+        autoRemoveTimer = setTimeout(() => {
+            removeToast(toast);
+        }, DURATION);
+    }
+
+    function stopTimer() {
+        if (autoRemoveTimer) {
+            clearTimeout(autoRemoveTimer);
+            autoRemoveTimer = null;
+        }
+    }
+
+    toast.addEventListener('mouseenter', stopTimer);
+    toast.addEventListener('mouseleave', startTimer);
+
+    startTimer();
+
     container.appendChild(toast);
 
     // 최대 3개까지만 유지 (화면 가림 방지)
     while (container.children.length > 3) {
         removeToast(container.firstElementChild);
     }
-
-    // 3.8초 후 자동 제거
-    setTimeout(() => {
-        removeToast(toast);
-    }, 3800);
 }
 
 function removeToast(toast) {
