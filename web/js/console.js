@@ -82,7 +82,7 @@ function removeToast(toast) {
         if (toast && toast.parentNode) {
             toast.parentNode.removeChild(toast);
         }
-    }, 300);
+    }, 350);
 }
 
 function clearConsole() {
