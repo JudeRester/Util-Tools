@@ -239,10 +239,18 @@ async function saveJsCodeToNotes() {
 
 function clearJsEditor() {
     const editor = document.getElementById('js-code-editor');
+    const outputEl = document.getElementById('js-runner-output');
+    const durationBadge = document.getElementById('js-run-duration');
     if (editor) {
         editor.value = '';
         saveJsCodeToStorage();
         editor.focus();
+    }
+    if (outputEl) {
+        outputEl.innerHTML = '<div class="output-placeholder">코드를 입력하고 [▶️ 실행] 버튼을 눌러보세요.</div>';
+    }
+    if (durationBadge) {
+        durationBadge.style.display = 'none';
     }
 }
 
@@ -262,10 +270,12 @@ function formatOutputValue(val) {
 async function runJsCode() {
     const editor = document.getElementById('js-code-editor');
     const outputEl = document.getElementById('js-runner-output');
+    const durationBadge = document.getElementById('js-run-duration');
     if (!editor || !outputEl) return;
 
     const code = editor.value;
     outputEl.innerHTML = '';
+    if (durationBadge) durationBadge.style.display = 'none';
 
     const logs = [];
 
@@ -322,15 +332,24 @@ async function runJsCode() {
             appendOutputLine('(실행 완료: 출력이나 반환값이 없습니다)', 'output-placeholder');
         }
 
-        // 실행 소요 시간
-        appendOutputLine(`⏱️ ${duration}ms 에 실행 완료`, 'out-time');
+        // 실행 소요 시간은 복사 영역 밖(상단 헤더 뱃지)에 표시
+        if (durationBadge) {
+            durationBadge.textContent = `⏱️ ${duration}ms`;
+            durationBadge.className = 'js-duration-badge';
+            durationBadge.style.display = 'inline-block';
+        }
     } catch (err) {
         const duration = (performance.now() - startTime).toFixed(2);
         appendOutputLine(`🚨 Runtime Error: ${err.name}\n${err.message}`, 'out-error');
         if (err.stack) {
             console.error(err);
         }
-        appendOutputLine(`⏱️ ${duration}ms (오류 발생)`, 'out-time');
+        // 오류 소요 시간 뱃지 표시
+        if (durationBadge) {
+            durationBadge.textContent = `⏱️ ${duration}ms (오류)`;
+            durationBadge.className = 'js-duration-badge error';
+            durationBadge.style.display = 'inline-block';
+        }
     }
 }
 

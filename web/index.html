@@ -230,7 +230,10 @@
                         <!-- 우측: 실행 결과 콘솔 -->
                         <div class="result-pane" id="js-result-pane">
                             <div class="pane-label">
-                                <span>Console Output</span>
+                                <div class="pane-label-left">
+                                    <span>Console Output</span>
+                                    <span id="js-run-duration" class="js-duration-badge" style="display: none;"></span>
+                                </div>
                                 <button class="mini-copy-btn" onclick="copyJsOutput()">📋 결과 복사</button>
                             </div>
                             <div id="js-runner-output" class="output-console">

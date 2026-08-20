@@ -1035,6 +1035,29 @@ body {
     font-weight: 600;
 }
 
+.pane-label-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.js-duration-badge {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Courier New', monospace;
+}
+
+.js-duration-badge.error {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.25);
+}
+
 .shortcut-tip {
     font-size: 0.72rem;
     color: var(--accent-hover);
