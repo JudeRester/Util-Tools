@@ -242,6 +242,9 @@
                         <div class="notes-editor-toolbar">
                             <input type="text" id="note-title-input" class="note-title-input" placeholder="메모 제목을 입력하세요..." oninput="onNoteTitleChange(this.value)">
                             <div class="notes-toolbar-actions">
+                                <button class="play-btn mini-tool-btn" onclick="moveCurrentNoteToTop()" title="이 메모를 목록 맨 위로 이동">
+                                    <span>🔝</span> 맨 위로
+                                </button>
                                 <button class="play-btn mini-tool-btn" onclick="copyCurrentNote()" title="메모 내용 클립보드 복사">
                                     <span>📋</span> 복사
                                 </button>

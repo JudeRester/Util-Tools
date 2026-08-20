@@ -217,6 +217,17 @@ function updateNoteStats(text) {
     charCountEl.textContent = `${chars.toLocaleString()} 글자 | ${lines.toLocaleString()} 줄`;
 }
 
+function bringNoteToTop(id) {
+    if (!id) return false;
+    const idx = currentNotes.findIndex(n => n.id === id);
+    if (idx > 0) {
+        const [note] = currentNotes.splice(idx, 1);
+        currentNotes.unshift(note);
+        return true;
+    }
+    return false;
+}
+
 function triggerAutoSave() {
     const statusEl = document.getElementById('note-save-status');
     if (statusEl) {
@@ -226,8 +237,12 @@ function triggerAutoSave() {
 
     clearTimeout(noteSaveTimeout);
     noteSaveTimeout = setTimeout(async () => {
+        const moved = bringNoteToTop(activeNoteId);
         await saveNotesImmediately();
-    }, 400);
+        if (moved) {
+            renderNotesUI();
+        }
+    }, 450);
 }
 
 async function saveNotesImmediately() {
@@ -260,9 +275,29 @@ async function copyCurrentNote() {
 
     try {
         await navigator.clipboard.writeText(activeNote.content);
-        logToConsole('클립보드 복사 완료', `'${activeNote.title}' 내용이 클립보드에 복사되었습니다.`);
+        activeNote.updatedAt = new Date().toLocaleString();
+        
+        // 최근 복사된 메모를 목록 맨 위로 이동
+        bringNoteToTop(activeNoteId);
+        await saveNotesImmediately();
+        renderNotesUI();
+
+        logToConsole('클립보드 복사 완료', `'${activeNote.title}' 내용이 복사되어 목록 맨 위로 이동되었습니다.`);
     } catch (e) {
         alert('클립보드 복사 실패: ' + e.message);
+    }
+}
+
+async function moveCurrentNoteToTop() {
+    const activeNote = currentNotes.find(n => n.id === activeNoteId);
+    if (!activeNote) return;
+
+    activeNote.updatedAt = new Date().toLocaleString();
+    const moved = bringNoteToTop(activeNoteId);
+    if (moved) {
+        await saveNotesImmediately();
+        renderNotesUI();
+        logToConsole('상단 이동', `'${activeNote.title}' 메모가 목록 맨 위로 이동되었습니다.`);
     }
 }
 
