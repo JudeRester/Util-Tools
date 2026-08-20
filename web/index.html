@@ -52,6 +52,9 @@
                 <button class="tab-btn" data-tab="notes">
                     <span class="tab-icon">📝</span> <span class="tab-label">빠른 메모</span>
                 </button>
+                <button class="tab-btn" data-tab="calendar">
+                    <span class="tab-icon">📅</span> <span class="tab-label">달력 & 일정</span>
+                </button>
                 <button class="tab-btn" data-tab="network">
                     <span class="tab-icon">🌐</span> <span class="tab-label">네트워크 & 기타</span>
                 </button>
@@ -281,6 +284,60 @@
                     </div>
                 </div>
             </section>
+
+            <!-- 8. 달력 & 일정 (Google Calendar iCal) 탭 -->
+            <section id="tab-calendar" class="tab-pane">
+                <div class="calendar-container">
+                    <!-- 상단 캘린더 툴바 -->
+                    <div class="calendar-toolbar">
+                        <div class="cal-nav-controls">
+                            <button class="cal-nav-btn" onclick="changeCalendarMonth(-1)" title="이전 달">◀</button>
+                            <h2 id="calendar-month-year-title" class="calendar-title">2026년 8월</h2>
+                            <button class="cal-nav-btn" onclick="changeCalendarMonth(1)" title="다음 달">▶</button>
+                            <button class="cal-today-btn" onclick="goToCalendarToday()">오늘</button>
+                        </div>
+                        <div class="cal-action-controls">
+                            <span id="calendar-sync-time" class="cal-sync-status">동기화 대기</span>
+                            <button class="play-btn mini-tool-btn" onclick="syncCalendarEvents(true)" title="구독된 구글 캘린더 일정 새로고침">
+                                <span>🔄</span> 동기화
+                            </button>
+                            <button class="play-btn mini-tool-btn" onclick="openCalendarModal()" title="구글 캘린더 iCal URL 구독 설정">
+                                <span>⚙️</span> 구독 설정
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 메인 2열 레이아웃 (월간 그리드 + 우측 일정 상세) -->
+                    <div class="calendar-main-grid">
+                        <!-- 좌측: 월간 달력 그리드 -->
+                        <div class="calendar-month-view">
+                            <!-- 요일 헤더 -->
+                            <div class="calendar-weekdays">
+                                <div class="weekday sun">일</div>
+                                <div class="weekday">월</div>
+                                <div class="weekday">화</div>
+                                <div class="weekday">수</div>
+                                <div class="weekday">목</div>
+                                <div class="weekday">금</div>
+                                <div class="weekday sat">토</div>
+                            </div>
+                            <!-- 35/42일 날짜 그리드 (JavaScript로 동적 렌더링) -->
+                            <div class="calendar-days-grid" id="calendar-days-grid">
+                            </div>
+                        </div>
+
+                        <!-- 우측: 선택한 날짜 일정 상세 및 오늘의 일정 -->
+                        <div class="calendar-agenda-panel">
+                            <div class="agenda-header">
+                                <span id="agenda-date-title">📌 선택한 날짜 일정</span>
+                            </div>
+                            <div class="agenda-events-list" id="agenda-events-list">
+                                <!-- JavaScript로 동적 렌더링 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
 
         <!-- 콘솔 높이 드래그 조절 바 -->
@@ -382,6 +439,57 @@
         </div>
     </div>
 
+    <!-- 캘린더 iCal 구독 관리 모달 -->
+    <div id="calendar-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>⚙️ 구글 캘린더 / iCal 구독 설정</h3>
+                <button class="modal-close-btn" onclick="closeCalendarModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- iCal URL 얻는 법 팁 -->
+                <div class="cal-help-box">
+                    💡 <b>구글 캘린더 iCal 주소 얻는 방법:</b><br>
+                    1. Google Calendar 웹 접속 ➔ 좌측 '내 캘린더' ➔ 캘린더 우측 [⋮] ➔ [설정 및 공유]<br>
+                    2. 아래로 스크롤하여 <b>[iCal 형식의 비공개 주소]</b> 복사 후 아래에 붙여넣기
+                </div>
+
+                <!-- 신규 추가 / 수정 폼 -->
+                <div class="shortcut-add-box">
+                    <div id="cal-form-title" class="form-title">➕ 새로운 캘린더 구독 추가</div>
+                    <div class="form-row">
+                        <input type="text" id="new-cal-name" placeholder="캘린더 이름 (예: 업무 캘린더, 개인 일정)" class="form-input">
+                        <select id="new-cal-color" class="form-input" style="max-width: 130px;">
+                            <option value="#3b82f6">🟦 파랑</option>
+                            <option value="#10b981">🟩 초록</option>
+                            <option value="#f59e0b">🟨 주황</option>
+                            <option value="#ef4444" selected>🟥 빨강</option>
+                            <option value="#8b5cf6">🟪 보라</option>
+                            <option value="#ec4899">🌸 핑크</option>
+                        </select>
+                    </div>
+                    <div class="form-row path-row">
+                        <input type="text" id="new-cal-url" placeholder="iCal 주소 (https://calendar.google.com/calendar/ical/.../basic.ics)" class="form-input path-input">
+                        <button type="button" id="cal-submit-btn" class="form-btn add-btn" onclick="addNewCalendarUrl()">추가</button>
+                        <button type="button" id="cal-cancel-btn" class="form-btn cancel-btn" style="display:none;" onclick="cancelEditCalendarUrl()">취소</button>
+                    </div>
+                </div>
+
+                <!-- 등록된 구독 목록 -->
+                <div class="list-section-header">
+                    <span>현재 구독 중인 캘린더 목록 (<span id="cal-count-badge">0</span>개)</span>
+                </div>
+                <div id="cal-manage-list" class="shortcuts-manage-list">
+                    <!-- 동적 생성 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="form-btn danger-btn" onclick="resetDefaultCalendarConfig()">기본값 복원</button>
+                <button class="form-btn close-btn" onclick="closeCalendarModal()">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 기능별 JS 모듈 로드 -->
     <script src="js/console.js"></script>
     <script src="js/drag_drop.js"></script>
@@ -391,6 +499,7 @@
     <script src="js/quick_launch.js"></script>
     <script src="js/js_runner.js"></script>
     <script src="js/notes.js"></script>
+    <script src="js/calendar.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

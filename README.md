@@ -14,7 +14,8 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 | **📁 파일 / 폴더** | • 프로젝트 작업 디렉토리 바로가기 카드 목록<br>• 상단 우측 인라인 드롭다운을 통해 **원하는 폴더 위치에서 PowerShell / CMD 즉시 실행**<br>• 탐색기 대화상자 기반 폴더 추가/수정/삭제/드래그 앤 드롭 순서 변경 |
 | **🔢 데이터 생성** | • 국세청 검증 알고리즘 기반 **유효한 한국 사업자등록번호 생성**<br>• 포맷팅(000-00-00000) / 숫자만(10자리) / 5개 일괄 생성 및 자동 클립보드 복사 |
 | **🧪 JS 실행기** | • JSFiddle / RunJS 스타일의 **JavaScript 코드 샌드박스** (비동기 `async/await` 완벽 지원)<br>• `console.log/warn/error` 출력 캡처 및 반환값(`return`), 실행 시간 측정<br>• `Ctrl + Enter` 실행, `Tab` 들여쓰기(4칸), 코드 자동 영구 보존 및 다양한 기본 템플릿 |
-| **📝 빠른 메모** | • 자원 소모가 전혀 없는 **초경량 스크래치패드 / 메모장**<br>• 다중 메모 생성, 실시간 자동 저장(Autosave), 글자 수/줄 수 카운트, 클립보드 복사<br>• `notes.example.json` 템플릿과 `notes.json` 로컬 저장소 분리로 민감 정보 Git 격리 |
+| **📝 빠른 메모** | • 자원 소모가 전혀 없는 **초경량 스크래치패드 / 메모장**<br>• 다중 메모 생성, 실시간 자동 저장(Autosave), 실시간 검색, 최근 수정/복사 시 상단 자동 정렬<br>• `notes.example.json` 템플릿과 `notes.json` 로컬 저장소 분리로 민감 정보 Git 격리 |
+| **📅 달력 & 일정** | • **구글 캘린더(Google Calendar) 및 iCal(ICS) 비공개 주소 실시간 구독 및 동기화**<br>• 다크 테마 월간 캘린더, 날짜별 일정 뱃지, 오늘의 일정(Today's Agenda) 상세 뷰<br>• 복잡한 OAuth2 인증 없이 iCal URL 등록만으로 공휴일 및 개인/업무 일정 자동 반영 |
 | **↕️ 스플리터** | • 하단 실행 결과 / 로그창을 **마우스 드래그로 자유롭게 크기 조절**<br>• 사용자가 조절한 높이는 로컬 스토리지에 자동 저장 및 복원 |
 | **🛠️ 백그라운드 트레이** | • 검은색 CMD 창 없이 구동되는 순수 GUI 데스크톱 앱<br>• Windows 작업표시줄 **시스템 트레이(System Tray)** 상주 (`utiltools.ico` 아이콘 연동)<br>• 트레이 더블클릭/메뉴로 언제든지 창 열기 및 완전 종료 |
 
@@ -32,9 +33,11 @@ D:\python
 ├── shortcuts.example.json      # 폴더 바로가기 기본 템플릿 (Git 버전 추적)
 ├── quick_launch.example.json   # 빠른 실행 기본 템플릿 (Git 버전 추적)
 ├── notes.example.json          # 빠른 메모 기본 템플릿 (Git 버전 추적)
+├── calendar_config.example.json # 캘린더 구독 기본 템플릿 (대한민국 공휴일 iCal 포함)
 ├── shortcuts.json              # [개인 데이터] 사용자 폴더 바로가기 (Git 제외)
 ├── quick_launch.json           # [개인 데이터] 사용자 빠른 실행/SSH/URL (Git 제외)
 ├── notes.json                  # [개인 데이터] 사용자 작성 메모 데이터 (Git 제외)
+├── calendar_config.json        # [개인 데이터] 사용자 구글 캘린더 구독 주소 (Git 제외)
 │
 ├── core/                       # [코어 시스템]
 │   ├── __init__.py
@@ -47,14 +50,15 @@ D:\python
 │   ├── quick_launch_service.py # 빠른 실행 CRUD, 앱/SSH/URL/PowerShell 실행
 │   ├── generator_service.py    # 사업자등록번호 체크섬 생성 알고리즘
 │   ├── dialog_service.py       # Tkinter 기반 파일/폴더 선택 대화상자
-│   └── notes_service.py        # 빠른 메모/스크래치패드 CRUD 및 영속화
+│   ├── notes_service.py        # 빠른 메모/스크래치패드 CRUD 및 영속화
+│   └── calendar_service.py     # 구글 캘린더 / iCal(ICS) 파싱 및 일정 동기화
 │
 └── web/                        # [프론트엔드 리소스]
-    ├── index.html              # 메인 UI 마크업
-    ├── style.css               # 모던 다크 테마 CSS & 스플리터/모달/드래그/메모 스타일
+    ├── index.html              # 메인 UI 마크업 (반응형 햄버거 메뉴 포함)
+    ├── style.css               # 모던 다크 테마 CSS & 스플리터/모달/달력/메모 스타일
     ├── utiltools.ico           # 브라우저 창 Favicon
     └── js/                     # [프론트엔드 모듈 (JavaScript)]
-        ├── app.js              # 탭 전환 네비게이션 및 DOMContentLoaded 진입점
+        ├── app.js              # 탭 전환 네비게이션, 모바일 햄버거 제어 및 초기화
         ├── console.js          # 하단 로그 출력 헬퍼 & 스플리터 마우스 드래그 조절기
         ├── drag_drop.js        # 공통 마우스 드래그 앤 드롭(Drag & Drop) 핸들러
         ├── system.js           # 시스템 사양 & 타임스탬프 & Ping UI 연동
@@ -62,7 +66,8 @@ D:\python
         ├── quick_launch.js     # 빠른 실행 렌더링, 인라인 편집 & 파일 선택 연동
         ├── generator.js        # 사업자번호 생성기 & 클립보드 복사 로직
         ├── js_runner.js        # JS 플레이그라운드 (AsyncFunction 샌드박스 엔진)
-        └── notes.js            # 빠른 메모 / 스크래치패드 실시간 에디터 및 자동 저장
+        ├── notes.js            # 빠른 메모 / 스크래치패드 실시간 에디터 및 자동 저장
+        └── calendar.js         # 월간 캘린더, 일정 동기화, Agenda 및 구독 관리
 ```
 
 ---

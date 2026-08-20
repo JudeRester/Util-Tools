@@ -1,0 +1,11 @@
+{
+  "ics_urls": [
+    {
+      "id": "1",
+      "name": "대한민국 공휴일",
+      "url": "https://calendar.google.com/calendar/ical/ko.south_korea%23holiday%40group.v.calendar.google.com/public/basic.ics",
+      "color": "#ef4444"
+    }
+  ],
+  "auto_refresh_minutes": 30
+}

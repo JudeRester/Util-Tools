@@ -106,4 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 5) 빠른 메모(Notes) 로드
     loadNotes();
+
+    // 6) 캘린더(Calendar) 로드
+    initCalendar();
 });
