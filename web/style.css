@@ -2004,62 +2004,22 @@ body {
 /* ==========================================
    동적 데이터 생성기 스튜디오 (Generator Studio)
    ========================================== */
-.generators-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 12px;
-    padding-bottom: 20px;
-}
-
-.generator-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: 10px;
-    transition: var(--transition);
+.gen-tool-card {
     position: relative;
+    user-select: none;
 }
 
-.generator-card:hover {
-    background: var(--bg-card-hover);
-    border-color: var(--accent-color);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
-}
-
-.gen-card-header {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-}
-
-.gen-card-icon {
-    font-size: 1.6rem;
-    padding: 8px;
-    background: rgba(255, 255, 255, 0.04);
-    border-radius: 8px;
-    flex-shrink: 0;
-}
-
-.gen-card-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.gen-card-title-row {
+.gen-title-line {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
 }
 
-.gen-card-title {
+.gen-title-line h3 {
+    margin: 0;
     font-size: 0.95rem;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -2067,68 +2027,44 @@ body {
 }
 
 .gen-card-cat {
-    font-size: 0.68rem;
+    font-size: 0.65rem;
     padding: 1px 6px;
-    border-radius: 10px;
+    border-radius: 4px;
     background: rgba(99, 102, 241, 0.15);
     color: #a5b4fc;
-    font-weight: 600;
+    font-weight: 500;
+    white-space: nowrap;
     flex-shrink: 0;
 }
 
-.gen-card-desc {
-    font-size: 0.76rem;
-    color: var(--text-secondary);
-    line-height: 1.35;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    word-break: break-all;
-}
-
-.gen-card-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    padding-top: 10px;
-}
-
-.gen-btn {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-    border: none;
-    transition: var(--transition);
-}
-
-.gen-btn.primary {
-    background: var(--primary-color);
-    color: white;
-}
-
-.gen-btn.primary:hover {
-    background: var(--primary-hover);
-}
-
-.gen-btn.secondary {
-    background: rgba(255, 255, 255, 0.06);
+.gen-bulk-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border-color);
-    color: var(--text-primary);
-    flex: 0 0 auto;
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: var(--transition);
+    opacity: 0.8;
 }
 
-.gen-btn.secondary:hover {
-    background: rgba(255, 255, 255, 0.12);
+.gen-tool-card:hover .gen-bulk-badge {
+    opacity: 1;
+    background: rgba(99, 102, 241, 0.2);
     border-color: var(--accent-color);
+    color: #ffffff;
+}
+
+.gen-bulk-badge:hover {
+    background: var(--accent-color) !important;
+    border-color: var(--accent-color) !important;
+    color: #ffffff !important;
+    transform: scale(1.05);
 }
 
 .code-template-chips {

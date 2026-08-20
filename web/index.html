@@ -131,24 +131,21 @@
 
             <!-- 4. 데이터 생성 (Custom Data Generator Studio) 탭 -->
             <section id="tab-generator" class="tab-pane">
-                <!-- 상단 도구 모음 -->
-                <div class="shortcuts-top-bar">
-                    <div class="top-bar-left">
-                        <span class="section-badge">동적 데이터 생성기</span>
-                        <span class="count-text">총 <b id="generator-total-count">0</b>개 등록됨</span>
-                    </div>
-                    <div class="top-bar-actions">
-                        <button class="compact-btn add" onclick="openAddGeneratorModal()" title="새로운 데이터 생성기 추가">
-                            <span>➕</span> 생성기 추가
+                <!-- 상단 타이틀 및 관리 바 -->
+                <div class="pane-toolbar-header">
+                    <div class="group-title-inline">
+                        <span class="title-icon">🔢</span> 데이터 생성기 (<span id="generator-total-count">0</span>개)
+                        <button class="edit-shortcuts-btn" onclick="openGeneratorsModal()" title="데이터 생성기 관리 및 JS 스크립트 수정">
+                            ⚙️ 관리
                         </button>
-                        <button class="compact-btn edit" onclick="openGeneratorsModal()" title="생성기 목록 관리 및 JS 스크립트 수정">
-                            <span>⚙️</span> 관리
+                        <button class="edit-shortcuts-btn" onclick="openAddGeneratorModal()" title="새로운 생성기 추가" style="margin-left: 6px;">
+                            ➕ 추가
                         </button>
                     </div>
                 </div>
 
                 <!-- 데이터 생성기 카드 목록 (동적 렌더링 컨테이너) -->
-                <div class="generators-grid" id="generators-grid">
+                <div class="button-grid" id="generators-grid">
                     <!-- JavaScript로 실시간 동적 렌더링 -->
                 </div>
             </section>

@@ -159,25 +159,18 @@ function renderGeneratorsUI() {
         const cat = escapeHtml(gen.category || '기타');
 
         return `
-            <div class="generator-card" title="${desc}">
-                <div class="gen-card-header">
-                    <div class="gen-card-icon">${icon}</div>
-                    <div class="gen-card-info">
-                        <div class="gen-card-title-row">
-                            <span class="gen-card-title">${name}</span>
-                            <span class="gen-card-cat">${cat}</span>
-                        </div>
-                        <div class="gen-card-desc">${desc}</div>
+            <div class="tool-btn gen-tool-card" onclick="runGenerator('${gen.id}', 1)" title="${desc} (클릭 시 1개 생성 및 복사)">
+                <div class="btn-icon">${icon}</div>
+                <div class="btn-text">
+                    <div class="gen-title-line">
+                        <h3>${name}</h3>
+                        <span class="gen-card-cat">${cat}</span>
                     </div>
+                    <p>${desc}</p>
                 </div>
-                <div class="gen-card-actions">
-                    <button class="gen-btn primary" onclick="runGenerator('${gen.id}', 1)" title="1개 생성 후 클립보드 자동 복사">
-                        <span>⚡</span> 생성 (1개)
-                    </button>
-                    <button class="gen-btn secondary" onclick="runGenerator('${gen.id}', 5)" title="5개 일괄 생성 후 복사">
-                        <span>📋</span> 5개 생성
-                    </button>
-                </div>
+                <button class="gen-bulk-badge" onclick="event.stopPropagation(); runGenerator('${gen.id}', 5)" title="5개 일괄 생성 및 복사">
+                    5개 📋
+                </button>
             </div>
         `;
     }).join('');
