@@ -148,8 +148,21 @@ def parse_ics_content(ics_text, calendar_info):
 
         if line == 'END:VEVENT':
             if in_event and current_event and current_event.get("startDate"):
-                if not current_event.get("endDate"):
-                    current_event["endDate"] = current_event["startDate"]
+                # RFC 5545 표준: 종일 일정(allDay)의 DTEND는 배타적(Exclusive)이므로 실제 일정 종료일은 DTEND - 1일임
+                if current_event.get("allDay"):
+                    end_str = current_event.get("endDate")
+                    start_str = current_event.get("startDate")
+                    if end_str and end_str > start_str:
+                        try:
+                            end_dt = datetime.datetime.strptime(end_str, "%Y-%m-%d") - datetime.timedelta(days=1)
+                            current_event["endDate"] = end_dt.strftime("%Y-%m-%d")
+                        except Exception:
+                            current_event["endDate"] = start_str
+                    else:
+                        current_event["endDate"] = start_str
+                else:
+                    if not current_event.get("endDate"):
+                        current_event["endDate"] = current_event["startDate"]
                 events.append(current_event)
             in_event = False
             current_event = None
