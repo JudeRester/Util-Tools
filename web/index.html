@@ -20,29 +20,42 @@
             <div class="header-status" id="header-status">준비 완료</div>
         </header>
 
-        <!-- 카테고리 탭 네비게이션 -->
-        <nav class="tab-nav">
-            <button class="tab-btn active" data-tab="system">
-                <span class="tab-icon">🖥️</span> 시스템 정보
-            </button>
-            <button class="tab-btn" data-tab="launch">
-                <span class="tab-icon">⚡</span> 빠른 실행
-            </button>
-            <button class="tab-btn" data-tab="files">
-                <span class="tab-icon">📁</span> 파일 / 폴더
-            </button>
-            <button class="tab-btn" data-tab="generator">
-                <span class="tab-icon">🔢</span> 데이터 생성
-            </button>
-            <button class="tab-btn" data-tab="jsrunner">
-                <span class="tab-icon">🧪</span> JS 실행기
-            </button>
-            <button class="tab-btn" data-tab="notes">
-                <span class="tab-icon">📝</span> 빠른 메모
-            </button>
-            <button class="tab-btn" data-tab="network">
-                <span class="tab-icon">🌐</span> 네트워크 & 기타
-            </button>
+        <!-- 카테고리 탭 네비게이션 (반응형 햄버거 메뉴 지원) -->
+        <nav class="tab-nav" id="main-tab-nav">
+            <!-- 좁은 화면용 햄버거 헤더 -->
+            <div class="mobile-tab-header">
+                <div class="mobile-active-indicator" id="mobile-active-tab-text">
+                    <span class="tab-icon">🖥️</span> <span class="active-tab-name">시스템 정보</span>
+                </div>
+                <button class="hamburger-menu-btn" id="hamburger-menu-btn" onclick="toggleMobileNav(event)" title="탭 메뉴 열기/닫기">
+                    <span class="hamburger-icon">☰</span> 메뉴
+                </button>
+            </div>
+
+            <!-- 탭 버튼 목록 (데스크톱: 가로 나열, 좁은 화면: 드롭다운) -->
+            <div class="tab-btn-wrapper" id="tab-btn-wrapper">
+                <button class="tab-btn active" data-tab="system">
+                    <span class="tab-icon">🖥️</span> <span class="tab-label">시스템 정보</span>
+                </button>
+                <button class="tab-btn" data-tab="launch">
+                    <span class="tab-icon">⚡</span> <span class="tab-label">빠른 실행</span>
+                </button>
+                <button class="tab-btn" data-tab="files">
+                    <span class="tab-icon">📁</span> <span class="tab-label">파일 / 폴더</span>
+                </button>
+                <button class="tab-btn" data-tab="generator">
+                    <span class="tab-icon">🔢</span> <span class="tab-label">데이터 생성</span>
+                </button>
+                <button class="tab-btn" data-tab="jsrunner">
+                    <span class="tab-icon">🧪</span> <span class="tab-label">JS 실행기</span>
+                </button>
+                <button class="tab-btn" data-tab="notes">
+                    <span class="tab-icon">📝</span> <span class="tab-label">빠른 메모</span>
+                </button>
+                <button class="tab-btn" data-tab="network">
+                    <span class="tab-icon">🌐</span> <span class="tab-label">네트워크 & 기타</span>
+                </button>
+            </div>
         </nav>
 
         <!-- 메인 콘텐츠 (카테고리별 기능 버튼 그리드) -->

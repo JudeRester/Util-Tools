@@ -74,14 +74,24 @@ body {
     border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
-/* 2. Category Tab Navigation */
+/* 2. Category Tab Navigation (Responsive Navbar) */
 .tab-nav {
-    display: flex;
-    gap: 8px;
+    position: relative;
     background: var(--bg-secondary);
     padding: 6px;
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
+    z-index: 100;
+}
+
+.mobile-tab-header {
+    display: none;
+}
+
+.tab-btn-wrapper {
+    display: flex;
+    gap: 6px;
+    width: 100%;
 }
 
 .tab-btn {
@@ -89,16 +99,17 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 10px 14px;
+    gap: 6px;
+    padding: 9px 8px;
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    font-size: 0.95rem;
+    font-size: 0.88rem;
     font-weight: 500;
     border-radius: 8px;
     cursor: pointer;
     transition: var(--transition);
+    white-space: nowrap;
 }
 
 .tab-btn:hover {
@@ -113,7 +124,78 @@ body {
 }
 
 .tab-icon {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
+    flex-shrink: 0;
+}
+
+.tab-label {
+    white-space: nowrap;
+}
+
+/* 좁은 화면/창 크기 축소 시 (880px 이하) 햄버거 메뉴 + 드롭다운으로 자동 전환 */
+@media (max-width: 880px) {
+    .mobile-tab-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 8px;
+    }
+
+    .mobile-active-indicator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.92rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .hamburger-menu-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+
+    .hamburger-menu-btn:hover {
+        background: var(--primary-hover);
+    }
+
+    .tab-btn-wrapper {
+        display: none;
+        flex-direction: column;
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+        padding: 8px;
+        z-index: 1000;
+        animation: fadeIn 0.15s ease;
+    }
+
+    .tab-btn-wrapper.open {
+        display: flex;
+    }
+
+    .tab-btn {
+        justify-content: flex-start;
+        padding: 10px 14px;
+        width: 100%;
+        font-size: 0.9rem;
+        border-radius: 6px;
+    }
 }
 
 /* 3. Tab Content Area & Button Grid */
