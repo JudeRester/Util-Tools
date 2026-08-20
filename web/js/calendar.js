@@ -238,12 +238,62 @@ async function syncCalendarEvents(force = false) {
     renderCalendarUI();
 }
 
+let disabledCalendarNames = new Set();
+
 // 2. UI 렌더링 총괄
 function renderCalendarUI() {
     renderCalendarHeader();
+    renderCalendarFilterBar();
     renderCalendarMonthGrid();
     renderAgendaPanel();
     renderCalendarManageList();
+}
+
+// 구독 캘린더 실시간 필터 칩 바 렌더링
+function renderCalendarFilterBar() {
+    const chipsEl = document.getElementById('cal-filter-chips');
+    if (!chipsEl) return;
+
+    const urls = calendarConfig.ics_urls || [];
+    if (urls.length === 0) {
+        chipsEl.innerHTML = '<span style="color:var(--text-secondary); font-size:0.75rem;">(구독된 캘린더 없음)</span>';
+        return;
+    }
+
+    // 캘린더 이름 목록 (중복 제거)
+    const calList = [];
+    urls.forEach(u => {
+        const name = u.name || '캘린더';
+        if (!calList.find(c => c.name === name)) {
+            calList.push({ name, color: u.color || '#6366f1' });
+        }
+    });
+
+    chipsEl.innerHTML = calList.map(cal => {
+        const isDisabled = disabledCalendarNames.has(cal.name);
+        const isActive = !isDisabled;
+        return `
+            <div class="cal-filter-chip ${isActive ? 'active' : 'disabled'}" onclick="toggleCalendarFilter('${escapeJsString(cal.name)}')" title="${isActive ? '클릭하여 이 캘린더 일정 숨기기' : '클릭하여 이 캘린더 일정 표시'}">
+                <span class="cal-filter-dot" style="background: ${cal.color};"></span>
+                <span>${escapeHtml(cal.name)}</span>
+                <span style="font-size:0.65rem; margin-left:2px;">${isActive ? '✓' : '✕'}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function toggleCalendarFilter(calName) {
+    if (disabledCalendarNames.has(calName)) {
+        disabledCalendarNames.delete(calName);
+    } else {
+        disabledCalendarNames.add(calName);
+    }
+    renderCalendarUI();
+}
+
+// 현재 활성화(필터링 통과)된 일정 목록 반환
+function getVisibleCalendarEvents() {
+    return calendarEvents.filter(e => !disabledCalendarNames.has(e.calendarName || '캘린더'));
 }
 
 // 헤더 년/월 드롭다운 값 동기화
@@ -335,7 +385,8 @@ function renderCalendarMonthGrid() {
 
 // 날짜 셀 안의 이벤트 뱃지들 렌더링
 function renderDayEventBadges(dateStr) {
-    const dayEvents = calendarEvents.filter(e => {
+    const visibleEvents = getVisibleCalendarEvents();
+    const dayEvents = visibleEvents.filter(e => {
         const start = e.startDate;
         const end = e.endDate || e.startDate;
         return dateStr >= start && dateStr <= end;
@@ -386,7 +437,8 @@ function renderAgendaPanel() {
 
     titleEl.innerHTML = `📌 <b>${selectedDateStr} (${weekName})</b> 일정`;
 
-    const dayEvents = calendarEvents.filter(e => {
+    const visibleEvents = getVisibleCalendarEvents();
+    const dayEvents = visibleEvents.filter(e => {
         const start = e.startDate;
         const end = e.endDate || e.startDate;
         return selectedDateStr >= start && selectedDateStr <= end;

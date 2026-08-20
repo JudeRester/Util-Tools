@@ -1442,6 +1442,73 @@ body {
     color: #ef4444;
 }
 
+/* 구독 캘린더 실시간 필터 칩 바 */
+.calendar-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.cal-filter-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.cal-filter-chips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.cal-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 16px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-primary);
+    transition: var(--transition);
+    user-select: none;
+}
+
+.cal-filter-chip:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.cal-filter-chip.active {
+    border-color: var(--accent-color);
+    background: rgba(99, 102, 241, 0.15);
+}
+
+.cal-filter-chip.disabled {
+    opacity: 0.35;
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.05);
+    text-decoration: line-through;
+    color: var(--text-secondary);
+}
+
+.cal-filter-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
 .calendar-main-grid {
     display: flex;
     gap: 0;
