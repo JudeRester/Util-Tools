@@ -288,13 +288,29 @@
             <!-- 8. 달력 & 일정 (Google Calendar iCal) 탭 -->
             <section id="tab-calendar" class="tab-pane">
                 <div class="calendar-container">
-                    <!-- 상단 캘린더 툴바 -->
+                    <!-- 상단 캘린더 툴바 (연/월 선택기 및 동기화) -->
                     <div class="calendar-toolbar">
                         <div class="cal-nav-controls">
                             <button class="cal-nav-btn" onclick="changeCalendarMonth(-1)" title="이전 달">◀</button>
-                            <h2 id="calendar-month-year-title" class="calendar-title">2026년 8월</h2>
+                            <div class="cal-picker-group">
+                                <select id="cal-year-select" class="cal-select" onchange="onCalendarYearChange(this.value)" title="연도 선택"></select>
+                                <select id="cal-month-select" class="cal-select" onchange="onCalendarMonthChange(this.value)" title="월 선택">
+                                    <option value="0">1월</option>
+                                    <option value="1">2월</option>
+                                    <option value="2">3월</option>
+                                    <option value="3">4월</option>
+                                    <option value="4">5월</option>
+                                    <option value="5">6월</option>
+                                    <option value="6">7월</option>
+                                    <option value="7">8월</option>
+                                    <option value="8">9월</option>
+                                    <option value="10">10월</option>
+                                    <option value="11">11월</option>
+                                    <option value="12">12월</option>
+                                </select>
+                            </div>
                             <button class="cal-nav-btn" onclick="changeCalendarMonth(1)" title="다음 달">▶</button>
-                            <button class="cal-today-btn" onclick="goToCalendarToday()">오늘</button>
+                            <button class="cal-today-btn" onclick="goToCalendarToday()" title="오늘 날짜로 이동">오늘</button>
                         </div>
                         <div class="cal-action-controls">
                             <span id="calendar-sync-time" class="cal-sync-status">동기화 대기</span>
@@ -307,10 +323,10 @@
                         </div>
                     </div>
 
-                    <!-- 메인 2열 레이아웃 (월간 그리드 + 우측 일정 상세) -->
-                    <div class="calendar-main-grid">
+                    <!-- 메인 2열 레이아웃 (월간 그리드 + 좌우 스플리터 + 우측 일정 상세) -->
+                    <div class="calendar-main-grid" id="calendar-main-grid">
                         <!-- 좌측: 월간 달력 그리드 -->
-                        <div class="calendar-month-view">
+                        <div class="calendar-month-view" id="calendar-month-view">
                             <!-- 요일 헤더 -->
                             <div class="calendar-weekdays">
                                 <div class="weekday sun">일</div>
@@ -326,8 +342,13 @@
                             </div>
                         </div>
 
+                        <!-- 좌우 너비 드래그 스플리터 -->
+                        <div id="calendar-resizer" class="calendar-v-resizer" title="좌우로 드래그하여 달력과 일정창 크기 조절">
+                            <div class="v-resizer-handle"></div>
+                        </div>
+
                         <!-- 우측: 선택한 날짜 일정 상세 및 오늘의 일정 -->
-                        <div class="calendar-agenda-panel">
+                        <div class="calendar-agenda-panel" id="calendar-agenda-panel">
                             <div class="agenda-header">
                                 <span id="agenda-date-title">📌 선택한 날짜 일정</span>
                             </div>

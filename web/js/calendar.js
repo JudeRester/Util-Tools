@@ -25,6 +25,8 @@ const DEFAULT_CALENDAR_CONFIG_FALLBACK = {
 
 // 1. 초기 로드
 async function initCalendar() {
+    initCalendarYearMonthSelect();
+    initCalendarResizer();
     await loadCalendarConfig();
     renderCalendarUI();
     
@@ -33,6 +35,85 @@ async function initCalendar() {
 
     // 자정(00:00) 자동 배치 동기화 및 주기적 백그라운드 동기화 스케줄링
     setupMidnightAndPeriodicSync();
+}
+
+// 연도 선택 드롭다운 옵션 초기화 (2020 ~ 2035)
+function initCalendarYearMonthSelect() {
+    const yearSelect = document.getElementById('cal-year-select');
+    if (!yearSelect) return;
+
+    yearSelect.innerHTML = '';
+    const startYear = 2020;
+    const endYear = 2035;
+    for (let y = startYear; y <= endYear; y++) {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = `${y}년`;
+        if (y === currentCalendarYear) opt.selected = true;
+        yearSelect.appendChild(opt);
+    }
+}
+
+// 좌우 스플리터(Resizer) 초기화 및 너비 드래그 제어
+function initCalendarResizer() {
+    const resizer = document.getElementById('calendar-resizer');
+    const monthView = document.getElementById('calendar-month-view');
+    const container = document.getElementById('calendar-main-grid');
+    if (!resizer || !monthView || !container) return;
+
+    // 저장된 좌측 너비 복원
+    const savedWidth = localStorage.getItem('calendar_month_width');
+    if (savedWidth) {
+        monthView.style.flex = 'none';
+        monthView.style.width = `${savedWidth}px`;
+    }
+
+    let isDragging = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    resizer.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startX = e.clientX;
+        startWidth = monthView.getBoundingClientRect().width;
+
+        resizer.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        const onMouseMove = (moveEvent) => {
+            if (!isDragging) return;
+            const deltaX = moveEvent.clientX - startX;
+            let newWidth = startWidth + deltaX;
+
+            const containerWidth = container.getBoundingClientRect().width;
+            const minWidth = 320;
+            const maxWidth = containerWidth - 220; // 우측 일정 패널 최소 220px 확보
+
+            if (newWidth < minWidth) newWidth = minWidth;
+            if (newWidth > maxWidth) newWidth = maxWidth;
+
+            monthView.style.flex = 'none';
+            monthView.style.width = `${newWidth}px`;
+        };
+
+        const onMouseUp = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            resizer.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+
+            const finalWidth = monthView.getBoundingClientRect().width;
+            localStorage.setItem('calendar_month_width', Math.round(finalWidth));
+
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    });
 }
 
 // 매일 자정(00:00:05) 자동 배치 동기화 및 주기적 새로고침 등록
@@ -165,12 +246,24 @@ function renderCalendarUI() {
     renderCalendarManageList();
 }
 
-// 헤더 년/월 표시
+// 헤더 년/월 드롭다운 값 동기화
 function renderCalendarHeader() {
-    const titleEl = document.getElementById('calendar-month-year-title');
-    if (titleEl) {
-        titleEl.textContent = `${currentCalendarYear}년 ${currentCalendarMonth + 1}월`;
-    }
+    const yearSelect = document.getElementById('cal-year-select');
+    const monthSelect = document.getElementById('cal-month-select');
+    if (yearSelect) yearSelect.value = currentCalendarYear;
+    if (monthSelect) monthSelect.value = currentCalendarMonth;
+}
+
+function onCalendarYearChange(yearVal) {
+    currentCalendarYear = parseInt(yearVal, 10);
+    renderCalendarMonthGrid();
+    renderAgendaPanel();
+}
+
+function onCalendarMonthChange(monthVal) {
+    currentCalendarMonth = parseInt(monthVal, 10);
+    renderCalendarMonthGrid();
+    renderAgendaPanel();
 }
 
 // 월간 날짜 그리드 렌더링

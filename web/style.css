@@ -1358,7 +1358,36 @@ body {
 .cal-nav-controls {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+}
+
+.cal-picker-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.cal-select {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+    transition: var(--transition);
+}
+
+.cal-select:hover, .cal-select:focus {
+    border-color: var(--accent-color);
+    background: var(--bg-secondary);
+}
+
+.cal-select option {
+    background: var(--bg-card);
+    color: var(--text-primary);
 }
 
 .cal-nav-btn {
@@ -1375,15 +1404,6 @@ body {
 .cal-nav-btn:hover {
     background: rgba(255, 255, 255, 0.12);
     border-color: var(--accent-color);
-}
-
-.calendar-title {
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    min-width: 110px;
-    text-align: center;
-    margin: 0;
 }
 
 .cal-today-btn {
@@ -1424,15 +1444,61 @@ body {
 
 .calendar-main-grid {
     display: flex;
-    gap: 12px;
+    gap: 0;
     flex: 1;
     min-height: 0;
     overflow: hidden;
+    position: relative;
 }
 
 /* 좌측 월간 달력 그리드 */
 .calendar-month-view {
     flex: 1.5;
+    min-width: 320px;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* 좌우 너비 드래그 스플리터 바 */
+.calendar-v-resizer {
+    width: 10px;
+    margin: 0 -1px;
+    cursor: col-resize;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 15;
+    transition: background 0.15s ease;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.calendar-v-resizer:hover, .calendar-v-resizer.dragging {
+    background: rgba(99, 102, 241, 0.35);
+}
+
+.v-resizer-handle {
+    width: 2px;
+    height: 40px;
+    background: var(--border-color);
+    border-radius: 2px;
+    transition: background 0.15s ease, height 0.15s ease;
+}
+
+.calendar-v-resizer:hover .v-resizer-handle, .calendar-v-resizer.dragging .v-resizer-handle {
+    background: var(--accent-color);
+    height: 55px;
+}
+
+/* 우측 일정 상세(Agenda) 패널 */
+.calendar-agenda-panel {
+    flex: 1;
+    min-width: 220px;
     display: flex;
     flex-direction: column;
     background: var(--bg-card);
