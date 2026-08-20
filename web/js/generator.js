@@ -164,13 +164,15 @@ function renderGeneratorsUI() {
                 <div class="btn-text">
                     <div class="gen-title-line">
                         <h3>${name}</h3>
-                        <span class="gen-card-cat">${cat}</span>
                     </div>
                     <p>${desc}</p>
                 </div>
-                <button class="gen-bulk-badge" onclick="event.stopPropagation(); runGenerator('${gen.id}', 5)" title="5개 일괄 생성 및 복사">
-                    5개 📋
-                </button>
+                <div class="gen-card-meta">
+                    <span class="gen-card-cat">${cat}</span>
+                    <button class="gen-bulk-btn" onclick="event.stopPropagation(); runGenerator('${gen.id}', 5)" title="5개 일괄 생성 및 복사">
+                        5개 📋
+                    </button>
+                </div>
             </div>
         `;
     }).join('');
@@ -258,15 +260,18 @@ function renderGeneratorsManageList() {
 
     listEl.innerHTML = currentGenerators.map((gen, idx) => `
         <div class="manage-item" draggable="true" data-index="${idx}" data-id="${gen.id}">
-            <div class="item-drag-handle" title="드래그하여 순서 변경">⋮⋮</div>
-            <div class="item-icon-preview">${escapeHtml(gen.icon || '🎲')}</div>
-            <div class="item-info">
-                <div class="item-name">${escapeHtml(gen.name || '생성기')} <span style="font-size:0.7rem; color:#a5b4fc;">[${escapeHtml(gen.category || '기타')}]</span></div>
-                <div class="item-path">${escapeHtml(gen.description || '')}</div>
+            <div class="drag-handle" title="드래그하여 순서 변경">⋮⋮</div>
+            <div style="font-size: 1.4rem; padding: 4px; line-height: 1;">${escapeHtml(gen.icon || '🎲')}</div>
+            <div class="manage-item-info">
+                <div class="manage-item-name">
+                    ${escapeHtml(gen.name || '생성기')} 
+                    <span class="gen-card-cat">${escapeHtml(gen.category || '기타')}</span>
+                </div>
+                <div class="manage-item-path">${escapeHtml(gen.description || '')}</div>
             </div>
-            <div class="item-actions">
-                <button class="item-btn edit-btn" onclick="editGenerator('${gen.id}')" title="생성기 스크립트 수정">✏️ 수정</button>
-                <button class="item-btn delete-btn" onclick="deleteGenerator('${gen.id}')" title="생성기 삭제">🗑️ 삭제</button>
+            <div class="manage-item-actions">
+                <button class="item-edit-btn" onclick="editGenerator('${gen.id}')" title="생성기 스크립트 수정">✏️ 수정</button>
+                <button class="item-delete-btn" onclick="deleteGenerator('${gen.id}')" title="생성기 삭제">🗑️ 삭제</button>
             </div>
         </div>
     `).join('');
