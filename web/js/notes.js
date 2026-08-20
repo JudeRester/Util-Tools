@@ -45,6 +45,7 @@ function clearNoteSearch() {
 
 // 초기 로드
 async function loadNotes() {
+    initNotesResizer();
     try {
         if (window.eel && eel.get_notes) {
             const res = await eel.get_notes()();
@@ -66,6 +67,68 @@ async function loadNotes() {
     }
 
     renderNotesUI();
+}
+
+// 메모장 좌우 스플리터(Resizer) 초기화 및 너비 드래그 제어
+function initNotesResizer() {
+    const resizer = document.getElementById('notes-resizer');
+    const sidebar = document.getElementById('notes-sidebar');
+    const container = document.querySelector('.notes-container');
+    if (!resizer || !sidebar || !container) return;
+
+    // 저장된 좌측 너비 복원
+    const savedWidth = localStorage.getItem('notes_sidebar_width');
+    if (savedWidth) {
+        sidebar.style.flex = 'none';
+        sidebar.style.width = `${savedWidth}px`;
+    }
+
+    let isDragging = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    resizer.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startX = e.clientX;
+        startWidth = sidebar.getBoundingClientRect().width;
+
+        resizer.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        const onMouseMove = (moveEvent) => {
+            if (!isDragging) return;
+            const deltaX = moveEvent.clientX - startX;
+            let newWidth = startWidth + deltaX;
+
+            const containerWidth = container.getBoundingClientRect().width;
+            const minWidth = 180;
+            const maxWidth = containerWidth - 260; // 우측 에디터 최소 260px 확보
+
+            if (newWidth < minWidth) newWidth = minWidth;
+            if (newWidth > maxWidth) newWidth = maxWidth;
+
+            sidebar.style.flex = 'none';
+            sidebar.style.width = `${newWidth}px`;
+        };
+
+        const onMouseUp = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            resizer.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+
+            const finalWidth = sidebar.getBoundingClientRect().width;
+            localStorage.setItem('notes_sidebar_width', Math.round(finalWidth));
+
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    });
 }
 
 function renderNotesUI() {

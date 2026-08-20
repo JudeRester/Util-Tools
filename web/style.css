@@ -1083,15 +1083,17 @@ body {
    ========================================== */
 .notes-container {
     display: flex;
-    gap: 12px;
+    gap: 0;
     height: 100%;
     flex: 1;
     min-height: 0;
     overflow: hidden;
+    position: relative;
 }
 
 .notes-sidebar {
-    width: 230px;
+    width: 240px;
+    min-width: 180px;
     flex-shrink: 0;
     height: 100%;
     min-height: 0;

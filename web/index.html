@@ -237,7 +237,7 @@
             <section id="tab-notes" class="tab-pane">
                 <div class="notes-container">
                     <!-- 좌측: 메모 목록 사이드바 -->
-                    <div class="notes-sidebar">
+                    <div class="notes-sidebar" id="notes-sidebar">
                         <div class="notes-sidebar-header">
                             <span>메모 목록 (<span id="notes-count-badge">0</span>)</span>
                             <button class="mini-btn add-note-btn" onclick="addNewNote()" title="새 메모 추가">➕ 새 메모</button>
@@ -252,8 +252,13 @@
                         </div>
                     </div>
 
+                    <!-- 좌우 너비 드래그 스플리터 -->
+                    <div id="notes-resizer" class="calendar-v-resizer" title="좌우로 드래그하여 메모 목록과 에디터 크기 조절">
+                        <div class="v-resizer-handle"></div>
+                    </div>
+
                     <!-- 우측: 메모 에디터 패널 -->
-                    <div class="notes-editor-panel">
+                    <div class="notes-editor-panel" id="notes-editor-panel">
                         <!-- 에디터 툴바 -->
                         <div class="notes-editor-toolbar">
                             <input type="text" id="note-title-input" class="note-title-input" placeholder="메모 제목을 입력하세요..." oninput="onNoteTitleChange(this.value)">
