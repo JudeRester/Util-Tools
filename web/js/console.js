@@ -16,6 +16,73 @@ function logToConsole(title, content) {
     
     consoleEl.textContent = textContent;
     consoleEl.scrollTop = 0;
+
+    // 하단 로그창이 접혀있는 상태인 경우 우측 하단에 실시간 토스트 알림 팝업!
+    if (isConsoleCollapsed) {
+        showToast(title, content);
+    }
+}
+
+function showToast(title, content) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    let bodyText = '';
+    if (typeof content === 'object') {
+        try {
+            // 깔끔한 1줄 요약
+            bodyText = JSON.stringify(content);
+        } catch (e) {
+            bodyText = String(content);
+        }
+    } else {
+        bodyText = String(content || '');
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'toast-card';
+    toast.title = '클릭하면 하단 로그창이 펼쳐집니다';
+    
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    toast.innerHTML = `
+        <div class="toast-header">
+            <span class="toast-title">🔔 ${escapeHtml(title)}</span>
+            <span class="toast-time">${timeStr}</span>
+        </div>
+        <div class="toast-body">${escapeHtml(bodyText)}</div>
+        <div class="toast-tip">클릭하여 로그창 열기 ↗</div>
+    `;
+
+    // 클릭 시 로그창 펼치기 및 토스트 닫기
+    toast.addEventListener('click', () => {
+        if (isConsoleCollapsed) {
+            toggleConsole();
+        }
+        removeToast(toast);
+    });
+
+    container.appendChild(toast);
+
+    // 최대 3개까지만 유지 (화면 가림 방지)
+    while (container.children.length > 3) {
+        removeToast(container.firstElementChild);
+    }
+
+    // 3.8초 후 자동 제거
+    setTimeout(() => {
+        removeToast(toast);
+    }, 3800);
+}
+
+function removeToast(toast) {
+    if (!toast || toast.classList.contains('hide')) return;
+    toast.classList.add('hide');
+    setTimeout(() => {
+        if (toast && toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+    }, 300);
 }
 
 function clearConsole() {
