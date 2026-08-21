@@ -198,7 +198,7 @@ async function pickFolderFromExplorer() {
                 }
             }
         } else {
-            alert('폴더 선택 대화상자를 지원하지 않는 환경입니다. 직접 경로를 입력해 주세요.');
+            await showAppAlert('폴더 선택 대화상자를 지원하지 않는 환경입니다. 직접 경로를 입력해 주세요.', '알림', 'ℹ️');
         }
     } catch (e) {
         logToConsole('폴더 선택 오류:', e);
@@ -214,7 +214,7 @@ async function addNewShortcut() {
     const path = pathInput.value.trim();
 
     if (!name || !path) {
-        alert('이름과 폴더 경로를 모두 입력해 주세요.');
+        await showAppAlert('이름과 폴더 경로를 모두 입력해 주세요.', '입력 필요', '⚠️');
         return;
     }
 
@@ -261,7 +261,13 @@ async function deleteShortcut(id) {
 
 // 기본값 복원
 async function resetDefaultShortcuts() {
-    if (confirm('기본 폴더 바로가기 목록으로 복원하시겠습니까?')) {
+    const confirmed = await showAppConfirm('기본 폴더 바로가기 목록으로 복원하시겠습니까?', {
+        title: '기본값 복원',
+        icon: '🔄',
+        confirmText: '복원',
+        isDanger: true
+    });
+    if (confirmed) {
         cancelEditShortcut();
         currentShortcuts = JSON.parse(JSON.stringify(DEFAULT_SHORTCUTS));
         await saveShortcuts();

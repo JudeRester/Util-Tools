@@ -215,7 +215,7 @@ async function saveJsCodeToNotes() {
 
     const code = editor.value.trim();
     if (!code) {
-        alert('저장할 JavaScript 코드가 비어있습니다.');
+        await showAppAlert('저장할 JavaScript 코드가 비어있습니다.', '알림', '⚠️');
         return;
     }
 
@@ -233,7 +233,7 @@ async function saveJsCodeToNotes() {
             switchTab('notes');
         }
     } else {
-        alert('메모 저장 기능을 찾을 수 없습니다.');
+        await showAppAlert('메모 저장 기능을 찾을 수 없습니다.', '오류', '❌');
     }
 }
 
@@ -359,7 +359,7 @@ async function copyJsOutput() {
 
     const text = outputEl.innerText;
     if (!text || text.includes('코드를 입력하고')) {
-        alert('복사할 실행 결과가 없습니다.');
+        await showAppAlert('복사할 실행 결과가 없습니다.', '알림', 'ℹ️');
         return;
     }
 
@@ -367,6 +367,6 @@ async function copyJsOutput() {
         await navigator.clipboard.writeText(text);
         logToConsole('복사 완료', 'JS 실행 결과가 클립보드에 복사되었습니다.');
     } catch (e) {
-        alert('클립보드 복사 실패: ' + e.message);
+        await showAppAlert('클립보드 복사 실패: ' + e.message, '오류', '❌');
     }
 }

@@ -640,6 +640,21 @@
         </div>
     </div>
 
+    <!-- 공통 인레이어 팝업 다이얼로그 (Alert / Confirm) -->
+    <div id="app-dialog-modal" class="modal-overlay dialog-modal-overlay">
+        <div class="modal-card dialog-card">
+            <div class="dialog-header">
+                <div class="dialog-icon" id="dialog-icon">ℹ️</div>
+                <h3 class="dialog-title" id="dialog-title">알림</h3>
+            </div>
+            <div class="dialog-body" id="dialog-message"></div>
+            <div class="dialog-footer" id="dialog-footer">
+                <button id="dialog-cancel-btn" class="form-btn close-btn">취소</button>
+                <button id="dialog-confirm-btn" class="form-btn add-btn">확인</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 로그창 접힘 시 표시되는 실시간 토스트 알림 컨테이너 -->
     <div id="toast-container" class="toast-container"></div>
 

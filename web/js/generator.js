@@ -184,13 +184,13 @@ function renderGeneratorsUI() {
 async function runGenerator(genId, count = 1) {
     const gen = currentGenerators.find(g => String(g.id) === String(genId));
     if (!gen) {
-        alert('생성기 정보를 찾을 수 없습니다.');
+        await showAppAlert('생성기 정보를 찾을 수 없습니다.', '생성기 오류', '⚠️');
         return;
     }
 
     const code = gen.code || '';
     if (!code.trim()) {
-        alert('생성기 스크립트 코드가 비어있습니다.');
+        await showAppAlert('생성기 스크립트 코드가 비어있습니다.', '코드 확인', '⚠️');
         return;
     }
 
@@ -217,7 +217,7 @@ async function runGenerator(genId, count = 1) {
     } catch (err) {
         console.error('생성기 실행 오류:', err);
         logToConsole(`🚨 [${gen.name}] 생성기 실행 오류`, err.message || String(err));
-        alert(`생성기 실행 중 오류가 발생했습니다:\n${err.message}`);
+        await showAppAlert(`생성기 실행 중 오류가 발생했습니다:\n${err.message}`, '실행 오류', '🚨');
     }
 }
 
@@ -439,7 +439,7 @@ async function testGeneratorCode() {
 
     const code = codeIn.value.trim();
     if (!code) {
-        alert('테스트할 JavaScript 코드가 비어있습니다.');
+        await showAppAlert('테스트할 JavaScript 코드가 비어있습니다.', '코드 확인', '⚠️');
         return;
     }
 
@@ -469,13 +469,17 @@ function hideTestOutput() {
 }
 
 // 6. Draft에서 현재 선택된 생성기 삭제 (디스크 저장 없음)
-function deleteCurrentGenerator() {
+async function deleteCurrentGenerator() {
     if (!selectedStudioGenId) return;
 
     const gen = studioDraftGenerators.find(g => String(g.id) === String(selectedStudioGenId));
     if (!gen) return;
 
-    if (!confirm(`'${gen.name}' 생성기를 목록에서 제거하시겠습니까?\n(하단의 [💾 변경사항 저장]을 눌러야 최종 반영되며, [취소] 시 복구됩니다)`)) return;
+    const confirmed = await showAppConfirm(
+        `'${gen.name}' 생성기를 목록에서 제거하시겠습니까?\n(하단의 [💾 변경사항 저장]을 눌러야 최종 반영되며, [취소] 시 복구됩니다)`,
+        { title: '생성기 삭제', icon: '🗑️', confirmText: '삭제', isDanger: true }
+    );
+    if (!confirmed) return;
 
     // Draft에서만 삭제
     studioDraftGenerators = studioDraftGenerators.filter(g => String(g.id) !== String(selectedStudioGenId));
@@ -486,8 +490,12 @@ function deleteCurrentGenerator() {
 }
 
 // 7. Draft에 기본 템플릿 로드 (디스크 저장 없음)
-function resetDefaultGenerators() {
-    if (!confirm('모든 생성기를 기본 템플릿 목록으로 되돌리시겠습니까?\n(하단의 [💾 변경사항 저장]을 눌러야 최종 반영됩니다)')) return;
+async function resetDefaultGenerators() {
+    const confirmed = await showAppConfirm(
+        '모든 생성기를 기본 템플릿 목록으로 되돌리시겠습니까?\n(하단의 [💾 변경사항 저장]을 눌러야 최종 반영됩니다)',
+        { title: '기본값 복원', icon: '🔄', confirmText: '복원', isDanger: true }
+    );
+    if (!confirmed) return;
 
     studioDraftGenerators = JSON.parse(JSON.stringify(DEFAULT_GENERATORS_FALLBACK));
     selectedStudioGenId = studioDraftGenerators.length > 0 ? studioDraftGenerators[0].id : null;
@@ -503,13 +511,13 @@ async function saveStudioChanges() {
     for (let i = 0; i < studioDraftGenerators.length; i++) {
         const g = studioDraftGenerators[i];
         if (!g.name || !g.name.trim()) {
-            alert(`[항목 #${i+1}] 생성기 이름을 입력해 주세요.`);
+            await showAppAlert(`[항목 #${i+1}] 생성기 이름을 입력해 주세요.`, '입력 필요', '⚠️');
             selectGeneratorInStudio(g.id);
             document.getElementById('gen-name-input')?.focus();
             return;
         }
         if (!g.code || !g.code.trim()) {
-            alert(`'${g.name}' 생성기의 JavaScript 코드를 입력해 주세요.`);
+            await showAppAlert(`'${g.name}' 생성기의 JavaScript 코드를 입력해 주세요.`, '코드 입력 필요', '⚠️');
             selectGeneratorInStudio(g.id);
             document.getElementById('gen-code-input')?.focus();
             return;

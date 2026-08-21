@@ -341,7 +341,7 @@ async function saveNotesImmediately() {
 async function copyCurrentNote() {
     const activeNote = currentNotes.find(n => n.id === activeNoteId);
     if (!activeNote || !activeNote.content) {
-        alert('복사할 메모 내용이 없습니다.');
+        await showAppAlert('복사할 메모 내용이 없습니다.', '알림', 'ℹ️');
         return;
     }
 
@@ -356,7 +356,7 @@ async function copyCurrentNote() {
 
         logToConsole('클립보드 복사 완료', `'${activeNote.title}' 내용이 복사되어 목록 맨 위로 이동되었습니다.`);
     } catch (e) {
-        alert('클립보드 복사 실패: ' + e.message);
+        await showAppAlert('클립보드 복사 실패: ' + e.message, '오류', '❌');
     }
 }
 
@@ -373,11 +373,17 @@ async function moveCurrentNoteToTop() {
     }
 }
 
-function clearCurrentNote() {
+async function clearCurrentNote() {
     const activeNote = currentNotes.find(n => n.id === activeNoteId);
     if (!activeNote) return;
 
-    if (confirm(`'${activeNote.title}' 메모의 내용을 모두 비우시겠습니까?`)) {
+    const confirmed = await showAppConfirm(`'${activeNote.title}' 메모의 내용을 모두 비우시겠습니까?`, {
+        title: '메모 비우기',
+        icon: '🧹',
+        confirmText: '비우기',
+        isDanger: true
+    });
+    if (confirmed) {
         activeNote.content = '';
         activeNote.updatedAt = new Date().toLocaleString();
         const editor = document.getElementById('note-content-editor');
@@ -394,7 +400,13 @@ async function deleteCurrentNote() {
     const activeNote = currentNotes.find(n => n.id === activeNoteId);
     if (!activeNote) return;
 
-    if (confirm(`'${activeNote.title}' 메모를 영구 삭제하시겠습니까?`)) {
+    const confirmed = await showAppConfirm(`'${activeNote.title}' 메모를 영구 삭제하시겠습니까?`, {
+        title: '메모 영구 삭제',
+        icon: '🗑️',
+        confirmText: '영구 삭제',
+        isDanger: true
+    });
+    if (confirmed) {
         currentNotes = currentNotes.filter(n => n.id !== activeNoteId);
         activeNoteId = currentNotes.length > 0 ? currentNotes[0].id : null;
 

@@ -235,7 +235,7 @@ async function addNewQuickLaunchItem() {
     const command = document.getElementById('new-ql-command').value.trim();
 
     if (!name || !command) {
-        alert('이름과 실행 명령어/경로를 모두 입력해 주세요.');
+        await showAppAlert('이름과 실행 명령어/경로를 모두 입력해 주세요.', '입력 필요', '⚠️');
         return;
     }
 
@@ -296,7 +296,13 @@ async function moveQuickLaunchItem(index, direction) {
 }
 
 async function resetDefaultQuickLaunch() {
-    if (confirm('기본 빠른 실행 목록으로 복원하시겠습니까?')) {
+    const confirmed = await showAppConfirm('기본 빠른 실행 목록으로 복원하시겠습니까?', {
+        title: '기본값 복원',
+        icon: '🔄',
+        confirmText: '복원',
+        isDanger: true
+    });
+    if (confirmed) {
         cancelEditQuickLaunch();
         currentQuickLaunch = JSON.parse(JSON.stringify(DEFAULT_QUICK_LAUNCH));
         await saveQuickLaunch();

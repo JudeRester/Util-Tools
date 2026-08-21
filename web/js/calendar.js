@@ -610,7 +610,7 @@ async function addNewCalendarUrl() {
     const rawUrl = document.getElementById('new-cal-url').value.trim();
 
     if (!name || !rawUrl) {
-        alert('캘린더 이름과 구글 캘린더 주소를 모두 입력해 주세요.');
+        await showAppAlert('캘린더 이름과 구글 캘린더 주소를 모두 입력해 주세요.', '입력 필요', '⚠️');
         return;
     }
 
@@ -651,7 +651,13 @@ async function addNewCalendarUrl() {
 }
 
 async function deleteCalendarUrl(id) {
-    if (confirm('이 캘린더 구독을 삭제하시겠습니까?')) {
+    const confirmed = await showAppConfirm('이 캘린더 구독을 삭제하시겠습니까?', {
+        title: '캘린더 삭제',
+        icon: '🗑️',
+        confirmText: '삭제',
+        isDanger: true
+    });
+    if (confirmed) {
         if (editingCalendarUrlId === id) {
             cancelEditCalendarUrl();
         }
@@ -664,7 +670,13 @@ async function deleteCalendarUrl(id) {
 }
 
 async function resetDefaultCalendarConfig() {
-    if (confirm('캘린더 설정을 기본값(대한민국 공휴일)으로 복원하시겠습니까?')) {
+    const confirmed = await showAppConfirm('캘린더 설정을 기본값(대한민국 공휴일)으로 복원하시겠습니까?', {
+        title: '기본값 복원',
+        icon: '🔄',
+        confirmText: '복원',
+        isDanger: true
+    });
+    if (confirmed) {
         cancelEditCalendarUrl();
         calendarConfig = JSON.parse(JSON.stringify(DEFAULT_CALENDAR_CONFIG_FALLBACK));
         await saveCalendarConfigLocally();

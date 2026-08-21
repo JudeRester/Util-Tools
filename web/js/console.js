@@ -224,3 +224,112 @@ function initConsoleResizer() {
         document.addEventListener('mouseup', onMouseUp);
     });
 }
+
+// ==========================================
+// 공통 인레이어 팝업 다이얼로그 (In-Layer Alert & Confirm)
+// ==========================================
+
+function showAppAlert(message, title = '알림', icon = 'ℹ️') {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('app-dialog-modal');
+        const iconEl = document.getElementById('dialog-icon');
+        const titleEl = document.getElementById('dialog-title');
+        const msgEl = document.getElementById('dialog-message');
+        const cancelBtn = document.getElementById('dialog-cancel-btn');
+        const confirmBtn = document.getElementById('dialog-confirm-btn');
+        if (!modal) {
+            console.log(`[Alert] ${title}: ${message}`);
+            return resolve();
+        }
+
+        iconEl.textContent = icon;
+        titleEl.textContent = title;
+        msgEl.textContent = message;
+        cancelBtn.style.display = 'none';
+        confirmBtn.className = 'form-btn add-btn';
+        confirmBtn.textContent = '확인';
+
+        const cleanup = () => {
+            modal.classList.remove('show');
+            document.removeEventListener('keydown', onKeyDown);
+        };
+
+        const onConfirm = () => {
+            cleanup();
+            resolve();
+        };
+
+        const onKeyDown = (e) => {
+            if (e.key === 'Enter' || e.key === 'Escape') {
+                e.preventDefault();
+                onConfirm();
+            }
+        };
+
+        confirmBtn.onclick = onConfirm;
+        document.addEventListener('keydown', onKeyDown);
+        modal.classList.add('show');
+        confirmBtn.focus();
+    });
+}
+
+function showAppConfirm(message, options = {}) {
+    const opts = typeof options === 'string' ? { title: options } : options;
+    const {
+        title = '확인',
+        icon = '❓',
+        confirmText = '확인',
+        cancelText = '취소',
+        isDanger = false
+    } = opts;
+
+    return new Promise((resolve) => {
+        const modal = document.getElementById('app-dialog-modal');
+        const iconEl = document.getElementById('dialog-icon');
+        const titleEl = document.getElementById('dialog-title');
+        const msgEl = document.getElementById('dialog-message');
+        const cancelBtn = document.getElementById('dialog-cancel-btn');
+        const confirmBtn = document.getElementById('dialog-confirm-btn');
+        if (!modal) return resolve(false);
+
+        iconEl.textContent = icon;
+        titleEl.textContent = title;
+        msgEl.textContent = message;
+        cancelBtn.style.display = 'inline-block';
+        cancelBtn.textContent = cancelText;
+        confirmBtn.className = isDanger ? 'form-btn danger-btn' : 'form-btn add-btn';
+        confirmBtn.textContent = confirmText;
+
+        const cleanup = () => {
+            modal.classList.remove('show');
+            document.removeEventListener('keydown', onKeyDown);
+        };
+
+        const onConfirm = () => {
+            cleanup();
+            resolve(true);
+        };
+
+        const onCancel = () => {
+            cleanup();
+            resolve(false);
+        };
+
+        const onKeyDown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                onConfirm();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                onCancel();
+            }
+        };
+
+        confirmBtn.onclick = onConfirm;
+        cancelBtn.onclick = onCancel;
+        document.addEventListener('keydown', onKeyDown);
+        modal.classList.add('show');
+        confirmBtn.focus();
+    });
+}
+
