@@ -37,7 +37,8 @@ app_settings.json
 # Allow public templates
 !*.example.json
 
-# AI Models
+# AI Models & Vector Cache
 models/
 *.onnx
+embeddings_cache.json
 

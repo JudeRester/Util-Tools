@@ -108,14 +108,16 @@ async function executeAiSearch(query) {
 
     try {
         let results = [];
+        let latencyMs = 0;
         if (window.eel && typeof eel.ai_semantic_search === 'function') {
             const res = await eel.ai_semantic_search(query, currentAiSearchCategory)();
             if (res.status === 'success' && Array.isArray(res.data)) {
                 results = res.data;
+                latencyMs = res.latency_ms || 0;
             }
         }
 
-        renderAiSearchResults(results, query);
+        renderAiSearchResults(results, query, latencyMs);
     } catch (err) {
         console.error("AI 검색 실패:", err);
         if (listEl) {
@@ -125,16 +127,17 @@ async function executeAiSearch(query) {
 }
 
 // 6. 검색 결과 렌더링
-function renderAiSearchResults(results, query) {
+function renderAiSearchResults(results, query, latencyMs = 0) {
     const listEl = document.getElementById('ai-results-list');
     const countEl = document.getElementById('ai-results-count');
     if (!listEl) return;
 
     if (countEl) {
+        const timeBadge = latencyMs > 0 ? `<span style="font-size:0.75rem; color:#34d399; margin-left:6px;">⚡ ${latencyMs}ms</span>` : '';
         if (results.length > 0) {
-            countEl.innerHTML = `<span>총 <b>${results.length}개</b>의 연관 항목이 발견되었습니다. (유사도 순)</span>`;
+            countEl.innerHTML = `<span>총 <b>${results.length}개</b> 연관 항목 발견 ${timeBadge}</span>`;
         } else {
-            countEl.innerHTML = `<span>'<b>${escapeHtml(query)}</b>'와 관련된 내용을 찾지 못했습니다.</span>`;
+            countEl.innerHTML = `<span>'<b>${escapeHtml(query)}</b>'와 관련된 내용을 찾지 못했습니다. ${timeBadge}</span>`;
         }
     }
 
