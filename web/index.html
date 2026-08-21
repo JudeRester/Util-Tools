@@ -55,6 +55,9 @@
                 <button class="tab-btn" data-tab="calendar">
                     <span class="tab-icon">📅</span> <span class="tab-label">달력 & 일정</span>
                 </button>
+                <button class="tab-btn" data-tab="mermaid">
+                    <span class="tab-icon">📊</span> <span class="tab-label">다이어그램</span>
+                </button>
                 <button class="tab-btn" data-tab="network">
                     <span class="tab-icon">🌐</span> <span class="tab-label">네트워크 & 기타</span>
                 </button>
@@ -389,6 +392,99 @@
                     </div>
                 </div>
             </section>
+
+            <!-- 9. Mermaid 다이어그램 시각화 스튜디오 탭 -->
+            <section id="tab-mermaid" class="tab-pane">
+                <div class="mermaid-studio-container">
+                    <!-- 상단 툴바 -->
+                    <div class="mermaid-toolbar">
+                        <div class="mermaid-toolbar-left">
+                            <span class="toolbar-title">📊 Mermaid Studio</span>
+                            <div class="mermaid-select-group">
+                                <label for="mermaid-template-select">템플릿:</label>
+                                <select id="mermaid-template-select" class="template-select" onchange="loadMermaidTemplate(this.value)">
+                                    <option value="flowchart_td">순서도 / Flowchart (상하)</option>
+                                    <option value="flowchart_lr">순서도 / Flowchart (좌우)</option>
+                                    <option value="sequence">시퀀스 다이어그램 (Sequence)</option>
+                                    <option value="class_diagram">클래스 다이어그램 (Class)</option>
+                                    <option value="er_diagram">데이터베이스 ERD (Entity-Relationship)</option>
+                                    <option value="state_diagram">상태 전이도 (State Diagram)</option>
+                                    <option value="gantt">간트 차트 (Gantt Schedule)</option>
+                                    <option value="mindmap">마인드맵 (Mindmap)</option>
+                                    <option value="git_graph">Git 브랜치 그래프 (Git Graph)</option>
+                                    <option value="pie_chart">원형 차트 (Pie Chart)</option>
+                                </select>
+                            </div>
+                            <div class="mermaid-select-group">
+                                <label for="mermaid-theme-select">테마:</label>
+                                <select id="mermaid-theme-select" class="template-select compact-theme-select" onchange="changeMermaidTheme(this.value)">
+                                    <option value="dark" selected>🌙 다크 (Dark)</option>
+                                    <option value="default">☀️ 라이트 (Default)</option>
+                                    <option value="forest">🌲 포레스트 (Forest)</option>
+                                    <option value="neutral">⚪ 뉴트럴 (Neutral)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mermaid-toolbar-right">
+                            <button class="play-btn mini-tool-btn" onclick="copyMermaidCode()" title="작성된 Mermaid 코드 클립보드 복사">
+                                <span>📋</span> 코드 복사
+                            </button>
+                            <button class="play-btn mini-tool-btn clear" onclick="clearMermaidEditor()" title="에디터 내용 비우기">
+                                <span>🧹</span> 비우기
+                            </button>
+                            <button class="play-btn mini-tool-btn" onclick="copyMermaidSvg()" title="렌더링된 SVG 벡터 코드 클립보드 복사">
+                                <span>📐</span> SVG 복사
+                            </button>
+                            <button class="play-btn mini-tool-btn" onclick="copyMermaidImageToClipboard()" title="다이어그램 이미지를 클립보드에 복사 (Ctrl+V 붙여넣기용)">
+                                <span>🖼️</span> 이미지 복사
+                            </button>
+                            <button class="play-btn mini-tool-btn run" onclick="downloadMermaidPng()" title="고해상도 PNG 이미지 파일로 다운로드">
+                                <span>💾</span> PNG 다운로드
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 좌우 분할 에디터 & 뷰포트 -->
+                    <div class="mermaid-split" id="mermaid-split">
+                        <!-- 좌측: 코드 에디터 -->
+                        <div class="mermaid-editor-pane" id="mermaid-editor-pane">
+                            <div class="pane-label">
+                                <span>Mermaid Script</span>
+                                <span class="shortcut-tip">실시간 렌더링</span>
+                            </div>
+                            <textarea id="mermaid-code-editor" class="code-textarea" spellcheck="false" placeholder="%% 여기에 Mermaid 다이어그램 스크립트를 작성하세요...&#10;flowchart TD&#10;    A[시작] --> B[처리]&#10;    B --> C[완료]" oninput="onMermaidCodeChange()"></textarea>
+                            <!-- 문법 에러 알림 바 -->
+                            <div id="mermaid-error-bar" class="mermaid-error-bar" style="display: none;">
+                                <span class="error-icon">⚠️</span>
+                                <span id="mermaid-error-text" class="error-text">문법 오류</span>
+                            </div>
+                        </div>
+
+                        <!-- 좌우 너비 드래그 스플리터 -->
+                        <div id="mermaid-resizer" class="calendar-v-resizer" title="좌우로 드래그하여 에디터와 뷰포트 크기 조절">
+                            <div class="v-resizer-handle"></div>
+                        </div>
+
+                        <!-- 우측: 다이어그램 뷰포트 -->
+                        <div class="mermaid-viewport-pane" id="mermaid-viewport-pane">
+                            <div class="pane-label">
+                                <span>Diagram Viewport</span>
+                                <div class="mermaid-zoom-controls">
+                                    <button class="zoom-btn" onclick="zoomMermaid(0.15)" title="확대 (Zoom In)">🔍+</button>
+                                    <button class="zoom-btn" onclick="zoomMermaid(-0.15)" title="축소 (Zoom Out)">🔍-</button>
+                                    <button class="zoom-btn" onclick="resetMermaidZoom()" title="기본 크기 (100%)">100%</button>
+                                    <button class="zoom-btn" onclick="fitMermaidToViewport()" title="화면 크기에 맞춤">↔️ 맞춤</button>
+                                </div>
+                            </div>
+                            <div id="mermaid-viewport" class="mermaid-viewport-area">
+                                <div id="mermaid-canvas" class="mermaid-canvas">
+                                    <div id="mermaid-render-output"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
 
         <!-- 콘솔 높이 드래그 조절 바 -->
@@ -689,6 +785,8 @@
     <script src="js/js_runner.js"></script>
     <script src="js/notes.js"></script>
     <script src="js/calendar.js"></script>
+    <script src="js/mermaid.min.js"></script>
+    <script src="js/mermaid_diagram.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

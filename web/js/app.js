@@ -125,6 +125,11 @@ function switchTab(targetTab) {
 
     // 5) 모바일 드롭다운 메뉴 자동 닫기
     closeMobileNav();
+
+    // 6) 다이어그램 탭 전환 시 뷰포트 맞춤 렌더링
+    if (targetTab === 'mermaid' && typeof fitMermaidToViewport === 'function') {
+        setTimeout(() => fitMermaidToViewport(), 50);
+    }
 }
 
 
@@ -176,4 +181,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 7) 캘린더(Calendar) 로드
     initCalendar();
+
+    // 8) Mermaid 다이어그램 스튜디오 초기화
+    if (typeof initMermaidDiagram === 'function') {
+        initMermaidDiagram();
+    }
 });
