@@ -3132,5 +3132,311 @@ body {
     margin-bottom: 8px;
 }
 
+/* ==========================================
+   AI 시맨틱 문맥 검색 & 의미 유사도 비교
+   ========================================== */
+.header-ai-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 12px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(168, 85, 247, 0.25));
+    border: 1px solid rgba(168, 85, 247, 0.45);
+    color: #e9d5ff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.header-ai-btn:hover {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.45), rgba(168, 85, 247, 0.45));
+    border-color: #c084fc;
+    color: #ffffff;
+    box-shadow: 0 0 14px rgba(168, 85, 247, 0.4);
+    transform: translateY(-1px);
+}
+
+.ai-search-box {
+    display: flex;
+    align-items: center;
+    background: #0d1117;
+    border: 2px solid rgba(168, 85, 247, 0.4);
+    border-radius: var(--radius-md);
+    padding: 8px 14px;
+    margin-bottom: 12px;
+    transition: var(--transition);
+}
+
+.ai-search-box:focus-within {
+    border-color: #c084fc;
+    box-shadow: 0 0 16px rgba(168, 85, 247, 0.3);
+}
+
+.ai-search-icon {
+    font-size: 1.3rem;
+    margin-right: 10px;
+}
+
+.ai-search-input-field {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #ffffff;
+    font-size: 0.96rem;
+    font-weight: 500;
+}
+
+.ai-search-input-field::placeholder {
+    color: #94a3b8;
+    font-size: 0.88rem;
+}
+
+.ai-filter-chips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.ai-filter-label {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-right: 2px;
+}
+
+.ai-chip-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    padding: 3px 10px;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.ai-chip-btn:hover {
+    color: var(--text-primary);
+    border-color: #a855f7;
+}
+
+.ai-chip-btn.active {
+    background: rgba(168, 85, 247, 0.25);
+    border-color: #c084fc;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.ai-results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    padding: 0 4px;
+}
+
+.ai-badge-tip {
+    font-size: 0.72rem;
+    color: #c084fc;
+    background: rgba(168, 85, 247, 0.12);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.ai-results-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 380px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.ai-result-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.ai-result-item:hover {
+    border-color: #a855f7;
+    background: var(--bg-card-hover);
+    transform: translateX(2px);
+}
+
+.ai-result-left {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 3px;
+}
+
+.ai-result-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.ai-result-tag {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.06);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: normal;
+}
+
+.ai-result-snippet {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 540px;
+}
+
+.ai-score-badge {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.ai-score-high {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.ai-score-mid {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.ai-score-low {
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.4);
+}
+
+.ai-compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.ai-compare-col {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ai-compare-col label {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.ai-compare-textarea {
+    height: 110px;
+    background: #0d1117;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: #ffffff;
+    font-size: 0.82rem;
+    padding: 8px 10px;
+    outline: none;
+    resize: vertical;
+}
+
+.ai-compare-textarea:focus {
+    border-color: #c084fc;
+}
+
+.ai-compare-action {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 14px;
+}
+
+.ai-compare-result-box {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    animation: fadeIn 0.2s ease;
+}
+
+.ai-compare-score-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.ai-compare-score-num {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #c084fc;
+}
+
+.ai-compare-verdict {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.ai-progress-bar-bg {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.ai-progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+
+.ai-keywords-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.ai-key-chip {
+    font-size: 0.72rem;
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    color: #e9d5ff;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
 
 

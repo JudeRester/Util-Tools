@@ -1,0 +1,316 @@
+/**
+ * AI 시맨틱 문맥 검색 & 의미 유사도 비교 제어 모듈
+ * - 초경량 다국어/음차(tomcat <-> 톰캣 등) 지능형 매칭
+ * - 전역 단축키 Ctrl+K 지원
+ */
+
+let currentAiSearchCategory = 'all';
+let aiSearchDebounceTimer = null;
+let lastAiSearchQuery = '';
+
+// 1. 모달 열기 / 닫기
+function openAiSearchModal(initialQuery = '') {
+    const modal = document.getElementById('ai-search-modal');
+    if (!modal) return;
+
+    modal.classList.add('show');
+    switchAiSubTab('search');
+
+    const input = document.getElementById('ai-search-input');
+    if (input) {
+        if (initialQuery) {
+            input.value = initialQuery;
+            onAiSearchInputChange(initialQuery);
+        } else if (!input.value.trim()) {
+            // 추천 기본 검색어 프리뷰
+            renderAiSearchEmptyState();
+        }
+        setTimeout(() => input.focus(), 80);
+    }
+}
+
+function closeAiSearchModal() {
+    const modal = document.getElementById('ai-search-modal');
+    if (modal) modal.classList.remove('show');
+}
+
+// 2. 서브 탭 전환
+function switchAiSubTab(tab) {
+    const searchBtn = document.getElementById('ai-subtab-search');
+    const compareBtn = document.getElementById('ai-subtab-compare');
+    const searchPane = document.getElementById('ai-search-pane');
+    const comparePane = document.getElementById('ai-compare-pane');
+
+    if (tab === 'search') {
+        searchBtn?.classList.add('active');
+        compareBtn?.classList.remove('active');
+        if (searchPane) searchPane.style.display = 'block';
+        if (comparePane) comparePane.style.display = 'none';
+        const input = document.getElementById('ai-search-input');
+        if (input) setTimeout(() => input.focus(), 60);
+    } else {
+        compareBtn?.classList.add('active');
+        searchBtn?.classList.remove('active');
+        if (comparePane) comparePane.style.display = 'block';
+        if (searchPane) searchPane.style.display = 'none';
+    }
+}
+
+// 3. 실시간 AI 검색 입력 처리 (디바운스 120ms)
+function onAiSearchInputChange(val) {
+    const clearBtn = document.getElementById('ai-search-clear-btn');
+    if (clearBtn) {
+        clearBtn.style.display = val ? 'inline-block' : 'none';
+    }
+
+    clearTimeout(aiSearchDebounceTimer);
+    if (!val || !val.trim()) {
+        renderAiSearchEmptyState();
+        return;
+    }
+
+    aiSearchDebounceTimer = setTimeout(() => {
+        executeAiSearch(val.trim());
+    }, 120);
+}
+
+function clearAiSearchInput() {
+    const input = document.getElementById('ai-search-input');
+    if (input) {
+        input.value = '';
+        input.focus();
+    }
+    const clearBtn = document.getElementById('ai-search-clear-btn');
+    if (clearBtn) clearBtn.style.display = 'none';
+    renderAiSearchEmptyState();
+}
+
+// 4. 카테고리 필터 설정
+function setAiSearchCategory(cat) {
+    currentAiSearchCategory = cat;
+    document.querySelectorAll('.ai-chip-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-cat') === cat);
+    });
+
+    const input = document.getElementById('ai-search-input');
+    if (input && input.value.trim()) {
+        executeAiSearch(input.value.trim());
+    }
+}
+
+// 5. 검색 실행 (백엔드 Eel AI 서비스 호출)
+async function executeAiSearch(query) {
+    lastAiSearchQuery = query;
+    const listEl = document.getElementById('ai-results-list');
+    const countEl = document.getElementById('ai-results-count');
+
+    if (countEl) countEl.innerHTML = `<span>⚡ '<b>${escapeHtml(query)}</b>' 문맥 분석 중...</span>`;
+
+    try {
+        let results = [];
+        if (window.eel && typeof eel.ai_semantic_search === 'function') {
+            const res = await eel.ai_semantic_search(query, currentAiSearchCategory)();
+            if (res.status === 'success' && Array.isArray(res.data)) {
+                results = res.data;
+            }
+        }
+
+        renderAiSearchResults(results, query);
+    } catch (err) {
+        console.error("AI 검색 실패:", err);
+        if (listEl) {
+            listEl.innerHTML = `<div style="color:var(--danger-color); text-align:center; padding:24px;">검색 처리 중 오류가 발생했습니다: ${err.message}</div>`;
+        }
+    }
+}
+
+// 6. 검색 결과 렌더링
+function renderAiSearchResults(results, query) {
+    const listEl = document.getElementById('ai-results-list');
+    const countEl = document.getElementById('ai-results-count');
+    if (!listEl) return;
+
+    if (countEl) {
+        if (results.length > 0) {
+            countEl.innerHTML = `<span>총 <b>${results.length}개</b>의 연관 항목이 발견되었습니다. (유사도 순)</span>`;
+        } else {
+            countEl.innerHTML = `<span>'<b>${escapeHtml(query)}</b>'와 관련된 내용을 찾지 못했습니다.</span>`;
+        }
+    }
+
+    if (results.length === 0) {
+        listEl.innerHTML = `
+            <div style="color:var(--text-secondary); text-align:center; padding:30px 10px;">
+                <div style="font-size: 2rem; margin-bottom: 8px;">🔍</div>
+                <div style="font-weight: 500;">일치하는 문맥 결과가 없습니다.</div>
+                <div style="font-size: 0.78rem; margin-top: 6px; color: #94a3b8;">
+                    다른 동의어나 기술 키워드(예: 톰캣, 토큰, 디비, 배포 등)로 검색해 보세요.
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    listEl.innerHTML = results.map(item => {
+        let scoreClass = 'ai-score-low';
+        if (item.score >= 80) scoreClass = 'ai-score-high';
+        else if (item.score >= 50) scoreClass = 'ai-score-mid';
+
+        const safeTitle = escapeHtml(item.title);
+        const safeSnippet = escapeHtml(item.snippet || '');
+
+        return `
+            <div class="ai-result-item" onclick="navigateToAiSearchResult(${JSON.stringify(item).replace(/"/g, '&quot;')})">
+                <div class="ai-result-left">
+                    <div class="ai-result-title-row">
+                        <span>${item.icon}</span>
+                        <span>${safeTitle}</span>
+                        <span class="ai-result-tag">${escapeHtml(item.category_label)}</span>
+                    </div>
+                    <div class="ai-result-snippet" title="${safeSnippet}">${safeSnippet || '내용 요약 없음'}</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="ai-score-badge ${scoreClass}">
+                        ${item.score >= 90 ? '🔥 ' : ''}${item.score}% 일치
+                    </span>
+                    <button class="form-btn add-btn" style="padding: 3px 8px; font-size: 0.75rem; white-space: nowrap;">
+                        이동 ➔
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// 빈 검색창 추천 상태
+function renderAiSearchEmptyState() {
+    const listEl = document.getElementById('ai-results-list');
+    const countEl = document.getElementById('ai-results-count');
+
+    if (countEl) {
+        countEl.textContent = '검색어를 입력하면 실시간 문맥 유사도 순으로 분석됩니다.';
+    }
+    if (!listEl) return;
+
+    listEl.innerHTML = `
+        <div style="color:var(--text-secondary); padding: 18px 12px; text-align: center;">
+            <div style="font-size: 0.88rem; font-weight: 600; color: #c084fc; margin-bottom: 8px;">
+                💡 이런 자연어로 검색해 보세요:
+            </div>
+            <div style="display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;">
+                <button class="mini-chip-btn" onclick="quickAiSearch('톰캣 포트')">톰캣 포트</button>
+                <button class="mini-chip-btn" onclick="quickAiSearch('디비 타임아웃')">디비 타임아웃</button>
+                <button class="mini-chip-btn" onclick="quickAiSearch('토큰 로그인')">토큰 로그인</button>
+                <button class="mini-chip-btn" onclick="quickAiSearch('배포 스크립트')">배포 스크립트</button>
+                <button class="mini-chip-btn" onclick="quickAiSearch('순서도 흐름')">순서도 흐름</button>
+                <button class="mini-chip-btn" onclick="quickAiSearch('난수 생성')">난수 생성</button>
+            </div>
+        </div>
+    `;
+}
+
+function quickAiSearch(term) {
+    const input = document.getElementById('ai-search-input');
+    if (input) {
+        input.value = term;
+        onAiSearchInputChange(term);
+    }
+}
+
+// 7. 검색 결과 클릭 시 해당 탭 및 항목으로 즉시 이동 (Smart Navigation)
+async function navigateToAiSearchResult(item) {
+    closeAiSearchModal();
+
+    if (!item || !item.target_tab) return;
+
+    // 해당 탭으로 전환
+    if (typeof switchTab === 'function') {
+        switchTab(item.target_tab);
+    }
+
+    if (item.category === 'notes' && item.action_data?.note_id) {
+        // 해당 메모 선택
+        if (typeof selectNote === 'function') {
+            selectNote(item.action_data.note_id);
+        }
+        showAppAlert(`'${item.title}' 메모로 이동했습니다. 📝`, '이동 완료', '✅');
+    } else if (item.category === 'diagrams' && item.action_data?.code) {
+        // 다이어그램 에디터에 로드
+        const editor = document.getElementById('mermaid-code-editor');
+        if (editor) {
+            editor.value = item.action_data.code;
+            if (typeof renderMermaid === 'function') renderMermaid(true);
+        }
+        showAppAlert(`'${item.title}' 다이어그램을 에디터에 불러왔습니다! 📊`, '불러오기 완료', '✅');
+    } else {
+        showAppAlert(`[${item.category_label}] '${item.title}' 항목으로 이동했습니다.`, '이동 완료', '✅');
+    }
+}
+
+// 8. 문장 의미 유사도 측정기 (Similarity Matcher)
+async function runAiSimilarityCompare() {
+    const textA = document.getElementById('ai-compare-text-a')?.value.trim();
+    const textB = document.getElementById('ai-compare-text-b')?.value.trim();
+    const resultBox = document.getElementById('ai-compare-result-card');
+
+    if (!textA || !textB) {
+        await showAppAlert('비교할 텍스트 A와 B를 모두 입력해 주세요.', '입력 필요', '⚠️');
+        return;
+    }
+
+    try {
+        let res = null;
+        if (window.eel && typeof eel.ai_compare_similarity === 'function') {
+            res = await eel.ai_compare_similarity(textA, textB)();
+        }
+
+        if (res && res.status === 'success') {
+            const score = res.score;
+            const verdict = res.verdict;
+            const keywords = res.common_keywords || [];
+
+            if (resultBox) {
+                resultBox.style.display = 'block';
+                resultBox.innerHTML = `
+                    <div class="ai-compare-score-row">
+                        <div>
+                            <span style="font-size: 0.82rem; color: var(--text-secondary);">의미 일치율:</span>
+                            <div class="ai-compare-score-num">${score}%</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="font-size: 0.82rem; color: var(--text-secondary);">AI 분석 판정:</span>
+                            <div class="ai-compare-verdict">${verdict}</div>
+                        </div>
+                    </div>
+                    <div class="ai-progress-bar-bg">
+                        <div class="ai-progress-bar-fill" style="width: ${Math.max(4, score)}%;"></div>
+                    </div>
+                    ${keywords.length > 0 ? `
+                        <div style="margin-top: 8px;">
+                            <span style="font-size: 0.78rem; color: #c084fc; font-weight: 600;">🔗 매칭된 핵심 의미 토큰:</span>
+                            <div class="ai-keywords-chips" style="margin-top: 4px;">
+                                ${keywords.map(k => `<span class="ai-key-chip">${escapeHtml(k)}</span>`).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                `;
+            }
+        }
+    } catch (e) {
+        console.error("유사도 비교 오류:", e);
+        await showAppAlert(`유사도 분석 실패: ${e.message}`, '오류', '⚠️');
+    }
+}
+
+// 9. 전역 단축키 Ctrl+K 바인딩
+document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        const modal = document.getElementById('ai-search-modal');
+        if (modal && modal.classList.contains('show')) {
+            closeAiSearchModal();
+        } else {
+            openAiSearchModal();
+        }
+    }
+});

@@ -26,6 +26,7 @@ import services.calendar_service
 import services.diagram_service
 import services.settings_service
 import services.backup_service
+import services.ai_search_service
 
 # 3. 코어 트레이 관리자 모듈 로드
 from core.tray import TrayManager

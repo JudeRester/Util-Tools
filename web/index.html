@@ -55,6 +55,9 @@
                 <button class="tab-btn" data-tab="mermaid">
                     <span class="tab-icon">📊</span> <span class="tab-label">다이어그램</span>
                 </button>
+                <button class="header-ai-btn" onclick="openAiSearchModal()" title="AI 문맥 검색 & 의미 유사도 비교 (단축키: Ctrl+K)">
+                    <span class="tab-icon">🧠</span> <span class="tab-label">AI 검색</span>
+                </button>
             </div>
         </nav>
 
@@ -933,6 +936,91 @@
         </div>
     </div>
 
+    <!-- AI 시맨틱 문맥 검색 & 의미 유사도 비교 모달 -->
+    <div id="ai-search-modal" class="modal-overlay">
+        <div class="modal-card modal-card-ai-search" style="max-width: 780px; width: 94%;">
+            <div class="modal-header">
+                <h3>🧠 AI 시맨틱 문맥 검색 & 지능형 비교</h3>
+                <button class="modal-close-btn" onclick="closeAiSearchModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 상단 서브 탭 (문맥 검색 / 문장 유사도 비교) -->
+                <div class="backup-subtabs">
+                    <button id="ai-subtab-search" class="backup-subtab active" onclick="switchAiSubTab('search')">
+                        <span>🔍</span> AI 문맥 검색 (Smart Search)
+                    </button>
+                    <button id="ai-subtab-compare" class="backup-subtab" onclick="switchAiSubTab('compare')">
+                        <span>⚖️</span> 문장 의미 유사도 측정 (Similarity Matcher)
+                    </button>
+                </div>
+
+                <!-- 1) AI 문맥 검색 패널 -->
+                <div id="ai-search-pane" class="ai-pane active">
+                    <!-- 대형 AI 검색창 -->
+                    <div class="ai-search-box">
+                        <span class="ai-search-icon">🧠</span>
+                        <input type="text" id="ai-search-input" class="ai-search-input-field" placeholder="자연어로 검색하세요 (예: 톰캣 포트, DB 타임아웃, 토큰 로그인, 배포 스크립트...)" oninput="onAiSearchInputChange(this.value)" autocomplete="off">
+                        <button type="button" id="ai-search-clear-btn" class="gen-search-clear-btn" onclick="clearAiSearchInput()" style="display: none;">&times;</button>
+                    </div>
+
+                    <!-- 카테고리 필터 칩 바 -->
+                    <div class="ai-filter-chips">
+                        <span class="ai-filter-label">필터:</span>
+                        <button class="ai-chip-btn active" data-cat="all" onclick="setAiSearchCategory('all')">전체</button>
+                        <button class="ai-chip-btn" data-cat="notes" onclick="setAiSearchCategory('notes')">📝 메모</button>
+                        <button class="ai-chip-btn" data-cat="diagrams" onclick="setAiSearchCategory('diagrams')">📊 다이어그램</button>
+                        <button class="ai-chip-btn" data-cat="generators" onclick="setAiSearchCategory('generators')">🔢 생성기</button>
+                        <button class="ai-chip-btn" data-cat="quick_launch" onclick="setAiSearchCategory('quick_launch')">⚡ 빠른실행</button>
+                        <button class="ai-chip-btn" data-cat="shortcuts" onclick="setAiSearchCategory('shortcuts')">📁 바로가기</button>
+                    </div>
+
+                    <!-- 검색 결과 헤더 및 목록 -->
+                    <div class="ai-results-header">
+                        <span id="ai-results-count">검색어를 입력하면 실시간 문맥 유사도 순으로 분석됩니다.</span>
+                        <span class="ai-badge-tip">단어 불일치·다국어(tomcat ↔ 톰캣) 자동 인식</span>
+                    </div>
+
+                    <div id="ai-results-list" class="ai-results-container">
+                        <!-- 동적 렌더링 -->
+                    </div>
+                </div>
+
+                <!-- 2) 문장 의미 유사도 측정기 패널 -->
+                <div id="ai-compare-pane" class="ai-pane" style="display: none;">
+                    <div class="backup-section-guide">
+                        두 문장이나 텍스트를 입력하고 AI를 통해 <b>단어가 달라도 뜻이 얼마나 일치하는지(0~100%)</b> 수치로 비교 분석합니다.
+                    </div>
+
+                    <div class="ai-compare-grid">
+                        <div class="ai-compare-col">
+                            <label><b>📝 기준 텍스트 A:</b></label>
+                            <textarea id="ai-compare-text-a" class="ai-compare-textarea" placeholder="예: 사용자가 비밀번호를 5회 틀리면 계정을 30분간 일시 잠금한다."></textarea>
+                        </div>
+                        <div class="ai-compare-col">
+                            <label><b>📝 비교 텍스트 B:</b></label>
+                            <textarea id="ai-compare-text-b" class="ai-compare-textarea" placeholder="예: 로그인 연속 실패 시 보안 정책에 따라 유저 접근을 일시 차단함."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="ai-compare-action">
+                        <button class="form-btn add-btn" onclick="runAiSimilarityCompare()">
+                            <span>⚡</span> 의미 유사도 분석 실행
+                        </button>
+                    </div>
+
+                    <!-- 비교 결과 카드 -->
+                    <div id="ai-compare-result-card" class="ai-compare-result-box" style="display: none;">
+                        <!-- 동적 렌더링 -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span class="shortcut-tip" style="margin-right: auto;">단축키: <code>Ctrl + K</code></span>
+                <button class="form-btn close-btn" onclick="closeAiSearchModal()">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 공통 인레이어 팝업 다이얼로그 (Alert / Confirm) -->
     <div id="app-dialog-modal" class="modal-overlay dialog-modal-overlay">
         <div class="modal-card dialog-card">
@@ -964,6 +1052,7 @@
     <script src="js/mermaid.min.js"></script>
     <script src="js/mermaid_diagram.js"></script>
     <script src="js/backup.js"></script>
+    <script src="js/ai_search.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
