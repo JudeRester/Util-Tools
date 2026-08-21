@@ -172,7 +172,48 @@ const MERMAID_TEMPLATES = {
     "버그 수정 & 리팩토링" : 25
     "코드 리뷰 & 설계" : 15
     "문서화 & 회의" : 10
-    "기타" : 5`
+    "기타" : 5`,
+
+    ai_search_arch: `flowchart TD
+    subgraph Client["🖥️ 사용자 입력 (Frontend)"]
+        UserQuery["🔍 검색어 입력<br/>('톰캣 포트', '디비 타임아웃')"]
+        KeyShort["⚡ 단축키 (Ctrl + K)"]
+    end
+
+    subgraph SearchEngine["🧠 AI 시맨틱 검색 파이프라인 (Backend)"]
+        Tokenizer["🔤 Dynamic Tokenizer<br/>(동적 길이 패딩)"]
+        ONNX["⚡ multilingual-e5-small ONNX<br/>(Query Embedding: 5~10ms)"]
+        CosineSim["📐 Cosine Similarity 내적 연산<br/>(RAM 상에서 0.1ms 매칭)"]
+        Ranking["📊 유사도 랭킹 & 하이라이팅<br/>(0% ~ 100% Score)"]
+    end
+
+    subgraph VectorCache["💾 벡터 DB 캐시 레이어"]
+        DiskCache[("📁 embeddings_cache.json<br/>(디스크 영구 보관)")]
+        RAMCache["⚡ In-Memory Matrix<br/>(N x 384 차원 벡터)"]
+        IncrementalSync["🔄 MD5 해시 증분 갱신<br/>(변경된 문서만 0.02s 갱신)"]
+    end
+
+    subgraph DataSources["📚 대상 시스템 데이터 (JSON)"]
+        Notes["📝 빠른 메모 (notes.json)"]
+        Diagrams["📊 다이어그램 (diagrams.json)"]
+        Generators["🔢 데이터 생성기 (generators.json)"]
+        QuickLaunch["⚡ 빠른 실행 (quick_launch.json)"]
+        Shortcuts["📁 바로가기 (shortcuts.json)"]
+    end
+
+    %% 연결 관계
+    UserQuery --> Tokenizer
+    KeyShort --> UserQuery
+    Tokenizer --> ONNX
+    ONNX --> CosineSim
+    
+    DataSources --> IncrementalSync
+    IncrementalSync --> DiskCache
+    DiskCache <--> RAMCache
+    RAMCache --> CosineSim
+    
+    CosineSim --> Ranking
+    Ranking -->|"⚡ 6ms 초고속 결과 반환"| UserResult["🎉 스마트 검색 결과 노출<br/>(원클릭 해당 탭 이동)"]`
 };
 
 let isMermaidEditorCollapsed = false;
@@ -609,6 +650,14 @@ const DEFAULT_DIAGRAMS_FALLBACK = [
         category: "ERD",
         description: "사용자, 주문, 주문 상품 간의 관계 다이어그램",
         code: MERMAID_TEMPLATES.er_diagram,
+        updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
+    },
+    {
+        id: "4",
+        title: "🧠 AI 시맨틱 검색 & 벡터 DB 캐시 아키텍처",
+        category: "Flowchart",
+        description: "multilingual-e5-small ONNX 모델, 동적 패딩 및 증분 벡터 캐싱 파이프라인",
+        code: MERMAID_TEMPLATES.ai_search_arch,
         updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
     }
 ];
