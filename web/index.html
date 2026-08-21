@@ -131,17 +131,29 @@
 
             <!-- 4. 데이터 생성 (Custom Data Generator Studio) 탭 -->
             <section id="tab-generator" class="tab-pane">
-                <!-- 상단 타이틀 및 관리 바 -->
-                <div class="pane-toolbar-header">
+                <!-- 상단 타이틀 및 관리/검색 툴바 -->
+                <div class="pane-toolbar-header gen-toolbar-header">
                     <div class="group-title-inline">
                         <span class="title-icon">🔢</span> 데이터 생성기 (<span id="generator-total-count">0</span>개)
+                    </div>
+                    <div class="gen-toolbar-actions">
+                        <div class="gen-search-box">
+                            <span class="gen-search-icon">🔍</span>
+                            <input type="text" id="gen-search-input" class="gen-search-input" placeholder="생성기 검색 (이름, 설명, 태그)..." oninput="onGeneratorSearchInput(this.value)">
+                            <button type="button" id="gen-search-clear-btn" class="gen-search-clear-btn" onclick="clearGeneratorSearch()" style="display: none;">&times;</button>
+                        </div>
                         <button class="edit-shortcuts-btn" onclick="openGeneratorsModal()" title="데이터 생성기 관리 및 JS 스크립트 수정">
                             ⚙️ 관리
                         </button>
-                        <button class="edit-shortcuts-btn" onclick="openAddGeneratorModal()" title="새로운 생성기 추가" style="margin-left: 6px;">
+                        <button class="edit-shortcuts-btn" onclick="openAddGeneratorModal()" title="새로운 생성기 추가">
                             ➕ 추가
                         </button>
                     </div>
+                </div>
+
+                <!-- 동적 카테고리 태그 필터 바 -->
+                <div id="gen-category-chips" class="gen-category-filter-bar">
+                    <!-- JavaScript로 동적 렌더링 -->
                 </div>
 
                 <!-- 데이터 생성기 카드 목록 (동적 렌더링 컨테이너) -->

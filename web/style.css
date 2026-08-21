@@ -2004,6 +2004,127 @@ body {
 /* ==========================================
    동적 데이터 생성기 스튜디오 카드 (Generator Cards)
    ========================================== */
+.gen-toolbar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.gen-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.gen-search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 3px 12px;
+    transition: var(--transition);
+    min-width: 220px;
+}
+
+.gen-search-box:focus-within {
+    border-color: var(--accent-color);
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 0 1px var(--accent-color);
+}
+
+.gen-search-icon {
+    font-size: 0.8rem;
+    margin-right: 6px;
+    opacity: 0.6;
+}
+
+.gen-search-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    width: 100%;
+}
+
+.gen-search-input::placeholder {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+}
+
+.gen-search-clear-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0 2px;
+    transition: var(--transition);
+}
+
+.gen-search-clear-btn:hover {
+    color: var(--text-primary);
+}
+
+.gen-category-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 14px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+}
+
+.gen-category-filter-bar::-webkit-scrollbar {
+    display: none;
+}
+
+.gen-filter-chip {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.76rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.gen-filter-chip:hover {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: var(--accent-color);
+    color: #ffffff;
+}
+
+.gen-filter-chip.active {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+
+.gen-filter-chip-count {
+    font-size: 0.68rem;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 1px 5px;
+    border-radius: 10px;
+    opacity: 0.85;
+}
+
 #generators-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));

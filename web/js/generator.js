@@ -5,6 +5,8 @@
 
 let currentGenerators = [];
 let selectedStudioGenId = null;
+let selectedGenCategory = 'ALL';
+let genSearchQuery = '';
 
 const DEFAULT_GENERATORS_FALLBACK = [
     {
@@ -133,7 +135,7 @@ async function loadGenerators() {
     initGenCodeEditorTabKey();
 }
 
-// 2. 메인 카드 그리드 렌더링
+// 2. 메인 카드 그리드 렌더링 (카테고리 필터 + 검색 지원)
 function renderGeneratorsUI() {
     const grid = document.getElementById('generators-grid');
     const totalCountEl = document.getElementById('generator-total-count');
@@ -141,20 +143,60 @@ function renderGeneratorsUI() {
 
     if (totalCountEl) totalCountEl.textContent = currentGenerators.length;
     if (badgeCountEl) badgeCountEl.textContent = currentGenerators.length;
+
+    renderGeneratorCategoryChips();
+
     if (!grid) return;
 
-    if (currentGenerators.length === 0) {
-        grid.innerHTML = `
-            <div class="empty-state" style="grid-column: 1 / -1; padding: 40px 20px; text-align: center; color: var(--text-secondary);">
-                <div style="font-size: 2rem; margin-bottom: 8px;">🔢</div>
-                <p>등록된 데이터 생성기가 없습니다.</p>
-                <button class="form-btn add-btn" style="margin-top: 10px;" onclick="openAddGeneratorModal()">➕ 새 생성기 추가</button>
-            </div>
-        `;
+    // 필터링 적용 (카테고리 + 검색어)
+    const filtered = currentGenerators.filter(gen => {
+        // 1) 카테고리 필터
+        if (selectedGenCategory !== 'ALL' && (gen.category || '기타') !== selectedGenCategory) {
+            return false;
+        }
+
+        // 2) 검색어 필터
+        if (genSearchQuery) {
+            const name = (gen.name || '').toLowerCase();
+            const desc = (gen.description || '').toLowerCase();
+            const cat = (gen.category || '').toLowerCase();
+            if (!name.includes(genSearchQuery) && !desc.includes(genSearchQuery) && !cat.includes(genSearchQuery)) {
+                return false;
+            }
+        }
+        return true;
+    });
+
+    if (filtered.length === 0) {
+        if (currentGenerators.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state" style="grid-column: 1 / -1; padding: 40px 20px; text-align: center; color: var(--text-secondary);">
+                    <div style="font-size: 2rem; margin-bottom: 8px;">🔢</div>
+                    <p>등록된 데이터 생성기가 없습니다.</p>
+                    <button class="form-btn add-btn" style="margin-top: 10px;" onclick="openAddGeneratorModal()">➕ 새 생성기 추가</button>
+                </div>
+            `;
+        } else if (genSearchQuery) {
+            grid.innerHTML = `
+                <div class="empty-state" style="grid-column: 1 / -1; padding: 30px 20px; text-align: center; color: var(--text-secondary);">
+                    <div style="font-size: 1.8rem; margin-bottom: 8px;">🔍</div>
+                    <p>'${escapeHtml(genSearchQuery)}' 검색어와 일치하는 데이터 생성기가 없습니다.</p>
+                    <button class="form-btn close-btn" style="margin-top: 10px;" onclick="clearGeneratorSearch()">검색어 초기화</button>
+                </div>
+            `;
+        } else {
+            grid.innerHTML = `
+                <div class="empty-state" style="grid-column: 1 / -1; padding: 30px 20px; text-align: center; color: var(--text-secondary);">
+                    <div style="font-size: 1.8rem; margin-bottom: 8px;">🏷️</div>
+                    <p>'${escapeHtml(selectedGenCategory)}' 카테고리에 등록된 생성기가 없습니다.</p>
+                    <button class="form-btn close-btn" style="margin-top: 10px;" onclick="setGeneratorCategoryFilter('ALL')">전체 보기</button>
+                </div>
+            `;
+        }
         return;
     }
 
-    grid.innerHTML = currentGenerators.map(gen => {
+    grid.innerHTML = filtered.map(gen => {
         const icon = gen.icon || '🎲';
         const name = escapeHtml(gen.name || '생성기');
         const desc = escapeHtml(gen.description || '');
@@ -165,7 +207,7 @@ function renderGeneratorsUI() {
                 <div class="gen-card-top-bar">
                     <div class="gen-card-icon-group">
                         <span class="gen-card-badge-icon">${icon}</span>
-                        <span class="gen-card-cat">${cat}</span>
+                        <span class="gen-card-cat" onclick="event.stopPropagation(); setGeneratorCategoryFilter('${escapeJsString(gen.category || '기타')}')" title="이 카테고리만 모아보기">${cat}</span>
                     </div>
                     <button class="gen-bulk-btn" onclick="event.stopPropagation(); runGenerator('${gen.id}', 5)" title="5개 일괄 생성 및 복사">
                         5개 📋
@@ -178,6 +220,68 @@ function renderGeneratorsUI() {
             </div>
         `;
     }).join('');
+}
+
+// 상단 카테고리 필터 칩 렌더링
+function renderGeneratorCategoryChips() {
+    const chipBar = document.getElementById('gen-category-chips');
+    if (!chipBar) return;
+
+    if (currentGenerators.length === 0) {
+        chipBar.innerHTML = '';
+        return;
+    }
+
+    // 카테고리별 개수 집계
+    const catCounts = { 'ALL': currentGenerators.length };
+    currentGenerators.forEach(gen => {
+        const cat = gen.category || '기타';
+        catCounts[cat] = (catCounts[cat] || 0) + 1;
+    });
+
+    const categories = ['ALL', ...Object.keys(catCounts).filter(k => k !== 'ALL')];
+
+    // 만약 현재 선택된 카테고리가 삭제 등으로 없어졌다면 ALL로 자동 복귀
+    if (selectedGenCategory !== 'ALL' && !catCounts[selectedGenCategory]) {
+        selectedGenCategory = 'ALL';
+    }
+
+    chipBar.innerHTML = categories.map(cat => {
+        const isActive = selectedGenCategory === cat;
+        const label = cat === 'ALL' ? '전체' : cat;
+        const count = catCounts[cat] || 0;
+
+        return `
+            <button type="button" class="gen-filter-chip ${isActive ? 'active' : ''}" onclick="setGeneratorCategoryFilter('${escapeJsString(cat)}')">
+                <span>${escapeHtml(label)}</span>
+                <span class="gen-filter-chip-count">${count}</span>
+            </button>
+        `;
+    }).join('');
+}
+
+function setGeneratorCategoryFilter(cat) {
+    selectedGenCategory = cat;
+    renderGeneratorsUI();
+}
+
+function onGeneratorSearchInput(val) {
+    genSearchQuery = (val || '').trim().toLowerCase();
+    const clearBtn = document.getElementById('gen-search-clear-btn');
+    if (clearBtn) {
+        clearBtn.style.display = genSearchQuery ? 'inline-block' : 'none';
+    }
+    renderGeneratorsUI();
+}
+
+function clearGeneratorSearch() {
+    const input = document.getElementById('gen-search-input');
+    const clearBtn = document.getElementById('gen-search-clear-btn');
+    if (input) input.value = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    genSearchQuery = '';
+    renderGeneratorsUI();
+    if (input) input.focus();
 }
 
 // 3. 생성기 스크립트 실행 함수
