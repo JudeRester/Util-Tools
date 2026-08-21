@@ -1,5 +1,5 @@
 """
-시스템 정보, IP 조회 및 네트워크 진단 서비스 모듈
+시스템 정보, 하드웨어 사양(CPU/RAM/GPU/Storage), IP 조회 및 네트워크 진단 서비스 모듈
 """
 import os
 import platform
@@ -7,11 +7,12 @@ import subprocess
 import socket
 import datetime
 import urllib.request
+import json
 import eel
 
 
 def _get_public_ip():
-    """외부 공인 IP 조회 (타임아웃 2.5초, 복수 엔드포인트 폴백)"""
+    """외부 공인 IP 조회 (타임아웃 2.0초, 복수 엔드포인트 폴백)"""
     endpoints = [
         "https://api.ipify.org",
         "https://icanhazip.com",
@@ -20,18 +21,117 @@ def _get_public_ip():
     for url in endpoints:
         try:
             req = urllib.request.Request(url, headers={'User-Agent': 'curl/7.68.0'})
-            with urllib.request.urlopen(req, timeout=2.5) as response:
+            with urllib.request.urlopen(req, timeout=2.0) as response:
                 ip = response.read().decode('utf-8').strip()
                 if ip:
                     return ip
         except Exception:
             continue
-    return "조회 실패 (인터넷 연결 확인 필요)"
+    return "조회 불가 (인터넷 연결 확인 필요)"
+
+
+def _get_hardware_info():
+    """Windows PowerShell Get-CimInstance를 활용한 정밀 하드웨어 사양 수집"""
+    hw_info = {
+        "CPU": None,
+        "RAM": None,
+        "GPU": None,
+        "Storage": []
+    }
+
+    if platform.system() != "Windows":
+        return hw_info
+
+    try:
+        ps_script = """
+        $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1 Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed
+        $os = Get-CimInstance Win32_OperatingSystem | Select-Object TotalVisibleMemorySize, FreePhysicalMemory
+        $gpu = Get-CimInstance Win32_VideoController | Where-Object { $_.Name -notlike "*Mirage*" -and $_.Name -notlike "*Virtual*" -and $_.Name -notlike "*Remote*" } | Select-Object Name, DriverVersion, AdapterRAM
+        if (-not $gpu) {
+            $gpu = Get-CimInstance Win32_VideoController | Select-Object -First 1 Name, DriverVersion, AdapterRAM
+        }
+        $disks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | Where-Object { $_.Size -gt 0 } | Select-Object DeviceID, Size, FreeSpace
+
+        [PSCustomObject]@{
+            CPU = $cpu
+            OS = $os
+            GPU = $gpu
+            Disks = $disks
+        } | ConvertTo-Json -Depth 3 -Compress
+        """
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=4.0
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
+            data = json.loads(result.stdout.strip())
+
+            # 1. CPU 정보 가공
+            if data.get("CPU"):
+                cpu_raw = data["CPU"]
+                cpu_name = (cpu_raw.get("Name") or "").strip()
+                cores = cpu_raw.get("NumberOfCores")
+                threads = cpu_raw.get("NumberOfLogicalProcessors")
+                max_clock = cpu_raw.get("MaxClockSpeed")
+                clock_str = f" @ {max_clock / 1000:.2f} GHz" if max_clock else ""
+                hw_info["CPU"] = f"{cpu_name} ({cores} 코어 / {threads} 스레드{clock_str})"
+
+            # 2. RAM 정보 가공
+            if data.get("OS"):
+                os_mem = data["OS"]
+                total_kb = os_mem.get("TotalVisibleMemorySize") or 0
+                free_kb = os_mem.get("FreePhysicalMemory") or 0
+                if total_kb > 0:
+                    total_gb = total_kb / (1024 * 1024)
+                    free_gb = free_kb / (1024 * 1024)
+                    used_gb = total_gb - free_gb
+                    usage_pct = (used_gb / total_gb) * 100
+                    hw_info["RAM"] = f"총 {total_gb:.2f} GB (사용 중: {used_gb:.2f} GB / {usage_pct:.1f}%, 여유: {free_gb:.2f} GB)"
+
+            # 3. GPU 정보 가공
+            if data.get("GPU"):
+                gpu_list = data["GPU"] if isinstance(data["GPU"], list) else [data["GPU"]]
+                gpu_strs = []
+                for g in gpu_list:
+                    g_name = (g.get("Name") or "").strip()
+                    vram_bytes = g.get("AdapterRAM") or 0
+                    driver_ver = g.get("DriverVersion") or ""
+                    vram_str = f", VRAM: {vram_bytes / (1024**3):.2f} GB" if vram_bytes > 0 else ""
+                    driver_str = f" [드라이버: {driver_ver}]" if driver_ver else ""
+                    if g_name:
+                        gpu_strs.append(f"{g_name}{vram_str}{driver_str}")
+                if gpu_strs:
+                    hw_info["GPU"] = " | ".join(gpu_strs)
+
+            # 4. Storage 정보 가공
+            if data.get("Disks"):
+                disk_list = data["Disks"] if isinstance(data["Disks"], list) else [data["Disks"]]
+                disk_strs = []
+                for d in disk_list:
+                    dev_id = d.get("DeviceID") or ""
+                    size = d.get("Size") or 0
+                    free = d.get("FreeSpace") or 0
+                    if size > 0:
+                        total_d_gb = size / (1024**3)
+                        free_d_gb = free / (1024**3)
+                        used_pct = ((size - free) / size) * 100
+                        disk_strs.append(f"{dev_id} ({free_d_gb:.1f} GB 남음 / {total_d_gb:.1f} GB, {used_pct:.0f}% 사용)")
+                if disk_strs:
+                    hw_info["Storage"] = disk_strs
+
+    except Exception:
+        pass
+
+    return hw_info
 
 
 @eel.expose
 def get_system_info():
-    """현재 시스템 사양 및 로컬/공인 IP 조회"""
+    """현재 시스템 사양, 하드웨어(CPU/RAM/GPU/Storage) 및 로컬/공인 IP 조회"""
     try:
         uname = platform.uname()
         local_ip = "127.0.0.1"
@@ -44,16 +144,20 @@ def get_system_info():
             local_ip = socket.gethostbyname(socket.gethostname())
 
         public_ip = _get_public_ip()
+        hw = _get_hardware_info()
 
         info = {
-            "OS": f"{uname.system} {uname.release} (버전: {uname.version})",
-            "아키텍처": uname.machine,
+            "OS / 운영체제": f"{uname.system} {uname.release} (빌드: {uname.version})",
             "호스트 이름": uname.node,
-            "프로세서": uname.processor or platform.processor(),
-            "Python 버전": platform.python_version(),
+            "시스템 아키텍처": uname.machine,
+            "CPU (프로세서)": hw.get("CPU") or uname.processor or platform.processor(),
+            "RAM (물리 메모리)": hw.get("RAM") or "조회 불가",
+            "GPU (그래픽 카드)": hw.get("GPU") or "조회 불가 (기본 그래픽)",
+            "저장공간 (디스크)": " / ".join(hw.get("Storage", [])) if hw.get("Storage") else "조회 불가",
             "Local IP (내부망)": local_ip,
             "Public IP (공인)": public_ip,
-            "현재 작업 디렉토리": os.getcwd()
+            "Python 런타임": f"Python {platform.python_version()} ({platform.architecture()[0]})",
+            "작업 디렉토리": os.getcwd()
         }
         return {"status": "success", "data": info}
     except Exception as e:
