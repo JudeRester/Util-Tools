@@ -17,7 +17,12 @@
                 <span class="logo-icon">🛠️</span>
                 <h1>Utility Toolkit</h1>
             </div>
-            <div class="header-status" id="header-status">준비 완료</div>
+            <div class="header-right-area" style="display: flex; align-items: center; gap: 12px;">
+                <button class="header-backup-btn" onclick="openBackupModal()" title="전체 데이터 백업(Export) 및 복원(Import)">
+                    <span>📦</span> 백업 / 복원
+                </button>
+                <div class="header-status" id="header-status">준비 완료</div>
+            </div>
         </header>
 
         <!-- 카테고리 탭 네비게이션 (반응형 햄버거 메뉴 지원) -->
@@ -834,6 +839,105 @@
         </div>
     </div>
 
+    <!-- 통합 데이터 백업 & 복원 (Export / Import) 모달 -->
+    <div id="backup-modal" class="modal-overlay">
+        <div class="modal-card modal-card-backup" style="max-width: 680px; width: 92%;">
+            <div class="modal-header">
+                <h3>📦 데이터 백업 & 복원 (Export / Import)</h3>
+                <button class="modal-close-btn" onclick="closeBackupModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 상단 서브 탭 (내보내기 / 가져오기) -->
+                <div class="backup-subtabs">
+                    <button id="backup-tab-export" class="backup-subtab active" onclick="switchBackupTab('export')">
+                        <span>📤</span> 데이터 내보내기 (Export)
+                    </button>
+                    <button id="backup-tab-import" class="backup-subtab" onclick="switchBackupTab('import')">
+                        <span>📥</span> 데이터 가져오기 (Import)
+                    </button>
+                </div>
+
+                <!-- 1) 데이터 내보내기 (Export) 섹션 -->
+                <div id="backup-export-pane" class="backup-pane active">
+                    <div class="backup-section-guide">
+                        백업할 데이터 항목들을 선택하세요. 전체 설정을 하나의 안전한 JSON 파일로 내려받을 수 있습니다.
+                    </div>
+                    <div class="backup-select-all-row">
+                        <label class="backup-checkbox-label">
+                            <input type="checkbox" id="export-select-all" checked onchange="toggleAllExportCheckboxes(this.checked)">
+                            <b>전체 선택 / 해제</b>
+                        </label>
+                        <span id="export-selected-count" class="backup-count-badge">선택: 0개</span>
+                    </div>
+                    <div id="backup-export-modules-list" class="backup-modules-grid">
+                        <!-- JavaScript로 동적 렌더링 -->
+                    </div>
+                    <div class="backup-action-bar">
+                        <button class="form-btn add-btn" onclick="executeExportDownload()">
+                            <span>💾</span> JSON 백업 파일 다운로드
+                        </button>
+                        <button class="form-btn close-btn" onclick="copyExportJsonToClipboard()">
+                            <span>📋</span> 클립보드로 복사
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2) 데이터 가져오기 (Import) 섹션 -->
+                <div id="backup-import-pane" class="backup-pane" style="display: none;">
+                    <div class="backup-section-guide">
+                        기존에 백업한 JSON 파일을 업로드하거나 아래 텍스트 상자에 붙여넣어 데이터를 복원하세요.
+                    </div>
+
+                    <!-- 파일 드롭존 -->
+                    <div class="backup-dropzone" id="backup-dropzone" onclick="triggerImportFileInput()">
+                        <input type="file" id="backup-file-input" accept=".json" style="display: none;" onchange="handleBackupFileSelect(event)">
+                        <div class="dropzone-icon">📂</div>
+                        <div class="dropzone-text"><b>클릭하여 백업 파일(.json) 선택</b> 또는 파일을 여기로 드래그 앤 드롭</div>
+                    </div>
+
+                    <!-- 또는 텍스트 입력창 -->
+                    <div class="backup-json-text-section">
+                        <label>또는 백업 JSON 텍스트 직접 입력:</label>
+                        <textarea id="import-json-textarea" class="backup-textarea" placeholder="{&#10;  &quot;app&quot;: &quot;Utility-Toolkit&quot;,&#10;  &quot;data&quot;: { ... }&#10;}" oninput="onImportJsonTextChange()"></textarea>
+                    </div>
+
+                    <!-- 복원 모드 선택 & 미리보기 -->
+                    <div class="backup-restore-options">
+                        <div class="restore-mode-group">
+                            <label><b>복원 방식:</b></label>
+                            <label class="radio-label">
+                                <input type="radio" name="import-mode" value="replace" checked>
+                                덮어쓰기 (Replace) - 기존 데이터 대체
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="import-mode" value="merge">
+                                병합 (Merge) - 기존 데이터 유지하며 추가
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="import-preview-box" class="import-preview-box" style="display: none;">
+                        <div class="preview-header">
+                            <span>🔍 가져올 데이터 모듈 선택:</span>
+                        </div>
+                        <div id="import-modules-checklist" class="backup-modules-grid compact">
+                            <!-- 동적 렌더링 -->
+                        </div>
+                    </div>
+
+                    <div class="backup-action-bar">
+                        <button id="execute-import-btn" class="form-btn add-btn" onclick="executeImportRestore()" disabled>
+                            <span>📥</span> 선택한 데이터 복원하기
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="form-btn close-btn" onclick="closeBackupModal()">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 공통 인레이어 팝업 다이얼로그 (Alert / Confirm) -->
     <div id="app-dialog-modal" class="modal-overlay dialog-modal-overlay">
         <div class="modal-card dialog-card">
@@ -864,6 +968,7 @@
     <script src="js/calendar.js"></script>
     <script src="js/mermaid.min.js"></script>
     <script src="js/mermaid_diagram.js"></script>
+    <script src="js/backup.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
