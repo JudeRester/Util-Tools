@@ -175,6 +175,8 @@ const MERMAID_TEMPLATES = {
     "기타" : 5`
 };
 
+let isMermaidEditorCollapsed = false;
+
 // 1. Mermaid 초기화
 function initMermaidDiagram() {
     try {
@@ -194,6 +196,10 @@ function initMermaidDiagram() {
     initMermaidResizer();
     initMermaidPanZoom();
 
+    // 에디터 접힘 상태 복원
+    isMermaidEditorCollapsed = localStorage.getItem('mermaid_editor_collapsed') === '1';
+    applyMermaidEditorCollapsedState();
+
     // 로컬스토리지에서 이전 작업 내용 복원
     const saved = localStorage.getItem('mermaid_saved_code');
     const editor = document.getElementById('mermaid-code-editor');
@@ -205,6 +211,40 @@ function initMermaidDiagram() {
     setTimeout(() => {
         renderMermaid(true);
     }, 100);
+}
+
+// 에디터 접기/펼치기 토글
+function toggleMermaidEditor() {
+    isMermaidEditorCollapsed = !isMermaidEditorCollapsed;
+    applyMermaidEditorCollapsedState();
+    localStorage.setItem('mermaid_editor_collapsed', isMermaidEditorCollapsed ? '1' : '0');
+    setTimeout(() => {
+        fitMermaidToViewport();
+    }, 220);
+}
+
+function applyMermaidEditorCollapsedState() {
+    const editorPane = document.getElementById('mermaid-editor-pane');
+    const resizer = document.getElementById('mermaid-resizer');
+    const toggleIcon = document.getElementById('mermaid-editor-toggle-icon');
+    const toggleText = document.getElementById('mermaid-editor-toggle-text');
+    const openEditorBtn = document.getElementById('mermaid-open-editor-btn');
+
+    if (!editorPane) return;
+
+    if (isMermaidEditorCollapsed) {
+        editorPane.classList.add('collapsed');
+        if (resizer) resizer.classList.add('hidden');
+        if (toggleIcon) toggleIcon.textContent = '▶';
+        if (toggleText) toggleText.textContent = '에디터 펼치기';
+        if (openEditorBtn) openEditorBtn.style.display = 'inline-flex';
+    } else {
+        editorPane.classList.remove('collapsed');
+        if (resizer) resizer.classList.remove('hidden');
+        if (toggleIcon) toggleIcon.textContent = '◀';
+        if (toggleText) toggleText.textContent = '에디터 접기';
+        if (openEditorBtn) openEditorBtn.style.display = 'none';
+    }
 }
 
 // 에디터 Tab 키 4칸 들여쓰기 지원

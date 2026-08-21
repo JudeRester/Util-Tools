@@ -424,6 +424,9 @@
                                     <option value="neutral">⚪ 뉴트럴 (Neutral)</option>
                                 </select>
                             </div>
+                            <button id="mermaid-editor-toggle-btn" class="play-btn mini-tool-btn" onclick="toggleMermaidEditor()" title="스크립트 에디터 접기/펼치기">
+                                <span id="mermaid-editor-toggle-icon">◀</span> <span id="mermaid-editor-toggle-text">에디터 접기</span>
+                            </button>
                         </div>
                         <div class="mermaid-toolbar-right">
                             <button class="play-btn mini-tool-btn" onclick="copyMermaidCode()" title="작성된 Mermaid 코드 클립보드 복사">
@@ -468,7 +471,12 @@
                         <!-- 우측: 다이어그램 뷰포트 -->
                         <div class="mermaid-viewport-pane" id="mermaid-viewport-pane">
                             <div class="pane-label">
-                                <span>Diagram Viewport</span>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <button id="mermaid-open-editor-btn" class="mini-tool-btn" onclick="toggleMermaidEditor()" title="스크립트 에디터 펼치기" style="display: none; padding: 1px 6px; font-size: 0.72rem;">
+                                        <span>▶️</span> 에디터 열기
+                                    </button>
+                                    <span>Diagram Viewport</span>
+                                </div>
                                 <div class="mermaid-zoom-controls">
                                     <button class="zoom-btn" onclick="zoomMermaid(0.15)" title="확대 (Zoom In)">🔍+</button>
                                     <button class="zoom-btn" onclick="zoomMermaid(-0.15)" title="축소 (Zoom Out)">🔍-</button>

@@ -2769,6 +2769,22 @@ body {
     flex-direction: column;
     background: var(--bg-primary);
     position: relative;
+    transition: flex 0.2s ease, min-width 0.2s ease, opacity 0.2s ease;
+}
+
+.mermaid-editor-pane.collapsed {
+    flex: 0 0 0px !important;
+    min-width: 0 !important;
+    width: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    overflow: hidden !important;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.calendar-v-resizer.hidden {
+    display: none !important;
 }
 
 .mermaid-error-bar {
