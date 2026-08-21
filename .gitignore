@@ -37,3 +37,7 @@ app_settings.json
 # Allow public templates
 !*.example.json
 
+# AI Models
+models/
+*.onnx
+
