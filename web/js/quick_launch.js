@@ -3,6 +3,7 @@
  */
 
 let currentQuickLaunch = [];
+let draftQuickLaunch = [];
 let editingQuickLaunchId = null;
 
 const DEFAULT_QUICK_LAUNCH = [
@@ -92,6 +93,14 @@ function renderQuickLaunchManageList() {
 
     // 드래그 앤 드롭 이벤트 바인딩
     attachListDragAndDrop('ql-manage-list', reorderQuickLaunch);
+}
+
+// 빠른 실행 드래그 앤 드롭 재정렬 (Draft 내에서만 순서 변경)
+function reorderQuickLaunch(fromIndex, toIndex) {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    const movedItem = draftQuickLaunch.splice(fromIndex, 1)[0];
+    draftQuickLaunch.splice(toIndex, 0, movedItem);
+    renderQuickLaunchManageList();
 }
 
 async function callExecuteQuickLaunchItem(idx) {
