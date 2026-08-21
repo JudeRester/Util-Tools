@@ -11,26 +11,18 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- 상단 헤더 -->
-        <header class="app-header">
-            <div class="logo-area">
-                <span class="logo-icon">🛠️</span>
-                <h1>Utility Toolkit</h1>
-            </div>
-            <div class="header-right-area" style="display: flex; align-items: center; gap: 12px;">
-                <button class="header-backup-btn" onclick="openBackupModal()" title="전체 데이터 백업(Export) 및 복원(Import)">
-                    <span>📦</span> 백업 / 복원
-                </button>
-                <div class="header-status" id="header-status">준비 완료</div>
-            </div>
-        </header>
-
-        <!-- 카테고리 탭 네비게이션 (반응형 햄버거 메뉴 지원) -->
+        <!-- 카테고리 탭 네비게이션 (1줄 초슬림 통합 바) -->
         <nav class="tab-nav" id="main-tab-nav">
+            <!-- 좌측 미니 브랜드 로고 -->
+            <div class="nav-brand">
+                <span class="brand-icon">🛠️</span>
+                <span class="brand-title">Utility Toolkit</span>
+            </div>
+
             <!-- 좁은 화면용 햄버거 헤더 -->
             <div class="mobile-tab-header">
                 <div class="mobile-active-indicator" id="mobile-active-tab-text">
-                    <span class="tab-icon">🖥️</span> <span class="active-tab-name">시스템 정보</span>
+                    <span class="tab-icon">🖥️</span> <span class="active-tab-name">시스템 & 네트워크</span>
                 </div>
                 <button class="hamburger-menu-btn" id="hamburger-menu-btn" onclick="toggleMobileNav(event)" title="탭 메뉴 열기/닫기">
                     <span class="hamburger-icon">☰</span> 메뉴
@@ -40,7 +32,7 @@
             <!-- 탭 버튼 목록 (데스크톱: 가로 나열, 좁은 화면: 드롭다운) -->
             <div class="tab-btn-wrapper" id="tab-btn-wrapper">
                 <button class="tab-btn active" data-tab="system">
-                    <span class="tab-icon">🖥️</span> <span class="tab-label">시스템 정보</span>
+                    <span class="tab-icon">🖥️</span> <span class="tab-label">시스템 & 네트워크</span>
                 </button>
                 <button class="tab-btn" data-tab="launch">
                     <span class="tab-icon">⚡</span> <span class="tab-label">빠른 실행</span>
@@ -63,18 +55,16 @@
                 <button class="tab-btn" data-tab="mermaid">
                     <span class="tab-icon">📊</span> <span class="tab-label">다이어그램</span>
                 </button>
-                <button class="tab-btn" data-tab="network">
-                    <span class="tab-icon">🌐</span> <span class="tab-label">네트워크 & 기타</span>
-                </button>
             </div>
         </nav>
 
         <!-- 메인 콘텐츠 (카테고리별 기능 버튼 그리드) -->
         <main class="tab-content-area">
             
-            <!-- 1. 시스템 정보 탭 -->
+            <!-- 1. 시스템 & 네트워크 통합 탭 -->
             <section id="tab-system" class="tab-pane active">
                 <div class="button-grid">
+                    <!-- 시스템 도구 -->
                     <button class="tool-btn" onclick="callGetSystemInfo()">
                         <div class="btn-icon">💻</div>
                         <div class="btn-text">
@@ -87,6 +77,38 @@
                         <div class="btn-text">
                             <h3>현재 타임스탬프</h3>
                             <p>현재 날짜, ISO 및 유닉스 시간</p>
+                        </div>
+                    </button>
+
+                    <!-- 네트워크 테스트 도구 -->
+                    <button class="tool-btn" onclick="callCheckPing('8.8.8.8')">
+                        <div class="btn-icon">🌐</div>
+                        <div class="btn-text">
+                            <h3>Google DNS Ping</h3>
+                            <p>8.8.8.8 연결 상태 테스트</p>
+                        </div>
+                    </button>
+                    <button class="tool-btn" onclick="callCheckPing('1.1.1.1')">
+                        <div class="btn-icon">☁️</div>
+                        <div class="btn-text">
+                            <h3>Cloudflare DNS Ping</h3>
+                            <p>1.1.1.1 연결 상태 테스트</p>
+                        </div>
+                    </button>
+                    <button class="tool-btn" onclick="callCheckPing('168.126.63.1')">
+                        <div class="btn-icon">📡</div>
+                        <div class="btn-text">
+                            <h3>KT DNS Ping</h3>
+                            <p>168.126.63.1 국내망 연결 테스트</p>
+                        </div>
+                    </button>
+
+                    <!-- 데이터 백업 & 복원 도구 -->
+                    <button class="tool-btn" onclick="openBackupModal()">
+                        <div class="btn-icon">📦</div>
+                        <div class="btn-text">
+                            <h3>데이터 백업 & 복원</h3>
+                            <p>전체 설정 및 데이터 내보내기/가져오기 (Export / Import)</p>
                         </div>
                     </button>
                 </div>
@@ -170,34 +192,7 @@
                 </div>
             </section>
 
-            <!-- 5. 네트워크 탭 -->
-            <section id="tab-network" class="tab-pane">
-                <div class="button-grid">
-                    <button class="tool-btn" onclick="callCheckPing('8.8.8.8')">
-                        <div class="btn-icon">🌐</div>
-                        <div class="btn-text">
-                            <h3>Google DNS Ping</h3>
-                            <p>8.8.8.8 연결 상태 테스트</p>
-                        </div>
-                    </button>
-                    <button class="tool-btn" onclick="callCheckPing('1.1.1.1')">
-                        <div class="btn-icon">☁️</div>
-                        <div class="btn-text">
-                            <h3>Cloudflare DNS Ping</h3>
-                            <p>1.1.1.1 연결 상태 테스트</p>
-                        </div>
-                    </button>
-                    <button class="tool-btn" onclick="callCheckPing('168.126.63.1')">
-                        <div class="btn-icon">📡</div>
-                        <div class="btn-text">
-                            <h3>KT DNS Ping</h3>
-                            <p>168.126.63.1 국내망 연결 테스트</p>
-                        </div>
-                    </button>
-                </div>
-            </section>
-
-            <!-- 6. JS 실행기 (Playground) 탭 -->
+            <!-- 5. JS 실행기 (Playground) 탭 -->
             <section id="tab-jsrunner" class="tab-pane">
                 <div class="playground-container">
                     <!-- 상단 툴바 -->
