@@ -228,20 +228,27 @@ function copyTextToClipboard(text) {
     }
 }
 
+let studioDraftGenerators = [];
+
 // ==========================================
-// 4. 2컬럼 스튜디오 모달 제어 (좌측 목록 + 우측 에디터)
+// 4. 2컬럼 스튜디오 모달 제어 (Write-Back Draft 버퍼링 방식)
 // ==========================================
 
 function openGeneratorsModal() {
     const modal = document.getElementById('generators-modal');
     if (!modal) return;
 
-    if (!selectedStudioGenId && currentGenerators.length > 0) {
-        selectedStudioGenId = currentGenerators[0].id;
+    // 1) Write-Back용 깊은 복사본(Draft 버퍼) 생성
+    studioDraftGenerators = JSON.parse(JSON.stringify(currentGenerators));
+
+    if (studioDraftGenerators.length > 0) {
+        selectedStudioGenId = studioDraftGenerators[0].id;
+    } else {
+        selectedStudioGenId = null;
     }
 
     renderGeneratorsManageList();
-    selectGeneratorInStudio(selectedStudioGenId);
+    loadGeneratorToEditor(selectedStudioGenId);
     modal.classList.add('show');
 }
 
@@ -254,23 +261,56 @@ function closeGeneratorsModal() {
     const modal = document.getElementById('generators-modal');
     if (modal) modal.classList.remove('show');
     hideTestOutput();
+    studioDraftGenerators = []; // Draft 폐기 (디스크 불변, 완벽 롤백)
+}
+
+// 현재 폼 입력을 Draft 버퍼에 실시간 동기화
+function syncCurrentEditorToDraft() {
+    const icon = (document.getElementById('gen-icon-input')?.value || '🎲').trim();
+    const name = (document.getElementById('gen-name-input')?.value || '').trim();
+    const category = (document.getElementById('gen-category-input')?.value || '사용자 정의').trim();
+    const description = (document.getElementById('gen-desc-input')?.value || '').trim();
+    const code = (document.getElementById('gen-code-input')?.value || '').trim();
+
+    if (selectedStudioGenId) {
+        const gen = studioDraftGenerators.find(g => String(g.id) === String(selectedStudioGenId));
+        if (gen) {
+            gen.icon = icon;
+            gen.name = name;
+            gen.category = category;
+            gen.description = description;
+            gen.code = code;
+        }
+    }
 }
 
 function selectGeneratorInStudio(id) {
+    // 1) 현재 편집 중이던 내용을 먼저 Draft 버퍼에 안전하게 저장
+    syncCurrentEditorToDraft();
+
     selectedStudioGenId = id;
     hideTestOutput();
 
-    // 1) 좌측 목록 active 클래스 갱신
-    const items = document.querySelectorAll('.gen-studio-item');
-    items.forEach(item => {
-        if (id && item.getAttribute('data-id') === String(id)) {
-            item.classList.add('active');
-        } else {
-            item.classList.remove('active');
-        }
-    });
+    if (id === null) {
+        // '새 생성기 추가' 클릭 시 Draft에 새 임시 생성기 객체 즉시 생성
+        const newId = Date.now().toString();
+        const newGen = {
+            id: newId,
+            name: '새 데이터 생성기',
+            icon: '🎲',
+            category: '사용자 정의',
+            description: '',
+            code: `// JavaScript 생성 코드를 작성하세요 (return 값으로 데이터 반환)\nconst rand = Math.floor(Math.random() * 900000) + 100000;\nreturn 'DATA_' + rand;`
+        };
+        studioDraftGenerators.unshift(newGen);
+        selectedStudioGenId = newId;
+    }
 
-    // 2) 우측 에디터 필드 채우기
+    renderGeneratorsManageList();
+    loadGeneratorToEditor(selectedStudioGenId);
+}
+
+function loadGeneratorToEditor(id) {
     const formTitle = document.getElementById('generator-form-title');
     const modeIcon = document.getElementById('gen-form-mode-icon');
     const iconIn = document.getElementById('gen-icon-input');
@@ -279,13 +319,11 @@ function selectGeneratorInStudio(id) {
     const descIn = document.getElementById('gen-desc-input');
     const codeIn = document.getElementById('gen-code-input');
     const deleteBtn = document.getElementById('gen-delete-btn');
-    const submitBtn = document.getElementById('gen-submit-btn');
 
     if (id) {
-        // 기존 생성기 수정 모드
-        const gen = currentGenerators.find(g => String(g.id) === String(id));
+        const gen = studioDraftGenerators.find(g => String(g.id) === String(id));
         if (gen) {
-            if (formTitle) formTitle.textContent = `생성기 편집: ${gen.name}`;
+            if (formTitle) formTitle.textContent = `생성기 편집: ${gen.name || '무제'}`;
             if (modeIcon) modeIcon.textContent = '✏️';
             if (iconIn) iconIn.value = gen.icon || '🎲';
             if (nameIn) nameIn.value = gen.name || '';
@@ -293,35 +331,37 @@ function selectGeneratorInStudio(id) {
             if (descIn) descIn.value = gen.description || '';
             if (codeIn) codeIn.value = gen.code || '';
             if (deleteBtn) deleteBtn.style.display = 'inline-block';
-            if (submitBtn) submitBtn.textContent = '💾 저장하기';
         }
     } else {
-        // 새 생성기 추가 모드
         if (formTitle) formTitle.textContent = '➕ 새로운 데이터 생성기 추가';
         if (modeIcon) modeIcon.textContent = '➕';
         if (iconIn) iconIn.value = '🎲';
         if (nameIn) nameIn.value = '';
         if (catIn) catIn.value = '사용자 정의';
         if (descIn) descIn.value = '';
-        if (codeIn) codeIn.value = `// JavaScript 생성 코드를 작성하세요 (return 값으로 데이터 반환)\nconst rand = Math.floor(Math.random() * 900000) + 100000;\nreturn 'DATA_' + rand;`;
+        if (codeIn) codeIn.value = '';
         if (deleteBtn) deleteBtn.style.display = 'none';
-        if (submitBtn) submitBtn.textContent = '➕ 새 생성기 등록';
-        if (nameIn) nameIn.focus();
     }
 }
 
-function renderGeneratorsManageList() {
+// 실시간 에디터 입력 시 좌측 사이드바 목록과 동기화
+function onStudioFieldInput() {
+    syncCurrentEditorToDraft();
+    renderGeneratorsManageList(false); // 드래그 이벤트 재등록 없이 DOM만 실시간 갱신
+}
+
+function renderGeneratorsManageList(rebindEvents = true) {
     const listEl = document.getElementById('generators-manage-list');
     const badgeEl = document.getElementById('gen-count-badge');
-    if (badgeEl) badgeEl.textContent = currentGenerators.length;
+    if (badgeEl) badgeEl.textContent = studioDraftGenerators.length;
     if (!listEl) return;
 
-    if (currentGenerators.length === 0) {
+    if (studioDraftGenerators.length === 0) {
         listEl.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-secondary); font-size:0.8rem;">등록된 생성기가 없습니다.</div>';
         return;
     }
 
-    listEl.innerHTML = currentGenerators.map((gen, idx) => {
+    listEl.innerHTML = studioDraftGenerators.map((gen, idx) => {
         const isActive = selectedStudioGenId && String(gen.id) === String(selectedStudioGenId);
         return `
             <div class="gen-studio-item ${isActive ? 'active' : ''}" draggable="true" data-index="${idx}" data-id="${gen.id}" onclick="selectGeneratorInStudio('${gen.id}')">
@@ -332,13 +372,15 @@ function renderGeneratorsManageList() {
                         <span class="gen-item-title">${escapeHtml(gen.name || '생성기')}</span>
                         <span class="gen-card-cat" style="font-size:0.6rem; padding:1px 4px;">${escapeHtml(gen.category || '기타')}</span>
                     </div>
-                    <div class="gen-item-sub">${escapeHtml(gen.description || '')}</div>
+                    <div class="gen-item-sub">${escapeHtml(gen.description || '(설명 없음)')}</div>
                 </div>
             </div>
         `;
     }).join('');
 
-    initGeneratorsDragAndDrop();
+    if (rebindEvents) {
+        initGeneratorsDragAndDrop();
+    }
 }
 
 function initGeneratorsDragAndDrop() {
@@ -377,12 +419,11 @@ function initGeneratorsDragAndDrop() {
                 const fromIdx = parseInt(dragSrcEl.getAttribute('data-index'), 10);
                 const toIdx = parseInt(item.getAttribute('data-index'), 10);
 
-                const movedItem = currentGenerators.splice(fromIdx, 1)[0];
-                currentGenerators.splice(toIdx, 0, movedItem);
+                // Draft 배열 내 순서만 변경 (디스크 쓰기 없음!)
+                const movedItem = studioDraftGenerators.splice(fromIdx, 1)[0];
+                studioDraftGenerators.splice(toIdx, 0, movedItem);
 
-                saveGeneratorsToServer();
                 renderGeneratorsManageList();
-                renderGeneratorsUI();
             }
         });
     });
@@ -427,102 +468,68 @@ function hideTestOutput() {
     if (outputBar) outputBar.style.display = 'none';
 }
 
-// 6. 생성기 저장 (추가 또는 수정)
-async function submitGeneratorForm() {
-    const icon = (document.getElementById('gen-icon-input')?.value || '🎲').trim();
-    const name = (document.getElementById('gen-name-input')?.value || '').trim();
-    const category = (document.getElementById('gen-category-input')?.value || '사용자 정의').trim();
-    const description = (document.getElementById('gen-desc-input')?.value || '').trim();
-    const code = (document.getElementById('gen-code-input')?.value || '').trim();
-
-    if (!name) {
-        alert('생성기 이름을 입력해 주세요.');
-        document.getElementById('gen-name-input')?.focus();
-        return;
-    }
-
-    if (!code) {
-        alert('JavaScript 생성 스크립트 코드를 입력해 주세요.');
-        document.getElementById('gen-code-input')?.focus();
-        return;
-    }
-
-    let targetId = selectedStudioGenId;
-
-    if (selectedStudioGenId) {
-        // 기존 수정
-        const gen = currentGenerators.find(g => String(g.id) === String(selectedStudioGenId));
-        if (gen) {
-            gen.icon = icon;
-            gen.name = name;
-            gen.category = category;
-            gen.description = description;
-            gen.code = code;
-        }
-    } else {
-        // 신규 추가
-        targetId = Date.now().toString();
-        const newGen = {
-            id: targetId,
-            name,
-            icon,
-            category,
-            description,
-            code
-        };
-        currentGenerators.unshift(newGen);
-        selectedStudioGenId = targetId;
-    }
-
-    await saveGeneratorsToServer();
-    renderGeneratorsManageList();
-    renderGeneratorsUI();
-    selectGeneratorInStudio(targetId);
-
-    logToConsole('데이터 생성기 저장 완료', `"${name}" 생성기가 성공적으로 저장되었습니다.`);
-}
-
-// 7. 현재 선택된 생성기 삭제
-async function deleteCurrentGenerator() {
+// 6. Draft에서 현재 선택된 생성기 삭제 (디스크 저장 없음)
+function deleteCurrentGenerator() {
     if (!selectedStudioGenId) return;
 
-    const gen = currentGenerators.find(g => String(g.id) === String(selectedStudioGenId));
+    const gen = studioDraftGenerators.find(g => String(g.id) === String(selectedStudioGenId));
     if (!gen) return;
 
-    if (!confirm(`'${gen.name}' 생성기를 정말 삭제하시겠습니까?`)) return;
+    if (!confirm(`'${gen.name}' 생성기를 목록에서 제거하시겠습니까?\n(하단의 [💾 변경사항 저장]을 눌러야 최종 반영되며, [취소] 시 복구됩니다)`)) return;
 
-    currentGenerators = currentGenerators.filter(g => String(g.id) !== String(selectedStudioGenId));
-    await saveGeneratorsToServer();
+    // Draft에서만 삭제
+    studioDraftGenerators = studioDraftGenerators.filter(g => String(g.id) !== String(selectedStudioGenId));
 
-    selectedStudioGenId = currentGenerators.length > 0 ? currentGenerators[0].id : null;
+    selectedStudioGenId = studioDraftGenerators.length > 0 ? studioDraftGenerators[0].id : null;
     renderGeneratorsManageList();
-    renderGeneratorsUI();
-    selectGeneratorInStudio(selectedStudioGenId);
-
-    logToConsole('데이터 생성기 삭제 완료', `"${gen.name}" 생성기가 삭제되었습니다.`);
+    loadGeneratorToEditor(selectedStudioGenId);
 }
 
-async function resetDefaultGenerators() {
-    if (!confirm('모든 생성기를 기본 템플릿 목록으로 복원하시겠습니까? (사용자가 추가한 생성기는 초기화됩니다)')) return;
+// 7. Draft에 기본 템플릿 로드 (디스크 저장 없음)
+function resetDefaultGenerators() {
+    if (!confirm('모든 생성기를 기본 템플릿 목록으로 되돌리시겠습니까?\n(하단의 [💾 변경사항 저장]을 눌러야 최종 반영됩니다)')) return;
 
-    try {
-        if (window.eel && typeof eel.reset_default_generators === 'function') {
-            const res = await eel.reset_default_generators()();
-            if (res.status === 'success') {
-                currentGenerators = res.data;
-            }
-        } else {
-            currentGenerators = JSON.parse(JSON.stringify(DEFAULT_GENERATORS_FALLBACK));
+    studioDraftGenerators = JSON.parse(JSON.stringify(DEFAULT_GENERATORS_FALLBACK));
+    selectedStudioGenId = studioDraftGenerators.length > 0 ? studioDraftGenerators[0].id : null;
+    renderGeneratorsManageList();
+    loadGeneratorToEditor(selectedStudioGenId);
+}
+
+// 8. Write-Back 최종 커밋 & 디스크 영구 저장
+async function saveStudioChanges() {
+    syncCurrentEditorToDraft();
+
+    // 유효성 검사: 이름이나 코드가 빈 항목이 있는지 검사
+    for (let i = 0; i < studioDraftGenerators.length; i++) {
+        const g = studioDraftGenerators[i];
+        if (!g.name || !g.name.trim()) {
+            alert(`[항목 #${i+1}] 생성기 이름을 입력해 주세요.`);
+            selectGeneratorInStudio(g.id);
+            document.getElementById('gen-name-input')?.focus();
+            return;
         }
-    } catch (e) {
-        currentGenerators = JSON.parse(JSON.stringify(DEFAULT_GENERATORS_FALLBACK));
+        if (!g.code || !g.code.trim()) {
+            alert(`'${g.name}' 생성기의 JavaScript 코드를 입력해 주세요.`);
+            selectGeneratorInStudio(g.id);
+            document.getElementById('gen-code-input')?.focus();
+            return;
+        }
     }
 
-    selectedStudioGenId = currentGenerators.length > 0 ? currentGenerators[0].id : null;
+    // 1) Draft 버퍼를 실제 마스터에 커밋
+    currentGenerators = JSON.parse(JSON.stringify(studioDraftGenerators));
+
+    // 2) 디스크 파일에 1회 최종 Write-Back 기록
     await saveGeneratorsToServer();
-    renderGeneratorsManageList();
+
+    // 3) 메인 화면 갱신 및 모달 닫기
     renderGeneratorsUI();
-    selectGeneratorInStudio(selectedStudioGenId);
+    closeGeneratorsModal();
+
+    logToConsole('데이터 생성기 변경사항 저장 완료', {
+        메시지: `총 ${currentGenerators.length}개의 데이터 생성기 설정이 안전하게 영구 저장되었습니다.`,
+        등록목록: currentGenerators.map(g => `${g.icon} ${g.name}`)
+    });
 }
 
 async function saveGeneratorsToServer() {
@@ -550,22 +557,32 @@ function insertGenCodeTemplate(type) {
 
     if (templates[type]) {
         codeArea.value = templates[type];
+        syncCurrentEditorToDraft();
         codeArea.focus();
     }
 }
 
-// 에디터 Tab 키 4칸 들여쓰기 지원
+// 에디터 Tab 키 4칸 들여쓰기 및 실시간 입력 동기화
 function initGenCodeEditorTabKey() {
     const editor = document.getElementById('gen-code-input');
-    if (!editor) return;
+    if (editor) {
+        editor.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const start = editor.selectionStart;
+                const end = editor.selectionEnd;
+                editor.value = editor.value.substring(0, start) + '    ' + editor.value.substring(end);
+                editor.selectionStart = editor.selectionEnd = start + 4;
+                syncCurrentEditorToDraft();
+            }
+        });
+        editor.addEventListener('input', onStudioFieldInput);
+    }
 
-    editor.addEventListener('keydown', (e) => {
-        if (e.key === 'Tab') {
-            e.preventDefault();
-            const start = editor.selectionStart;
-            const end = editor.selectionEnd;
-            editor.value = editor.value.substring(0, start) + '    ' + editor.value.substring(end);
-            editor.selectionStart = editor.selectionEnd = start + 4;
+    ['gen-name-input', 'gen-icon-input', 'gen-category-input', 'gen-desc-input'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', onStudioFieldInput);
         }
     });
 }
