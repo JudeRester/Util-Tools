@@ -34,10 +34,12 @@ D:\python
 ├── quick_launch.example.json   # 빠른 실행 기본 템플릿 (Git 버전 추적)
 ├── notes.example.json          # 빠른 메모 기본 템플릿 (Git 버전 추적)
 ├── calendar_config.example.json # 캘린더 구독 기본 템플릿 (대한민국 공휴일 iCal 포함)
+├── diagrams.example.json       # 다이어그램 기본 템플릿 (Git 버전 추적)
 ├── shortcuts.json              # [개인 데이터] 사용자 폴더 바로가기 (Git 제외)
 ├── quick_launch.json           # [개인 데이터] 사용자 빠른 실행/SSH/URL (Git 제외)
 ├── notes.json                  # [개인 데이터] 사용자 작성 메모 데이터 (Git 제외)
 ├── calendar_config.json        # [개인 데이터] 사용자 구글 캘린더 구독 주소 (Git 제외)
+├── diagrams.json               # [개인 데이터] 사용자 저장 다이어그램 데이터 (Git 제외)
 │
 ├── core/                       # [코어 시스템]
 │   ├── __init__.py
