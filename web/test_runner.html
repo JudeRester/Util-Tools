@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="js/mermaid.min.js"></script>
+    <script src="js/mermaid_templates.js"></script>
+    <script src="js/mermaid_diagram.js"></script>
+</head>
+<body>
+    <pre id="results"></pre>
+    <script>
+        (async function() {
+            mermaid.initialize({ startOnLoad: false, securityLevel: 'loose' });
+            const results = {};
+            for (const [k, c] of Object.entries(MERMAID_TEMPLATES)) {
+                try {
+                    const id = 'test_svg_' + k;
+                    await mermaid.render(id, c);
+                    results[k] = 'PASS';
+                } catch (e) {
+                    results[k] = 'FAIL: ' + (e.message || e.str || e);
+                }
+            }
+            document.getElementById('results').textContent = JSON.stringify(results, null, 2);
+            document.title = 'TEST_DONE';
+            
+            // Write to a visible element
+            const doneDiv = document.createElement('div');
+            doneDiv.id = 'done_marker';
+            doneDiv.textContent = 'DONE';
+            document.body.appendChild(doneDiv);
+        })();
+    </script>
+</body>
+</html>
