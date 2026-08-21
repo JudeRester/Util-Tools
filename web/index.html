@@ -429,6 +429,12 @@
                             </button>
                         </div>
                         <div class="mermaid-toolbar-right">
+                            <button class="play-btn mini-tool-btn" onclick="openDiagramListModal()" title="저장된 다이어그램 목록 열기">
+                                <span>📂</span> 다이어그램 목록 (<span id="mermaid-saved-count-badge">0</span>)
+                            </button>
+                            <button class="play-btn mini-tool-btn" onclick="openSaveCurrentDiagramPrompt()" title="현재 다이어그램을 목록에 저장">
+                                <span>💾</span> 저장
+                            </button>
                             <button class="play-btn mini-tool-btn" onclick="copyMermaidCode()" title="작성된 Mermaid 코드 클립보드 복사">
                                 <span>📋</span> 코드 복사
                             </button>
@@ -761,6 +767,69 @@
                         </div>
                     </div>
                 </main>
+            </div>
+        </div>
+    </div>
+
+    <!-- 저장된 다이어그램 목록 관리 모달 -->
+    <div id="diagram-list-modal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 750px; width: 92%;">
+            <div class="modal-header">
+                <h3>📂 저장된 다이어그램 목록</h3>
+                <button class="modal-close-btn" onclick="closeDiagramListModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 상단 검색창 및 새 저장 버튼 -->
+                <div class="diagram-list-header-row" style="display: flex; gap: 10px; margin-bottom: 14px; align-items: center;">
+                    <div class="gen-search-box" style="flex: 1; min-width: 180px;">
+                        <span class="gen-search-icon">🔍</span>
+                        <input type="text" id="diagram-search-input" class="gen-search-input" placeholder="다이어그램 제목, 설명, 코드 검색..." oninput="onDiagramSearchInput(this.value)">
+                        <button type="button" id="diagram-search-clear-btn" class="gen-search-clear-btn" onclick="clearDiagramSearch()" style="display: none;">&times;</button>
+                    </div>
+                    <button class="form-btn add-btn" onclick="openSaveCurrentDiagramPrompt()" style="white-space: nowrap; padding: 6px 14px;">
+                        <span>➕</span> 현재 스크립트 저장
+                    </button>
+                </div>
+
+                <!-- 등록된 목록 -->
+                <div class="list-section-header">
+                    <span>저장된 다이어그램 (<span id="diagram-saved-count">0</span>개)</span>
+                </div>
+                <div id="diagrams-manage-list" class="shortcuts-manage-list" style="max-height: 380px; overflow-y: auto;">
+                    <!-- 동적 렌더링 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="form-btn danger-btn" onclick="resetDefaultDiagrams()">기본값 복원</button>
+                <div style="display: flex; gap: 8px; margin-left: auto;">
+                    <button class="form-btn close-btn" onclick="closeDiagramListModal()">취소</button>
+                    <button class="form-btn add-btn" onclick="saveDiagramChanges()">💾 변경사항 저장</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 다이어그램 저장/수정 입력 모달 -->
+    <div id="save-diagram-modal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 520px; width: 90%;">
+            <div class="modal-header">
+                <h3 id="save-diagram-modal-title">💾 다이어그램 저장</h3>
+                <button class="modal-close-btn" onclick="closeSaveDiagramModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="shortcut-add-box" style="margin-bottom: 0;">
+                    <div class="form-row">
+                        <input type="text" id="save-diagram-title" placeholder="다이어그램 제목 (예: 서비스 아키텍처 흐름도)" class="form-input">
+                    </div>
+                    <div class="form-row">
+                        <input type="text" id="save-diagram-category" placeholder="카테고리 (예: Flowchart, Sequence, ERD 등)" class="form-input" style="max-width: 160px;">
+                        <input type="text" id="save-diagram-desc" placeholder="설명 (예: 인증 및 캐시 처리 흐름)" class="form-input">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="form-btn close-btn" onclick="closeSaveDiagramModal()">취소</button>
+                <button class="form-btn add-btn" onclick="confirmSaveDiagram()">저장 완료</button>
             </div>
         </div>
     </div>

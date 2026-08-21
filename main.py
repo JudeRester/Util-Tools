@@ -23,6 +23,7 @@ import services.generator_service
 import services.dialog_service
 import services.notes_service
 import services.calendar_service
+import services.diagram_service
 import services.settings_service
 
 # 3. 코어 트레이 관리자 모듈 로드
