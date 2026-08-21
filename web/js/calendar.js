@@ -496,8 +496,11 @@ function goToCalendarToday() {
     renderCalendarUI();
 }
 
-// 3. 캘린더 구독 설정 모달 관련 로직
+// 3. 캘린더 구독 설정 모달 관련 로직 (Write-Back Draft 버퍼링 방식)
+let draftCalendarConfig = null;
+
 function openCalendarModal() {
+    draftCalendarConfig = JSON.parse(JSON.stringify(calendarConfig));
     cancelEditCalendarUrl();
     renderCalendarManageList();
     document.getElementById('calendar-modal').classList.add('show');
@@ -505,12 +508,14 @@ function openCalendarModal() {
 
 function closeCalendarModal() {
     cancelEditCalendarUrl();
+    draftCalendarConfig = null;
     document.getElementById('calendar-modal').classList.remove('show');
 }
 
 function renderCalendarManageList() {
+    const cfg = draftCalendarConfig || calendarConfig;
     const countBadge = document.getElementById('cal-count-badge');
-    const urls = calendarConfig.ics_urls || [];
+    const urls = cfg.ics_urls || [];
     if (countBadge) countBadge.textContent = urls.length;
 
     const listEl = document.getElementById('cal-manage-list');
@@ -538,7 +543,8 @@ function renderCalendarManageList() {
 }
 
 function startEditCalendarUrl(id) {
-    const urls = calendarConfig.ics_urls || [];
+    const cfg = draftCalendarConfig || calendarConfig;
+    const urls = cfg.ics_urls || [];
     const item = urls.find(u => u.id === id);
     if (!item) return;
 
@@ -604,6 +610,7 @@ function normalizeCalendarUrl(url) {
     return url;
 }
 
+// 새 캘린더 추가/수정 (Draft에만 반영)
 async function addNewCalendarUrl() {
     const name = document.getElementById('new-cal-name').value.trim();
     const color = document.getElementById('new-cal-color').value;
@@ -616,18 +623,20 @@ async function addNewCalendarUrl() {
 
     const url = normalizeCalendarUrl(rawUrl);
 
-    if (!calendarConfig.ics_urls) {
-        calendarConfig.ics_urls = [];
+    if (!draftCalendarConfig) {
+        draftCalendarConfig = JSON.parse(JSON.stringify(calendarConfig));
+    }
+    if (!draftCalendarConfig.ics_urls) {
+        draftCalendarConfig.ics_urls = [];
     }
 
     if (editingCalendarUrlId !== null) {
         // 수정 모드
-        const target = calendarConfig.ics_urls.find(u => u.id === editingCalendarUrlId);
+        const target = draftCalendarConfig.ics_urls.find(u => u.id === editingCalendarUrlId);
         if (target) {
             target.name = name;
             target.color = color;
             target.url = url;
-            logToConsole('캘린더 수정 완료', `[${name}] ${url}`);
         }
         cancelEditCalendarUrl();
     } else {
@@ -638,20 +647,20 @@ async function addNewCalendarUrl() {
             color,
             url
         };
-        calendarConfig.ics_urls.push(newItem);
-        document.getElementById('new-cal-name').value = '';
-        document.getElementById('new-cal-url').value = '';
-        logToConsole('캘린더 추가 완료', `[${name}] ${url}`);
+        draftCalendarConfig.ics_urls.push(newItem);
+        cancelEditCalendarUrl();
     }
 
-    await saveCalendarConfigLocally();
     renderCalendarManageList();
-    // 새 캘린더 추가/수정 후 즉시 일정 동기화
-    syncCalendarEvents(true);
 }
 
+// 캘린더 삭제 (Draft에서만 제거)
 async function deleteCalendarUrl(id) {
-    const confirmed = await showAppConfirm('이 캘린더 구독을 삭제하시겠습니까?', {
+    if (!draftCalendarConfig) {
+        draftCalendarConfig = JSON.parse(JSON.stringify(calendarConfig));
+    }
+    const item = (draftCalendarConfig.ics_urls || []).find(u => u.id === id);
+    const confirmed = await showAppConfirm(`'${item ? item.name : '선택한'}' 캘린더 구독을 삭제하시겠습니까?\n(하단의 [💾 변경사항 저장]을 눌러야 최종 반영됩니다)`, {
         title: '캘린더 삭제',
         icon: '🗑️',
         confirmText: '삭제',
@@ -661,16 +670,14 @@ async function deleteCalendarUrl(id) {
         if (editingCalendarUrlId === id) {
             cancelEditCalendarUrl();
         }
-        calendarConfig.ics_urls = (calendarConfig.ics_urls || []).filter(u => u.id !== id);
-        await saveCalendarConfigLocally();
+        draftCalendarConfig.ics_urls = (draftCalendarConfig.ics_urls || []).filter(u => u.id !== id);
         renderCalendarManageList();
-        syncCalendarEvents(true);
-        logToConsole('캘린더 삭제', `ID: ${id}`);
     }
 }
 
+// 기본값 복원 (Draft에만 적용)
 async function resetDefaultCalendarConfig() {
-    const confirmed = await showAppConfirm('캘린더 설정을 기본값(대한민국 공휴일)으로 복원하시겠습니까?', {
+    const confirmed = await showAppConfirm('캘린더 설정을 기본값(대한민국 공휴일)으로 되돌리시겠습니까?\n(하단의 [💾 변경사항 저장]을 눌러야 최종 반영됩니다)', {
         title: '기본값 복원',
         icon: '🔄',
         confirmText: '복원',
@@ -678,12 +685,21 @@ async function resetDefaultCalendarConfig() {
     });
     if (confirmed) {
         cancelEditCalendarUrl();
-        calendarConfig = JSON.parse(JSON.stringify(DEFAULT_CALENDAR_CONFIG_FALLBACK));
-        await saveCalendarConfigLocally();
+        draftCalendarConfig = JSON.parse(JSON.stringify(DEFAULT_CALENDAR_CONFIG_FALLBACK));
         renderCalendarManageList();
-        syncCalendarEvents(true);
-        logToConsole('캘린더 초기화', '기본값으로 복원되었습니다.');
     }
+}
+
+// Write-Back 최종 영구 저장
+async function saveCalendarManageChanges() {
+    if (draftCalendarConfig) {
+        calendarConfig = JSON.parse(JSON.stringify(draftCalendarConfig));
+    }
+    await saveCalendarConfigLocally();
+    syncCalendarEvents(true);
+    closeCalendarModal();
+
+    logToConsole('캘린더 설정 변경사항 저장 완료', `총 ${(calendarConfig.ics_urls || []).length}개의 캘린더 구독 설정이 안전하게 저장되었습니다.`);
 }
 
 async function saveCalendarConfigLocally() {

@@ -70,60 +70,66 @@ function renderShortcutsUI() {
     }
 
     // 3) 모달 관리 리스트 갱신
-    const countBadge = document.getElementById('shortcut-count-badge');
-    if (countBadge) countBadge.textContent = currentShortcuts.length;
-
-    const manageListEl = document.getElementById('shortcuts-manage-list');
-    if (manageListEl) {
-        if (currentShortcuts.length === 0) {
-            manageListEl.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:15px; font-size:0.85rem;">등록된 바로가기가 없습니다.</div>';
-        } else {
-            manageListEl.innerHTML = currentShortcuts.map((item, idx) => `
-                <div class="manage-item ${editingShortcutId === (item.id || idx.toString()) ? 'editing' : ''}" draggable="true" data-index="${idx}">
-                    <span class="drag-handle" title="마우스로 드래그하여 순서 변경">⋮⋮</span>
-                    <div class="manage-item-info">
-                        <div class="manage-item-name">${item.icon || '📁'} ${escapeHtml(item.name)}</div>
-                        <div class="manage-item-path" title="${escapeHtml(item.path)}">${escapeHtml(item.path)}</div>
-                    </div>
-                    <div class="manage-item-actions">
-                        <button type="button" class="item-edit-btn" onclick="startEditShortcut('${item.id || idx}')" title="수정">✏️</button>
-                        <button type="button" class="item-move-btn" onclick="moveShortcut(${idx}, -1)" ${idx === 0 ? 'disabled' : ''} title="위로 이동">▲</button>
-                        <button type="button" class="item-move-btn" onclick="moveShortcut(${idx}, 1)" ${idx === currentShortcuts.length - 1 ? 'disabled' : ''} title="아래로 이동">▼</button>
-                        <button type="button" class="item-delete-btn" onclick="deleteShortcut('${item.id || idx}')" title="삭제">삭제</button>
-                    </div>
-                </div>
-            `).join('');
-
-            // 드래그 앤 드롭 이벤트 바인딩
-            attachListDragAndDrop('shortcuts-manage-list', reorderShortcuts);
-        }
-    }
+    renderShortcutsManageList();
 }
 
-// 숏컷 드래그 앤 드롭 재정렬
-async function reorderShortcuts(fromIndex, toIndex) {
+let draftShortcuts = [];
+
+// 모달 관리 목록 렌더링 (Draft 기준)
+function renderShortcutsManageList() {
+    const list = document.getElementById('shortcuts-modal')?.classList.contains('show') ? draftShortcuts : currentShortcuts;
+    const countBadge = document.getElementById('shortcut-count-badge');
+    if (countBadge) countBadge.textContent = list.length;
+
+    const manageListEl = document.getElementById('shortcuts-manage-list');
+    if (!manageListEl) return;
+
+    if (list.length === 0) {
+        manageListEl.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:15px; font-size:0.85rem;">등록된 바로가기가 없습니다.</div>';
+        return;
+    }
+
+    manageListEl.innerHTML = list.map((item, idx) => `
+        <div class="manage-item ${editingShortcutId === (item.id || idx.toString()) ? 'editing' : ''}" draggable="true" data-index="${idx}">
+            <span class="drag-handle" title="마우스로 드래그하여 순서 변경">⋮⋮</span>
+            <div class="manage-item-info">
+                <div class="manage-item-name">${item.icon || '📁'} ${escapeHtml(item.name)}</div>
+                <div class="manage-item-path" title="${escapeHtml(item.path)}">${escapeHtml(item.path)}</div>
+            </div>
+            <div class="manage-item-actions">
+                <button type="button" class="item-edit-btn" onclick="startEditShortcut('${item.id || idx}')" title="수정">✏️</button>
+                <button type="button" class="item-move-btn" onclick="moveShortcut(${idx}, -1)" ${idx === 0 ? 'disabled' : ''} title="위로 이동">▲</button>
+                <button type="button" class="item-move-btn" onclick="moveShortcut(${idx}, 1)" ${idx === list.length - 1 ? 'disabled' : ''} title="아래로 이동">▼</button>
+                <button type="button" class="item-delete-btn" onclick="deleteShortcut('${item.id || idx}')" title="삭제">삭제</button>
+            </div>
+        </div>
+    `).join('');
+
+    // 드래그 앤 드롭 이벤트 바인딩
+    attachListDragAndDrop('shortcuts-manage-list', reorderShortcuts);
+}
+
+// 숏컷 드래그 앤 드롭 재정렬 (Draft 내에서만 순서 변경)
+function reorderShortcuts(fromIndex, toIndex) {
     if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
-    const movedItem = currentShortcuts.splice(fromIndex, 1)[0];
-    currentShortcuts.splice(toIndex, 0, movedItem);
-    await saveShortcuts();
-    renderShortcutsUI();
-    logToConsole('순서 변경 완료', `'${movedItem.name}' 위치 이동 (${fromIndex + 1}번 ➔ ${toIndex + 1}번)`);
+    const movedItem = draftShortcuts.splice(fromIndex, 1)[0];
+    draftShortcuts.splice(toIndex, 0, movedItem);
+    renderShortcutsManageList();
 }
 
 // 숏컷 순서 변경 (위 / 아래)
-async function moveShortcut(index, direction) {
+function moveShortcut(index, direction) {
     const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= currentShortcuts.length) return;
+    if (targetIndex < 0 || targetIndex >= draftShortcuts.length) return;
 
-    const temp = currentShortcuts[index];
-    currentShortcuts[index] = currentShortcuts[targetIndex];
-    currentShortcuts[targetIndex] = temp;
+    const temp = draftShortcuts[index];
+    draftShortcuts[index] = draftShortcuts[targetIndex];
+    draftShortcuts[targetIndex] = temp;
 
-    await saveShortcuts();
-    renderShortcutsUI();
+    renderShortcutsManageList();
 }
 
-// 숏컷 저장
+// 숏컷 저장 (마스터 -> 디스크)
 async function saveShortcuts() {
     try {
         localStorage.setItem('folder_shortcuts', JSON.stringify(currentShortcuts));
@@ -135,21 +141,23 @@ async function saveShortcuts() {
     }
 }
 
-// 모달 열기/닫기
+// 모달 열기/닫기 (Write-Back)
 function openShortcutsModal() {
+    draftShortcuts = JSON.parse(JSON.stringify(currentShortcuts));
     cancelEditShortcut();
-    renderShortcutsUI();
+    renderShortcutsManageList();
     document.getElementById('shortcuts-modal').classList.add('show');
 }
 
 function closeShortcutsModal() {
     cancelEditShortcut();
+    draftShortcuts = [];
     document.getElementById('shortcuts-modal').classList.remove('show');
 }
 
 // 수정 모드 시작
 function startEditShortcut(id) {
-    const item = currentShortcuts.find((it, idx) => (it.id || idx.toString()) === id.toString());
+    const item = draftShortcuts.find((it, idx) => (it.id || idx.toString()) === id.toString());
     if (!item) return;
 
     editingShortcutId = id;
@@ -163,14 +171,16 @@ function startEditShortcut(id) {
 
     document.getElementById('shortcut-cancel-btn').style.display = 'inline-block';
     document.getElementById('new-name-input').focus();
-    renderShortcutsUI();
+    renderShortcutsManageList();
 }
 
 // 수정 모드 취소
 function cancelEditShortcut() {
     editingShortcutId = null;
-    document.getElementById('new-name-input').value = '';
-    document.getElementById('new-path-input').value = '';
+    const nameIn = document.getElementById('new-name-input');
+    const pathIn = document.getElementById('new-path-input');
+    if (nameIn) nameIn.value = '';
+    if (pathIn) pathIn.value = '';
 
     const titleEl = document.getElementById('shortcut-form-title');
     if (titleEl) titleEl.textContent = '➕ 새로운 바로가기 추가';
@@ -181,7 +191,7 @@ function cancelEditShortcut() {
     const cancelBtn = document.getElementById('shortcut-cancel-btn');
     if (cancelBtn) cancelBtn.style.display = 'none';
 
-    renderShortcutsUI();
+    renderShortcutsManageList();
 }
 
 // 탐색기로 폴더 선택 대화상자 호출
@@ -205,7 +215,7 @@ async function pickFolderFromExplorer() {
     }
 }
 
-// 새 숏컷 추가 또는 기존 숏컷 수정 완료
+// 새 숏컷 추가 또는 기존 숏컷 수정 완료 (Draft에만 반영)
 async function addNewShortcut() {
     const nameInput = document.getElementById('new-name-input');
     const pathInput = document.getElementById('new-path-input');
@@ -222,12 +232,11 @@ async function addNewShortcut() {
 
     if (editingShortcutId !== null) {
         // 수정 모드
-        const targetIdx = currentShortcuts.findIndex((it, idx) => (it.id || idx.toString()) === editingShortcutId.toString());
+        const targetIdx = draftShortcuts.findIndex((it, idx) => (it.id || idx.toString()) === editingShortcutId.toString());
         if (targetIdx !== -1) {
-            currentShortcuts[targetIdx].name = name;
-            currentShortcuts[targetIdx].path = path;
-            currentShortcuts[targetIdx].icon = icon;
-            logToConsole('바로가기 수정 완료', `[${name}] ${path}`);
+            draftShortcuts[targetIdx].name = name;
+            draftShortcuts[targetIdx].path = path;
+            draftShortcuts[targetIdx].icon = icon;
         }
         cancelEditShortcut();
     } else {
@@ -238,30 +247,36 @@ async function addNewShortcut() {
             path: path,
             icon: icon
         };
-        currentShortcuts.push(newObj);
+        draftShortcuts.push(newObj);
         nameInput.value = '';
         pathInput.value = '';
-        logToConsole('바로가기 추가 완료', `[${name}] ${path}`);
+        cancelEditShortcut();
     }
 
-    await saveShortcuts();
-    renderShortcutsUI();
+    renderShortcutsManageList();
 }
 
-// 숏컷 삭제
+// 숏컷 삭제 (Draft에서만 제거)
 async function deleteShortcut(id) {
     if (editingShortcutId === id) {
         cancelEditShortcut();
     }
-    currentShortcuts = currentShortcuts.filter((item, idx) => (item.id || idx.toString()) !== id.toString());
-    await saveShortcuts();
-    renderShortcutsUI();
-    logToConsole('바로가기 삭제 완료', `ID: ${id}`);
+    const item = draftShortcuts.find((it, idx) => (it.id || idx.toString()) === id.toString());
+    const confirmed = await showAppConfirm(`'${item ? item.name : '선택한'}' 바로가기를 삭제하시겠습니까?\n(하단의 [💾 변경사항 저장]을 눌러야 최종 반영됩니다)`, {
+        title: '바로가기 삭제',
+        icon: '🗑️',
+        confirmText: '삭제',
+        isDanger: true
+    });
+    if (!confirmed) return;
+
+    draftShortcuts = draftShortcuts.filter((it, idx) => (it.id || idx.toString()) !== id.toString());
+    renderShortcutsManageList();
 }
 
-// 기본값 복원
+// 기본값 복원 (Draft에만 적용)
 async function resetDefaultShortcuts() {
-    const confirmed = await showAppConfirm('기본 폴더 바로가기 목록으로 복원하시겠습니까?', {
+    const confirmed = await showAppConfirm('기본 폴더 바로가기 목록으로 되돌리시겠습니까?\n(하단의 [💾 변경사항 저장]을 눌러야 최종 반영됩니다)', {
         title: '기본값 복원',
         icon: '🔄',
         confirmText: '복원',
@@ -269,11 +284,19 @@ async function resetDefaultShortcuts() {
     });
     if (confirmed) {
         cancelEditShortcut();
-        currentShortcuts = JSON.parse(JSON.stringify(DEFAULT_SHORTCUTS));
-        await saveShortcuts();
-        renderShortcutsUI();
-        logToConsole('바로가기 초기화', '기본값으로 복원되었습니다.');
+        draftShortcuts = JSON.parse(JSON.stringify(DEFAULT_SHORTCUTS));
+        renderShortcutsManageList();
     }
+}
+
+// Write-Back 최종 영구 저장
+async function saveShortcutsChanges() {
+    currentShortcuts = JSON.parse(JSON.stringify(draftShortcuts));
+    await saveShortcuts();
+    renderShortcutsUI();
+    closeShortcutsModal();
+
+    logToConsole('바로가기 변경사항 저장 완료', `총 ${currentShortcuts.length}개의 폴더 바로가기 설정이 안전하게 저장되었습니다.`);
 }
 
 // 탐색기로 열기 백엔드 호출

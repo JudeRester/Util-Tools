@@ -431,7 +431,10 @@
             </div>
             <div class="modal-footer">
                 <button class="form-btn danger-btn" onclick="resetDefaultShortcuts()">기본값으로 복원</button>
-                <button class="form-btn close-btn" onclick="closeShortcutsModal()">닫기</button>
+                <div style="display: flex; gap: 8px; margin-left: auto;">
+                    <button class="form-btn close-btn" onclick="closeShortcutsModal()">취소</button>
+                    <button class="form-btn add-btn" onclick="saveShortcutsChanges()">💾 변경사항 저장</button>
+                </div>
             </div>
         </div>
     </div>
@@ -478,7 +481,10 @@
             </div>
             <div class="modal-footer">
                 <button class="form-btn danger-btn" onclick="resetDefaultQuickLaunch()">기본값으로 복원</button>
-                <button class="form-btn close-btn" onclick="closeQuickLaunchModal()">닫기</button>
+                <div style="display: flex; gap: 8px; margin-left: auto;">
+                    <button class="form-btn close-btn" onclick="closeQuickLaunchModal()">취소</button>
+                    <button class="form-btn add-btn" onclick="saveQuickLaunchChanges()">💾 변경사항 저장</button>
+                </div>
             </div>
         </div>
     </div>
@@ -529,7 +535,10 @@
             </div>
             <div class="modal-footer">
                 <button class="form-btn danger-btn" onclick="resetDefaultCalendarConfig()">기본값 복원</button>
-                <button class="form-btn close-btn" onclick="closeCalendarModal()">닫기</button>
+                <div style="display: flex; gap: 8px; margin-left: auto;">
+                    <button class="form-btn close-btn" onclick="closeCalendarModal()">취소</button>
+                    <button class="form-btn add-btn" onclick="saveCalendarManageChanges()">💾 변경사항 저장</button>
+                </div>
             </div>
         </div>
     </div>
