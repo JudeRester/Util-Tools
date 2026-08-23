@@ -1,7 +1,7 @@
 /**
  * Mermaid 다이어그램 시각화 스튜디오 (Mermaid Diagram Studio) 모듈
  * 실시간 텍스트 기반 다이어그램 렌더링, 템플릿 프리셋 연동, 줌/팬 인터랙션, PNG/SVG 내보내기 지원
- * (템플릿 데이터는 js/mermaid_templates.js 에서 분리 로드)
+ * (템플릿 데이터 및 기본 샘플은 js/mermaid_templates.js 에서 분리 로드)
  */
 
 let currentMermaidTheme = 'dark';
@@ -12,63 +12,417 @@ let isMermaidPanning = false;
 let mermaidPanStartX = 0;
 let mermaidPanStartY = 0;
 let mermaidRenderTimer = null;
+
 let isMermaidEditorCollapsed = false;
 
+// 1. Mermaid 초기화
+function initMermaidDiagram() {
+    try {
+        if (typeof mermaid !== 'undefined') {
+            mermaid.initialize({
+                startOnLoad: false,
+                theme: currentMermaidTheme,
+                securityLevel: 'loose',
+                flowchart: { curve: 'basis' }
+            });
+        }
+    } catch (e) {
+        console.error("Mermaid 초기화 실패:", e);
+    }
+
+    initMermaidEditorTabKey();
+    initMermaidResizer();
+    initMermaidPanZoom();
+
+    // 에디터 접힘 상태 복원
+    isMermaidEditorCollapsed = localStorage.getItem('mermaid_editor_collapsed') === '1';
+    applyMermaidEditorCollapsedState();
+
+    // 로컬스토리지에서 이전 작업 내용 복원
+    const saved = localStorage.getItem('mermaid_saved_code');
+    const editor = document.getElementById('mermaid-code-editor');
+    if (editor) {
+        editor.value = saved || MERMAID_TEMPLATES.flowchart_td;
+    }
+
+    // 저장된 다이어그램 목록 불러오기
+    loadSavedDiagrams();
+
+    // 초기 렌더링
+    setTimeout(() => {
+        renderMermaid(true);
+    }, 100);
+}
+
+// 에디터 접기/펼치기 토글
+function toggleMermaidEditor() {
+    isMermaidEditorCollapsed = !isMermaidEditorCollapsed;
+    applyMermaidEditorCollapsedState();
+    localStorage.setItem('mermaid_editor_collapsed', isMermaidEditorCollapsed ? '1' : '0');
+    setTimeout(() => {
+        fitMermaidToViewport();
+    }, 220);
+}
+
+function applyMermaidEditorCollapsedState() {
+    const editorPane = document.getElementById('mermaid-editor-pane');
+    const resizer = document.getElementById('mermaid-resizer');
+    const toggleIcon = document.getElementById('mermaid-editor-toggle-icon');
+    const toggleText = document.getElementById('mermaid-editor-toggle-text');
+    const openEditorBtn = document.getElementById('mermaid-open-editor-btn');
+
+    if (!editorPane) return;
+
+    if (isMermaidEditorCollapsed) {
+        editorPane.classList.add('collapsed');
+        if (resizer) resizer.classList.add('hidden');
+        if (toggleIcon) toggleIcon.textContent = '▶';
+        if (toggleText) toggleText.textContent = '에디터 펼치기';
+        if (openEditorBtn) openEditorBtn.style.display = 'inline-flex';
+    } else {
+        editorPane.classList.remove('collapsed');
+        if (resizer) resizer.classList.remove('hidden');
+        if (toggleIcon) toggleIcon.textContent = '◀';
+        if (toggleText) toggleText.textContent = '에디터 접기';
+        if (openEditorBtn) openEditorBtn.style.display = 'none';
+    }
+}
+
+// 에디터 Tab 키 4칸 들여쓰기 지원
+function initMermaidEditorTabKey() {
+    const editor = document.getElementById('mermaid-code-editor');
+    if (!editor) return;
+
+    editor.addEventListener('keydown', function(e) {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const start = this.selectionStart;
+            const end = this.selectionEnd;
+            this.value = this.value.substring(0, start) + "    " + this.value.substring(end);
+            this.selectionStart = this.selectionEnd = start + 4;
+            onMermaidCodeChange();
+        }
+    });
+}
+
+// 에디터 내용 변경 시 실시간 디바운스 렌더링
+function onMermaidCodeChange() {
+    if (mermaidRenderTimer) clearTimeout(mermaidRenderTimer);
+    mermaidRenderTimer = setTimeout(() => {
+        renderMermaid(false);
+    }, 250);
+}
+
+// 다이어그램 렌더링
+async function renderMermaid(force = false) {
+    const editor = document.getElementById('mermaid-code-editor');
+    const outputEl = document.getElementById('mermaid-render-output');
+    const errorBar = document.getElementById('mermaid-error-bar');
+    const errorText = document.getElementById('mermaid-error-text');
+
+    if (!editor || !outputEl) return;
+
+    const code = editor.value.trim();
+    if (!code) {
+        outputEl.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:30px;">코드를 입력하면 다이어그램이 실시간으로 렌더링됩니다.</div>';
+        if (errorBar) errorBar.style.display = 'none';
+        return;
+    }
+
+    if (typeof mermaid === 'undefined') {
+        outputEl.innerHTML = '<div style="color:#ef4444; padding:20px;">Mermaid 라이브러리를 불러오지 못했습니다.</div>';
+        return;
+    }
+
+    try {
+        const uniqueId = 'mermaid-svg-' + Date.now();
+        const { svg } = await mermaid.render(uniqueId, code);
+        outputEl.innerHTML = svg;
+        outputEl.style.opacity = '1';
+
+        if (errorBar) errorBar.style.display = 'none';
+
+        // 성공 시 로컬스토리지 자동 저장
+        localStorage.setItem('mermaid_saved_code', editor.value);
+
+        if (force) {
+            fitMermaidToViewport();
+        }
+    } catch (err) {
+        console.warn("Mermaid 렌더링 문법 오류:", err);
+        if (errorBar && errorText) {
+            errorText.textContent = (err.message || err.str || '문법 오류가 발생했습니다. 문법을 확인해 주세요.').split('\n')[0];
+            errorBar.style.display = 'flex';
+        }
+        if (outputEl.firstChild) {
+            outputEl.style.opacity = '0.4';
+        }
+    }
+}
+
+// 템플릿 불러오기
+function loadMermaidTemplate(key) {
+    const tpl = MERMAID_TEMPLATES[key];
+    if (!tpl) return;
+
+    const editor = document.getElementById('mermaid-code-editor');
+    if (editor) {
+        editor.value = tpl;
+        renderMermaid(true);
+        logToConsole('Mermaid 템플릿 로드', `템플릿: [${key}] 적용 완료`);
+    }
+}
+
+// 테마 변경
+async function changeMermaidTheme(theme) {
+    currentMermaidTheme = theme;
+    try {
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: theme,
+            securityLevel: 'loose',
+            flowchart: { curve: 'basis' }
+        });
+        await renderMermaid(false);
+        logToConsole('Mermaid 테마 변경', `테마: [${theme}]`);
+    } catch (e) {
+        console.error("테마 변경 오류:", e);
+    }
+}
+
+// 에디터 비우기
+function clearMermaidEditor() {
+    const editor = document.getElementById('mermaid-code-editor');
+    if (editor) {
+        editor.value = '';
+        renderMermaid(true);
+        if (editor) editor.focus();
+    }
+}
+
+// 코드 클립보드 복사
+async function copyMermaidCode() {
+    const editor = document.getElementById('mermaid-code-editor');
+    if (!editor || !editor.value.trim()) {
+        await showAppAlert('복사할 코드가 없습니다.', '알림', 'ℹ️');
+        return;
+    }
+    navigator.clipboard.writeText(editor.value);
+    logToConsole('코드 복사 완료', 'Mermaid 스크립트가 클립보드에 복사되었습니다.');
+    showAppAlert('Mermaid 코드가 클립보드에 복사되었습니다! 📋', '복사 완료', '✅');
+}
+
+// SVG 벡터 코드 복사
+async function copyMermaidSvg() {
+    const outputEl = document.getElementById('mermaid-render-output');
+    const svg = outputEl?.querySelector('svg');
+    if (!svg) {
+        await showAppAlert('복사할 다이어그램 SVG가 없습니다.', '알림', '⚠️');
+        return;
+    }
+    const svgCode = svg.outerHTML;
+    navigator.clipboard.writeText(svgCode);
+    logToConsole('SVG 복사 완료', 'SVG 벡터 코드가 클립보드에 복사되었습니다.');
+    showAppAlert('SVG 벡터 코드가 클립보드에 복사되었습니다! 📐', '복사 완료', '✅');
+}
+
+// 다이어그램 이미지를 클립보드에 복사 (Ctrl+V 붙여넣기용)
+async function copyMermaidImageToClipboard() {
+    const outputEl = document.getElementById('mermaid-render-output');
+    const svg = outputEl?.querySelector('svg');
+    if (!svg) {
+        await showAppAlert('복사할 다이어그램이 없습니다.', '알림', '⚠️');
+        return;
+    }
+
+    try {
+        const blob = await svgToPngBlob(svg);
+        if (blob && navigator.clipboard && navigator.clipboard.write) {
+            await navigator.clipboard.write([
+                new ClipboardItem({ 'image/png': blob })
+            ]);
+            logToConsole('이미지 클립보드 복사 완료', '메신저나 문서에 Ctrl+V로 붙여넣을 수 있습니다.');
+            await showAppAlert('다이어그램 이미지가 클립보드에 복사되었습니다! 🖼️\n(문서나 메신저에 바로 Ctrl+V로 붙여넣기 가능)', '복사 완료', '✅');
+        } else {
+            downloadMermaidPng();
+        }
+    } catch (e) {
+        console.error("클립보드 복사 실패:", e);
+        downloadMermaidPng();
+    }
+}
+
+// 고해상도 PNG 파일 다운로드
+async function downloadMermaidPng() {
+    const outputEl = document.getElementById('mermaid-render-output');
+    const svg = outputEl?.querySelector('svg');
+    if (!svg) {
+        await showAppAlert('다운로드할 다이어그램이 없습니다.', '알림', '⚠️');
+        return;
+    }
+
+    try {
+        const blob = await svgToPngBlob(svg);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `mermaid-diagram-${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        logToConsole('PNG 다운로드 완료', a.download);
+    } catch (e) {
+        logToConsole('PNG 생성 실패', e.message || e);
+    }
+}
+
+// SVG -> PNG Blob 변환 헬퍼 (배경색 및 2배 고해상도 렌더링)
+function svgToPngBlob(svgElement) {
+    return new Promise((resolve, reject) => {
+        try {
+            const svgString = new XMLSerializer().serializeToString(svgElement);
+            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            const URLObj = window.URL || window.webkitURL || window;
+            const blobURL = URLObj.createObjectURL(svgBlob);
+
+            const bbox = svgElement.getBoundingClientRect();
+            const width = Math.max(bbox.width, 400) * 2;
+            const height = Math.max(bbox.height, 300) * 2;
+
+            const image = new Image();
+            image.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+
+                // 다크 배경 채우기
+                ctx.fillStyle = currentMermaidTheme === 'dark' ? '#0d1117' : '#ffffff';
+                ctx.fillRect(0, 0, width, height);
+
+                ctx.drawImage(image, 0, 0, width, height);
+                URLObj.revokeObjectURL(blobURL);
+
+                canvas.toBlob(blob => {
+                    if (blob) resolve(blob);
+                    else reject(new Error('Canvas to Blob 실패'));
+                }, 'image/png');
+            };
+            image.onerror = (e) => reject(e);
+            image.src = blobURL;
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
+// 2. 줌 및 패닝 (Zoom & Pan) 기능
+function initMermaidPanZoom() {
+    const viewport = document.getElementById('mermaid-viewport');
+    if (!viewport) return;
+
+    // 마우스 휠 줌
+    viewport.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 0.1 : -0.1;
+        zoomMermaid(delta);
+    }, { passive: false });
+
+    // 마우스 드래그 패닝
+    viewport.addEventListener('mousedown', function(e) {
+        if (e.target.closest('button')) return;
+        isMermaidPanning = true;
+        mermaidPanStartX = e.clientX - mermaidPanX;
+        mermaidPanStartY = e.clientY - mermaidPanY;
+        viewport.classList.add('panning');
+    });
+
+    window.addEventListener('mousemove', function(e) {
+        if (!isMermaidPanning) return;
+        mermaidPanX = e.clientX - mermaidPanStartX;
+        mermaidPanY = e.clientY - mermaidPanStartY;
+        updateCanvasTransform();
+    });
+
+    window.addEventListener('mouseup', function() {
+        if (isMermaidPanning) {
+            isMermaidPanning = false;
+            viewport.classList.remove('panning');
+        }
+    });
+}
+
+function zoomMermaid(delta) {
+    mermaidZoomScale = Math.max(0.2, Math.min(3.0, mermaidZoomScale + delta));
+    updateCanvasTransform();
+}
+
+function resetMermaidZoom() {
+    mermaidZoomScale = 1.0;
+    mermaidPanX = 0;
+    mermaidPanY = 0;
+    updateCanvasTransform();
+}
+
+function fitMermaidToViewport() {
+    mermaidZoomScale = 1.0;
+    mermaidPanX = 0;
+    mermaidPanY = 0;
+    updateCanvasTransform();
+}
+
+function updateCanvasTransform() {
+    const canvas = document.getElementById('mermaid-canvas');
+    if (canvas) {
+        canvas.style.transform = `translate(${mermaidPanX}px, ${mermaidPanY}px) scale(${mermaidZoomScale})`;
+    }
+}
+
+// 3. 좌우 스플리터 리사이저
+function initMermaidResizer() {
+    const resizer = document.getElementById('mermaid-resizer');
+    const editorPane = document.getElementById('mermaid-editor-pane');
+    const container = document.getElementById('mermaid-split');
+
+    if (!resizer || !editorPane || !container) return;
+
+    let isResizing = false;
+
+    resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const rect = container.getBoundingClientRect();
+        const newWidth = e.clientX - rect.left;
+        const totalWidth = rect.width;
+        const percent = (newWidth / totalWidth) * 100;
+
+        if (percent >= 20 && percent <= 80) {
+            editorPane.style.flex = `0 0 ${percent}%`;
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        }
+    });
+}
+
+// ==========================================
+// 4. 저장된 다이어그램 목록 관리 및 영속화 (Write-Back)
+// ==========================================
 let savedDiagrams = [];
 let draftSavedDiagrams = [];
 let diagramSearchQuery = '';
 let editingDiagramId = null;
-
-const DEFAULT_DIAGRAMS_FALLBACK = [
-    {
-        id: "1",
-        title: "⚡ 서비스 아키텍처 & 캐싱 흐름도",
-        category: "Flowchart",
-        description: "API 게이트웨이, Redis 캐시 확인 및 DB 쿼리 흐름도",
-        code: MERMAID_TEMPLATES.flowchart_td,
-        updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
-    },
-    {
-        id: "2",
-        title: "🔐 JWT 로그인 & 주문 결제 시퀀스",
-        category: "Sequence",
-        description: "동기/비동기 호출, alt 분기, loop 반복, par 병렬 처리 및 critical 트랜잭션",
-        code: MERMAID_TEMPLATES.sequence,
-        updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
-    },
-    {
-        id: "3",
-        title: "🗄️ 이커머스 핵심 도메인 ERD",
-        category: "ERD",
-        description: "사용자, 프로필, 주문, 상품, 카테고리, 리뷰 간의 관계형 모델링",
-        code: MERMAID_TEMPLATES.er_diagram,
-        updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
-    },
-    {
-        id: "4",
-        title: "🧠 AI 시맨틱 검색 & 벡터 DB 캐시 아키텍처",
-        category: "Flowchart",
-        description: "multilingual-e5-small ONNX 모델, 동적 패딩 및 증분 벡터 캐싱 파이프라인",
-        code: MERMAID_TEMPLATES.ai_search_arch,
-        updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
-    },
-    {
-        id: "5",
-        title: "🚀 2026 차세대 플랫폼 런칭 로드맵",
-        category: "Gantt",
-        description: "기획/백엔드/프론트엔드/QA 마일스톤 및 의존성 간트 차트",
-        code: MERMAID_TEMPLATES.gantt,
-        updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
-    },
-    {
-        id: "6",
-        title: "🎯 2026 제품 기능 개발 우선순위 매트릭스",
-        category: "Quadrant",
-        description: "난이도 대비 비즈니스 가치(ROI) 4분면 분석 차트",
-        code: MERMAID_TEMPLATES.quadrant_chart,
-        updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
-    }
-];
 
 async function loadSavedDiagrams() {
     try {
