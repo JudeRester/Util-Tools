@@ -15,8 +15,8 @@ const MERMAID_TEMPLATES = {
     subgraph ServiceLayer ["⚙️ 백엔드 마이크로서비스"]
         direction LR
         D[["[[서브루틴]] 인증 서비스"]]
-        E[/"[/평행사변형/] 데이터 파싱"/]
-        F[\"[\역평행사변형\] 응답 직렬화"\]
+        E[/"[평행사변형] 데이터 파싱"/]
+        F["[역평행사변형] 응답 직렬화"]
         G{{"{{육각형}} 비즈니스 로직 처리"}}
     end
 
@@ -27,15 +27,15 @@ const MERMAID_TEMPLATES = {
     end
 
     subgraph OutputLayer ["🌐 외부 연동"]
-        K>"[비대칭형] 외부 Webhook"]
-        L[/"[/사다리꼴\] 최종 클라이언트 응답"/]
+        K>"[깃발형] 외부 Webhook"]
+        L["[사다리꼴] 최종 클라이언트 응답"]
     end
 
     %% [2] 연결선 종류 및 텍스트 라벨
     A --> B
     B --> C
     C -->|Yes: 인증 성공| D
-    C -.->|No: 미인증 (점선)| A
+    C -.->|No: 미인증 점선| A
     
     %% [3] 굵은 화살표 & 실선 & 양방향 연결
     D ==> G
@@ -100,49 +100,65 @@ const MERMAID_TEMPLATES = {
     participant DB as 🗄️ 데이터베이스
     participant PG as 💳 결제 대행사 (PG)
 
-    %% [2] 동기 호출 & 활성화 박스 (+/-)
-    User->>+Front: 로그인 폼 제출 (ID/PW)
-    Front->>+API: POST /api/v1/auth/login
-    API->>+Auth: 자격 증명 검증 요청
-    Auth->>+DB: SELECT * FROM users WHERE email=?
-    DB-->>-Auth: 사용자 레코드 반환
+    %% [2] 동기 호출 & 활성화 플로우
+    User->>Front: 로그인 폼 제출 (ID/PW)
+    activate Front
+    Front->>API: POST /api/v1/auth/login
+    activate API
+    API->>Auth: 자격 증명 검증 요청
+    activate Auth
+    Auth->>DB: SELECT * FROM users WHERE email=?
+    activate DB
+    DB-->>Auth: 사용자 레코드 반환
+    deactivate DB
     
     %% [3] 조건 분기 (alt / else)
     alt 비밀번호 일치 성공
-        Auth-->>API: JWT Token (Access & Refresh)
-        API-->>Front: 200 OK (Set-Cookie)
+        Auth-->>API: JWT Token 발급 (200 OK)
+        API-->>Front: 인증 성공 및 토큰 반환
         Front-->>User: 메인 대시보드 화면 전환
     else 비밀번호 불일치
-        Auth--xAPI: 401 Unauthorized 에러
-        API-->>-Front: 실패 응답
+        Auth-->>API: 401 Unauthorized 에러
+        API-->>Front: 로그인 실패 응답
         Front-->>User: "비밀번호를 확인해주세요" 안내
     end
-    deactivate Front
+    deactivate Auth
     deactivate API
+    deactivate Front
 
     %% [4] 배경 영역 강조 (rect) 및 메모 (Note)
     rect rgb(20, 30, 45)
         Note over User, PG: 💳 주문 및 결제 트랜잭션 영역
-        User->>+Front: "결제 승인" 버튼 클릭
-        Front->>+API: POST /api/v1/orders
+        User->>Front: "결제 승인" 버튼 클릭
+        activate Front
+        Front->>API: POST /api/v1/orders
+        activate API
         
         %% [5] 병렬 처리 (par / and)
         par 재고 차감 및 주문 생성
-            API->>+DB: UPDATE stock SET count=count-1
-            DB-->>-API: 성공
+            API->>DB: UPDATE stock SET count=count-1
+            activate DB
+            DB-->>API: 성공
+            deactivate DB
         and PG사 승인 요청
-            API->>+PG: 결제 승인 API 호출
-            PG-->>-API: 승인 완료 (TID: 98765)
+            API->>PG: 결제 승인 API 호출
+            activate PG
+            PG-->>API: 승인 완료 (TID: 98765)
+            deactivate PG
         end
         
         %% [6] 반복문 (loop)
         loop 배송 준비 상태 폴링 (최대 3회)
-            API->>+DB: 배송 상태 확인
-            DB-->>-API: 준비 완료
+            API->>DB: 배송 상태 확인
+            activate DB
+            DB-->>API: 준비 완료
+            deactivate DB
         end
         
-        API-->>-Front: 201 Created (주문 완료)
-        Front-->>-User: 영수증 화면 표시
+        API-->>Front: 201 Created (주문 완료)
+        deactivate API
+        Front-->>User: 영수증 화면 표시
+        deactivate Front
     end
 
     %% [7] 예외 및 트랜잭션 보장 (critical / option)
@@ -449,9 +465,9 @@ const MERMAID_TEMPLATES = {
         Python["Python (FastAPI, Django)"]
         Go["Go (Gin, Fiber)"]
       Database["데이터베이스"]
-        RDBMS[("PostgreSQL / MySQL")]
-        NoSQL[("MongoDB / DynamoDB")]
-        Cache[("Redis / Memcached")]
+        RDBMS["PostgreSQL / MySQL"]
+        NoSQL["MongoDB / DynamoDB"]
+        Cache["Redis / Memcached"]
     DevOps["🚀 DevOps & Cloud"]
       CI_CD["CI/CD"]
         GithubActions["GitHub Actions"]
@@ -538,27 +554,27 @@ const MERMAID_TEMPLATES = {
     requirement_diagram: `requirementDiagram
 
     requirement req_sec_01 {
-        id: SEC-01
-        text: 모든 사용자 비밀번호 및 민감정보는 단방향 해시(Argon2id)로 암호화 저장되어야 한다.
-        risk: High
-        verifymethod: Test
+        id: "SEC-01"
+        text: "모든 사용자 비밀번호 및 민감정보는 단방향 해시(Argon2id)로 암호화 저장되어야 한다."
+        risk: high
+        verifymethod: test
     }
 
     requirement req_perf_01 {
-        id: PERF-01
-        text: 95%의 읽기 API 요청은 200ms 이내에 응답해야 한다.
-        risk: Medium
-        verifymethod: Demonstration
+        id: "PERF-01"
+        text: "95%의 읽기 API 요청은 200ms 이내에 응답해야 한다."
+        risk: medium
+        verifymethod: demonstration
     }
 
     element auth_service {
-        type: Microservice
-        docref: architecture/auth_module.md
+        type: "Microservice"
+        docref: "architecture/auth_module.md"
     }
 
     element redis_cache {
-        type: In-Memory Cache
-        docref: infrastructure/redis.md
+        type: "In-Memory Cache"
+        docref: "infrastructure/redis.md"
     }
 
     auth_service - satisfies -> req_sec_01
