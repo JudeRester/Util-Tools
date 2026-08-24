@@ -278,39 +278,57 @@ async function downloadMermaidPng() {
 }
 
 // SVG -> PNG Blob 변환 헬퍼 (배경색 및 2배 고해상도 렌더링)
+// SVG -> PNG Blob 변환 헬퍼 (Base64 Data URL 방식으로 Tainted Canvas 방지)
 function svgToPngBlob(svgElement) {
     return new Promise((resolve, reject) => {
         try {
-            const svgString = new XMLSerializer().serializeToString(svgElement);
-            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-            const URLObj = window.URL || window.webkitURL || window;
-            const blobURL = URLObj.createObjectURL(svgBlob);
+            const clone = svgElement.cloneNode(true);
+            
+            if (!clone.getAttribute('xmlns')) {
+                clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            }
+            if (!clone.getAttribute('xmlns:xlink')) {
+                clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+            }
 
             const bbox = svgElement.getBoundingClientRect();
-            const width = Math.max(bbox.width, 400) * 2;
-            const height = Math.max(bbox.height, 300) * 2;
+            const width = Math.max(bbox.width || 400, 300) * 2;
+            const height = Math.max(bbox.height || 300, 200) * 2;
+
+            clone.setAttribute('width', width);
+            clone.setAttribute('height', height);
+
+            // Blob URL 대신 Base64 Data URL 사용
+            const svgString = new XMLSerializer().serializeToString(clone);
+            const base64Data = btoa(unescape(encodeURIComponent(svgString)));
+            const dataUrl = 'data:image/svg+xml;base64,' + base64Data;
 
             const image = new Image();
+            image.crossOrigin = 'anonymous';
+
             image.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
 
-                // 다크 배경 채우기
-                ctx.fillStyle = currentMermaidTheme === 'dark' ? '#0d1117' : '#ffffff';
-                ctx.fillRect(0, 0, width, height);
+                    ctx.fillStyle = currentMermaidTheme === 'dark' ? '#0d1117' : '#ffffff';
+                    ctx.fillRect(0, 0, width, height);
 
-                ctx.drawImage(image, 0, 0, width, height);
-                URLObj.revokeObjectURL(blobURL);
+                    ctx.drawImage(image, 0, 0, width, height);
 
-                canvas.toBlob(blob => {
-                    if (blob) resolve(blob);
-                    else reject(new Error('Canvas to Blob 실패'));
-                }, 'image/png');
+                    canvas.toBlob(blob => {
+                        if (blob) resolve(blob);
+                        else reject(new Error('Canvas to Blob 변환 실패'));
+                    }, 'image/png');
+                } catch (canvasErr) {
+                    reject(canvasErr);
+                }
             };
-            image.onerror = (e) => reject(e);
-            image.src = blobURL;
+
+            image.onerror = (e) => reject(new Error('SVG 로드 실패: ' + (e.message || 'Data URL 에러')));
+            image.src = dataUrl;
         } catch (e) {
             reject(e);
         }
