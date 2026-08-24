@@ -212,6 +212,32 @@ async function copyMermaidCode() {
     showAppAlert('Mermaid 코드가 클립보드에 복사되었습니다! 📋', '복사 완료', '✅');
 }
 
+// XML 파서 호환 SVG 포맷팅 헬퍼 (<br> -> <br/> 자동 변환)
+function formatSvgForXmlExport(svgElement) {
+    const clone = svgElement.cloneNode(true);
+
+    if (!clone.getAttribute('xmlns')) {
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    }
+    if (!clone.getAttribute('xmlns:xlink')) {
+        clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+    }
+
+    let xmlString = new XMLSerializer().serializeToString(clone);
+
+    // XML 파서 Mismatch 에러 방지를 위해 void 태그들을 self-closing(<br/>)으로 변환
+    xmlString = xmlString
+        .replace(/<br(?:\s*[\/]?>|\s+[^>]*?[\/]?>)/gi, (m) => m.endsWith('/>') ? m : m.slice(0, -1) + '/>')
+        .replace(/<img([^>]*?)(?<!\/)>/gi, '<img$1/>')
+        .replace(/<hr([^>]*?)(?<!\/)>/gi, '<hr$1/>');
+
+    if (!xmlString.startsWith('<?xml')) {
+        xmlString = '<?xml version="1.0" encoding="UTF-8"?>\n' + xmlString;
+    }
+
+    return xmlString;
+}
+
 // SVG 벡터 코드 복사
 async function copyMermaidSvg() {
     const outputEl = document.getElementById('mermaid-render-output');
@@ -220,7 +246,8 @@ async function copyMermaidSvg() {
         await showAppAlert('복사할 다이어그램 SVG가 없습니다.', '알림', '⚠️');
         return;
     }
-    const svgCode = svg.outerHTML;
+
+    const svgCode = formatSvgForXmlExport(svg);
     navigator.clipboard.writeText(svgCode);
     logToConsole('SVG 복사 완료', 'SVG 벡터 코드가 클립보드에 복사되었습니다.');
     showAppAlert('SVG 벡터 코드가 클립보드에 복사되었습니다! 📐', '복사 완료', '✅');
