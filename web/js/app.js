@@ -128,14 +128,21 @@ function switchTab(targetTab) {
     let activeIcon = '';
     let activeLabel = '';
 
-    if (targetTab === 'csv' || targetTab === 'mermaid') {
+    if (targetTab === 'csv' || targetTab === 'markdown' || targetTab === 'mermaid') {
         if (dropdownBtn) dropdownBtn.classList.add('active');
         const activeItem = document.querySelector(`.tab-dropdown-item[data-tab="${targetTab}"]`);
         if (activeItem) activeItem.classList.add('active');
 
-        const isCsv = targetTab === 'csv';
-        activeIcon = isCsv ? '📋' : '📊';
-        activeLabel = isCsv ? 'CSV 뷰어' : '다이어그램';
+        if (targetTab === 'csv') {
+            activeIcon = '📋';
+            activeLabel = 'CSV 뷰어';
+        } else if (targetTab === 'markdown') {
+            activeIcon = '📝';
+            activeLabel = 'Markdown 뷰어';
+        } else {
+            activeIcon = '📊';
+            activeLabel = '다이어그램';
+        }
 
         const dropdownIconEl = document.getElementById('viewer-diagram-icon');
         const dropdownLabelEl = document.getElementById('viewer-diagram-label');
@@ -241,5 +248,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 9) CSV 뷰어 초기화
     if (typeof initCsvViewer === 'function') {
         initCsvViewer();
+    }
+
+    // 10) Markdown 뷰어 초기화
+    if (typeof initMarkdownViewer === 'function') {
+        initMarkdownViewer();
     }
 });

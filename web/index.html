@@ -67,6 +67,13 @@
                                 <span class="item-desc">테이블 데이터 열람 & 변환</span>
                             </div>
                         </button>
+                        <button type="button" class="tab-dropdown-item" data-tab="markdown" onclick="selectDropdownTab('markdown', '📝', 'Markdown 뷰어', event)">
+                            <span class="item-icon">📝</span>
+                            <div class="item-text">
+                                <span class="item-title">Markdown 뷰어</span>
+                                <span class="item-desc">GFM 문서 렌더러 & 에디터</span>
+                            </div>
+                        </button>
                         <button type="button" class="tab-dropdown-item" data-tab="mermaid" onclick="selectDropdownTab('mermaid', '📊', '다이어그램', event)">
                             <span class="item-icon">📊</span>
                             <div class="item-text">
@@ -295,6 +302,96 @@
                         <button id="csv-prev-page-btn" class="page-btn" onclick="prevCsvPage()" title="이전 페이지">◀ 이전</button>
                         <span id="csv-page-indicator" class="page-indicator">1 / 1 페이지</span>
                         <button id="csv-next-page-btn" class="page-btn" onclick="nextCsvPage()" title="다음 페이지">다음 ▶</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Markdown 뷰어 & 에디터 (Markdown Studio) 탭 -->
+            <section id="tab-markdown" class="tab-pane">
+                <div class="markdown-viewer-container">
+                    <!-- 상단 컨트롤 툴바 -->
+                    <div class="pane-toolbar-header md-toolbar-header">
+                        <div class="md-toolbar-left">
+                            <button class="form-btn add-btn" onclick="openMarkdownFileDialog()" title="로컬 Markdown/텍스트 파일 열기">
+                                <span>📂</span> 파일 열기
+                            </button>
+                            <button class="form-btn select-file-btn" onclick="pasteMarkdownFromClipboard()" title="클립보드 마크다운 붙여넣기">
+                                <span>📋</span> 붙여넣기
+                            </button>
+                            <button class="play-btn mini-tool-btn" onclick="loadSampleMarkdownData()" title="마크다운 가이드 샘플 불러오기">
+                                <span>✨</span> 샘플 로드
+                            </button>
+                            <button class="play-btn mini-tool-btn clear" onclick="clearMarkdownViewer()" title="에디터 비우기">
+                                <span>🧹</span> 비우기
+                            </button>
+                            <button class="play-btn mini-tool-btn" onclick="openMarkdownTocModal()" title="문서 목차 (TOC) 팝업">
+                                <span>📑</span> 목차
+                            </button>
+                        </div>
+
+                        <div class="md-toolbar-center">
+                            <div id="markdown-stats-summary" class="md-stats-summary">
+                                <span>📝 0자 | 0단어</span>
+                            </div>
+                            <span id="markdown-file-badge" class="md-file-badge" style="display: none;"></span>
+                        </div>
+
+                        <div class="md-toolbar-right">
+                            <!-- 뷰 모드 전환 버튼 그룹 -->
+                            <div class="md-mode-switch-group">
+                                <button type="button" class="md-mode-btn active" data-mode="split" onclick="setMarkdownViewMode('split')" title="에디터 + 미리보기 반반 보기">Split</button>
+                                <button type="button" class="md-mode-btn" data-mode="editor" onclick="setMarkdownViewMode('editor')" title="에디터만 크게 보기">Editor</button>
+                                <button type="button" class="md-mode-btn" data-mode="preview" onclick="setMarkdownViewMode('preview')" title="미리보기만 크게 보기">Preview</button>
+                            </div>
+
+                            <!-- 내보내기/저장 액션 버튼들 -->
+                            <button class="mini-tool-btn" onclick="copyMarkdownSource()" title="Markdown 원본 소스 복사">
+                                <span>📋</span> MD 복사
+                            </button>
+                            <button class="mini-tool-btn" onclick="copyMarkdownRenderedHtml()" title="렌더링된 HTML 복사">
+                                <span>🌐</span> HTML 복사
+                            </button>
+                            <button class="mini-tool-btn" onclick="printMarkdownDocument()" title="인쇄 및 PDF로 저장">
+                                <span>🖨️</span> 인쇄/PDF
+                            </button>
+                            <button class="mini-tool-btn primary" onclick="saveMarkdownToFile()" title="Markdown 파일로 저장">
+                                <span>💾</span> 파일 저장
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 스플릿 뷰 컨테이너 (에디터 | 리사이저 | 미리보기) -->
+                    <div id="markdown-split-container" class="markdown-split-container">
+                        <!-- 드롭 오버레이 -->
+                        <div id="markdown-drop-overlay" class="markdown-drop-overlay" style="display: none;">
+                            <div class="drop-icon">📝</div>
+                            <div class="drop-title">Markdown 파일을 여기에 놓아주세요</div>
+                        </div>
+
+                        <!-- 좌측: 에디터 패널 -->
+                        <div id="markdown-editor-pane" class="markdown-editor-pane">
+                            <div class="md-pane-header">
+                                <span class="md-pane-title">✏️ Markdown 소스 에디터</span>
+                                <span class="md-pane-tip">Tab: 들여쓰기</span>
+                            </div>
+                            <textarea id="markdown-editor-input" class="markdown-editor-input" placeholder="마크다운 텍스트를 입력하거나 .md 파일을 열어주세요..." spellcheck="false"></textarea>
+                        </div>
+
+                        <!-- 중앙: 드래그블 리사이저 바 -->
+                        <div id="markdown-resizer" class="markdown-resizer" title="좌우 드래그하여 에디터 너비 조절">
+                            <div class="resizer-handle-line"></div>
+                        </div>
+
+                        <!-- 우측: 렌더링된 미리보기 패널 -->
+                        <div id="markdown-preview-pane" class="markdown-preview-pane">
+                            <div class="md-pane-header">
+                                <span class="md-pane-title">🖥️ 실시간 GFM 미리보기</span>
+                                <span class="md-pane-tip">Mermaid 자동 렌더링</span>
+                            </div>
+                            <div id="markdown-preview-output" class="markdown-preview-output markdown-body">
+                                <!-- 실시간 렌더링 결과 -->
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -1196,6 +1293,7 @@
     <script src="js/mermaid_templates.js"></script>
     <script src="js/mermaid_diagram.js"></script>
     <script src="js/csv_viewer.js"></script>
+    <script src="js/markdown_viewer.js"></script>
     <script src="js/backup.js"></script>
     <script src="js/ai_search.js"></script>
     <script src="js/app.js"></script>
