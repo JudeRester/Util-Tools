@@ -15,6 +15,7 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 | **📋 CSV 뷰어** | • **대용량 CSV / TSV / 테이블 데이터 초고속 렌더링 & 뷰어**<br>• 인코딩(UTF-8, CP949/EUC-KR) 및 구분자(쉼표, 탭, 세미콜론, 파이프) **자동 감지**<br>• 드래그 앤 드롭 파일 로드, 클립보드(`Ctrl+V`) 표 데이터 즉시 붙여넣기<br>• 컬럼별 정렬(숫자/문자/날짜), 전역 실시간 검색 및 하이라이팅, 페이지네이션<br>• **Markdown 표, JSON 배열, SQL INSERT 문, 필터된 CSV** 원클릭 변환/다운로드 |
 | **📝 Markdown 뷰어** | • **GFM(GitHub Flavored Markdown) 실시간 뷰어 & 에디터 (Markdown Studio)**<br>• **GitHub Alert 콜아웃**(`[!NOTE]`, `[!TIP]`, `[!WARNING]` 등 5종) 및 **Mermaid 다이어그램** 자동 시각화<br>• GFM 표, **인터랙티브 태스크 체크박스(클릭 시 소스 동기화)**, 코드 블록 구문 강조 및 복사<br>• Split(반반) / Editor / Preview 모드, 동기화 스크롤, **목차(TOC) 생성**, 실시간 통계 및 인쇄/PDF 저장 |
 | **📊 다이어그램** | • **Mermaid 다이어그램 비주얼 스튜디오** (Flowchart, Sequence, Mindmap 등 16종 프리셋)<br>• 마우스 휠 줌 & 드래그 패닝, SVG/PNG 이미지 다운로드 및 클립보드 복사 |
+| **📧 이메일 아카이브** | • **.eml / .msg 이메일 로컬 보관소 & 실시간 뷰어 (Git 격리 추적 제외)**<br>• **intfloat/multilingual-e5-small ONNX 신경망 기반 AI 시맨틱 문맥 검색(`Ctrl+K`) 연동**<br>• **메일 카테고리 자동/수동 분류** (업무/프로젝트, 회의록, 견적/계약, 인사/총무, 시스템/알림 등) 및 필터 칩<br>• HTML / 텍스트 본문 뷰어, 첨부파일 메타데이터 표시, Windows 기본 메일 앱(Outlook 등) 즉시 실행 연동 |
 | **🔢 데이터 생성** | • **커스텀 데이터 생성기 스튜디오 (Custom Generator Studio)**<br>• 사용자가 직접 JavaScript 스크립트로 **새로운 생성기 추가/수정/순서 변경** 가능<br>• 기본 내장: 국세청 사업자번호, UUID v4, 16자리 강력 비밀번호, 한국인 가상 더미, 타임스탬프, 32자 HEX 토큰<br>• 원클릭 1개/5개 일괄 생성 및 클립보드 자동 복사 |
 | **🧪 JS 실행기** | • JSFiddle / RunJS 스타일의 **JavaScript 코드 샌드박스** (비동기 `async/await` 완벽 지원)<br>• `console.log/warn/error` 출력 캡처 및 반환값(`return`), 실행 시간 측정<br>• `Ctrl + Enter` 실행, `Tab` 들여쓰기(4칸), 코드 자동 영구 보존 및 다양한 기본 템플릿 |
 | **📝 빠른 메모** | • 자원 소모가 전혀 없는 **초경량 스크래치패드 / 메모장**<br>• 다중 메모 생성, 실시간 자동 저장(Autosave), 실시간 검색, 최근 수정/복사 시 상단 자동 정렬<br>• 메모 목록 & 에디터 간 **마우스 드래그블 스플리터(너비 자동 기억)** 제공<br>• `notes.example.json` 템플릿과 `notes.json` 로컬 저장소 분리로 민감 정보 Git 격리 |
@@ -38,11 +39,14 @@ D:\python
 ├── notes.example.json          # 빠른 메모 기본 템플릿 (Git 버전 추적)
 ├── calendar_config.example.json # 캘린더 구독 기본 템플릿 (대한민국 공휴일 iCal 포함)
 ├── diagrams.example.json       # 다이어그램 기본 템플릿 (Git 버전 추적)
+├── emails.example.json         # 이메일 아카이브 기본 템플릿 (Git 버전 추적)
 ├── shortcuts.json              # [개인 데이터] 사용자 폴더 바로가기 (Git 제외)
 ├── quick_launch.json           # [개인 데이터] 사용자 빠른 실행/SSH/URL (Git 제외)
 ├── notes.json                  # [개인 데이터] 사용자 작성 메모 데이터 (Git 제외)
 ├── calendar_config.json        # [개인 데이터] 사용자 구글 캘린더 구독 주소 (Git 제외)
 ├── diagrams.json               # [개인 데이터] 사용자 저장 다이어그램 데이터 (Git 제외)
+├── emails.json                 # [개인 데이터] 사용자 이메일 아카이브 메타데이터 (Git 제외)
+├── emails/                     # [개인 데이터] 로컬 저장된 원본 .eml 파일 디렉토리 (Git 제외)
 │
 ├── core/                       # [코어 시스템]
 │   ├── __init__.py
@@ -60,6 +64,7 @@ D:\python
 │   ├── diagram_service.py      # Mermaid 다이어그램 스튜디오 백엔드
 │   ├── csv_service.py          # CSV/TSV 파서, 인코딩/구분자 자동 감지 및 저장
 │   ├── markdown_service.py     # Markdown 파일 열기/저장 및 인코딩 감지 백엔드
+│   ├── email_service.py        # EML 이메일 파서, 카테고리 분류, 저장 및 OS 앱 실행
 │   ├── backup_service.py       # 전체 설정 데이터 통합 백업/복원
 │   └── ai_search_service.py    # ONNX AI 시맨틱 검색 & 벡터 DB 캐시 엔진
 │
@@ -76,6 +81,7 @@ D:\python
         ├── quick_launch.js     # 빠른 실행 렌더링, 인라인 편집 & 파일 선택 연동
         ├── csv_viewer.js       # CSV/TSV 데이터 뷰어, 정렬, 검색, 변환/내보내기
         ├── markdown_viewer.js  # Markdown 실시간 뷰어/에디터, GFM/Mermaid 렌더러
+        ├── email_viewer.js     # EML 이메일 아카이브, 카테고리 필터링, HTML 본문 뷰어
         ├── generator.js        # 사업자번호 생성기 & 클립보드 복사 로직
         ├── js_runner.js        # JS 플레이그라운드 (AsyncFunction 샌드박스 엔진)
         ├── notes.js            # 빠른 메모 / 스크래치패드 실시간 에디터 및 자동 저장

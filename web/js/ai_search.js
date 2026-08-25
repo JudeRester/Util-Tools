@@ -237,6 +237,12 @@ async function navigateToAiSearchResult(item) {
             selectNote(item.action_data.note_id);
         }
         showAppAlert(`'${item.title}' 메모로 이동했습니다. 📝`, '이동 완료', '✅');
+    } else if (item.category === 'emails' && item.action_data?.email_id) {
+        // 해당 이메일 선택 및 열람
+        if (typeof openEmailFromAiSearch === 'function') {
+            openEmailFromAiSearch(item.action_data.email_id);
+        }
+        showAppAlert(`'${item.title}' 이메일로 이동했습니다. 📧`, '이동 완료', '✅');
     } else if (item.category === 'diagrams' && item.action_data?.code) {
         // 다이어그램 에디터에 로드
         const editor = document.getElementById('mermaid-code-editor');

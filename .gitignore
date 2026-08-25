@@ -32,6 +32,9 @@ calendar_config.json
 calendar_cache.json
 diagrams.json
 app_settings.json
+emails.json
+emails/
+*.eml
 *.local.json
 *.log
 

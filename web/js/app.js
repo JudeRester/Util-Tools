@@ -128,7 +128,7 @@ function switchTab(targetTab) {
     let activeIcon = '';
     let activeLabel = '';
 
-    if (targetTab === 'csv' || targetTab === 'markdown' || targetTab === 'mermaid') {
+    if (targetTab === 'csv' || targetTab === 'markdown' || targetTab === 'mermaid' || targetTab === 'emails') {
         if (dropdownBtn) dropdownBtn.classList.add('active');
         const activeItem = document.querySelector(`.tab-dropdown-item[data-tab="${targetTab}"]`);
         if (activeItem) activeItem.classList.add('active');
@@ -139,6 +139,9 @@ function switchTab(targetTab) {
         } else if (targetTab === 'markdown') {
             activeIcon = '📝';
             activeLabel = 'Markdown 뷰어';
+        } else if (targetTab === 'emails') {
+            activeIcon = '📧';
+            activeLabel = '이메일 아카이브';
         } else {
             activeIcon = '📊';
             activeLabel = '다이어그램';
@@ -253,5 +256,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 10) Markdown 뷰어 초기화
     if (typeof initMarkdownViewer === 'function') {
         initMarkdownViewer();
+    }
+
+    // 11) EML 이메일 아카이브 초기화
+    if (typeof initEmailViewer === 'function') {
+        initEmailViewer();
     }
 });

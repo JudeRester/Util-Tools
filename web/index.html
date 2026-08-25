@@ -81,6 +81,13 @@
                                 <span class="item-desc">Mermaid 실시간 시각화</span>
                             </div>
                         </button>
+                        <button type="button" class="tab-dropdown-item" data-tab="emails" onclick="selectDropdownTab('emails', '📧', '이메일 아카이브', event)">
+                            <span class="item-icon">📧</span>
+                            <div class="item-text">
+                                <span class="item-title">이메일 아카이브</span>
+                                <span class="item-desc">EML 저장, 분류 & AI 검색</span>
+                            </div>
+                        </button>
                     </div>
                 </div>
                 <button class="header-ai-btn" onclick="openAiSearchModal()" title="AI 문맥 검색 & 의미 유사도 비교 (단축키: Ctrl+K)">
@@ -390,6 +397,75 @@
                             </div>
                             <div id="markdown-preview-output" class="markdown-preview-output markdown-body">
                                 <!-- 실시간 렌더링 결과 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- EML 이메일 아카이브 & 뷰어 탭 -->
+            <section id="tab-emails" class="tab-pane">
+                <div class="email-viewer-container">
+                    <!-- 상단 컨트롤 & 카테고리 필터 툴바 -->
+                    <div class="pane-toolbar-header email-toolbar-header">
+                        <div class="email-toolbar-left">
+                            <button class="form-btn add-btn" onclick="importEmlFiles()" title="로컬 .eml / .msg 파일 불러오기">
+                                <span>📂</span> EML 파일 열기
+                            </button>
+                            <button class="form-btn select-file-btn" onclick="importEmlFolder()" title="폴더 내 모든 EML 파일 일괄 가져오기">
+                                <span>📁</span> 폴더 일괄 등록
+                            </button>
+                            <button class="play-btn mini-tool-btn clear" onclick="clearAllEmailArchive()" title="이메일 목록 비우기">
+                                <span>🧹</span> 전체 비우기
+                            </button>
+                        </div>
+
+                        <!-- 중앙 실시간 검색창 -->
+                        <div class="email-toolbar-center">
+                            <div class="gen-search-box email-search-box">
+                                <span class="gen-search-icon">🔍</span>
+                                <input type="text" id="email-search-input" class="gen-search-input" placeholder="이메일 검색 (제목, 보낸사람, 본문, 분류)..." oninput="onEmailSearchInput(this.value)">
+                                <button type="button" id="email-search-clear-btn" class="gen-search-clear-btn" onclick="clearEmailSearch()" style="display: none;">&times;</button>
+                            </div>
+                        </div>
+
+                        <div class="email-toolbar-right">
+                            <span class="email-stats-badge">
+                                <span>📧 총 </span><b id="email-total-count">0건</b>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- 카테고리 칩 필터 바 -->
+                    <div id="email-category-chips" class="gen-category-filter-bar email-category-filter-bar">
+                        <!-- JavaScript로 동적 렌더링 -->
+                    </div>
+
+                    <!-- 스플릿 뷰 컨테이너 (좌측: 이메일 목록 | 리사이저 | 우측: 이메일 본문 리더) -->
+                    <div id="email-split-container" class="email-split-container">
+                        <!-- 드롭 오버레이 -->
+                        <div id="email-drop-overlay" class="email-drop-overlay" style="display: none;">
+                            <div class="drop-icon">📧</div>
+                            <div class="drop-title">.eml 파일을 여기에 놓아주세요</div>
+                            <div class="drop-desc">자동으로 본문 및 헤더가 파싱되어 아카이브에 등록됩니다.</div>
+                        </div>
+
+                        <!-- 좌측: 이메일 목록 패널 -->
+                        <div id="email-list-panel" class="email-list-panel">
+                            <div id="email-list-items" class="email-list-items">
+                                <!-- JavaScript로 동적 렌더링 -->
+                            </div>
+                        </div>
+
+                        <!-- 중앙: 좌우 드래그블 리사이저 -->
+                        <div id="email-resizer" class="calendar-v-resizer" title="좌우로 드래그하여 목록과 본문 크기 조절">
+                            <div class="v-resizer-handle"></div>
+                        </div>
+
+                        <!-- 우측: 이메일 상세 리더 패널 -->
+                        <div id="email-reader-panel" class="email-reader-panel">
+                            <div id="email-detail-container" class="email-detail-container">
+                                <!-- JavaScript로 동적 렌더링 -->
                             </div>
                         </div>
                     </div>
@@ -1226,6 +1302,7 @@
                         <span class="ai-filter-label">필터:</span>
                         <button class="ai-chip-btn active" data-cat="all" onclick="setAiSearchCategory('all')">전체</button>
                         <button class="ai-chip-btn" data-cat="notes" onclick="setAiSearchCategory('notes')">📝 메모</button>
+                        <button class="ai-chip-btn" data-cat="emails" onclick="setAiSearchCategory('emails')">📧 이메일</button>
                         <button class="ai-chip-btn" data-cat="diagrams" onclick="setAiSearchCategory('diagrams')">📊 다이어그램</button>
                         <button class="ai-chip-btn" data-cat="generators" onclick="setAiSearchCategory('generators')">🔢 생성기</button>
                         <button class="ai-chip-btn" data-cat="quick_launch" onclick="setAiSearchCategory('quick_launch')">⚡ 빠른실행</button>
@@ -1312,6 +1389,7 @@
     <script src="js/mermaid_diagram.js"></script>
     <script src="js/csv_viewer.js"></script>
     <script src="js/markdown_viewer.js"></script>
+    <script src="js/email_viewer.js"></script>
     <script src="js/backup.js"></script>
     <script src="js/ai_search.js"></script>
     <script src="js/app.js"></script>

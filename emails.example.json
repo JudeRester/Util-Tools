@@ -1,0 +1,54 @@
+[
+  {
+    "id": "eml_sample_01",
+    "subject": "[공지] 2026년 3분기 정기 시스템 인프라 점검 및 DB 백업 안내",
+    "from": "Infra Team <infra-admin@example.com>",
+    "to": "All Employees <all@example.com>",
+    "date": "2026-08-20 18:30:00",
+    "category": "시스템/알림",
+    "snippet": "안녕하세요. 인프라팀입니다. 2026년 3분기 정기 시스템 점검이 8월 28일(금) 22:00부터 익일 06:00까지 진행됩니다.",
+    "body_text": "안녕하세요. 인프라팀입니다.\n\n2026년 3분기 정기 시스템 점검이 아래와 같이 진행될 예정입니다.\n\n1. 점검 일시: 2026-08-28 22:00 ~ 2026-08-29 06:00 (총 8시간)\n2. 대상 서비스: 사내 인트라넷, 빌드 서버, DB 클러스터\n3. 작업 내용: OS 보안 패치, DB 정기 백업 및 스토리지 증설\n\n점검 시간 동안 모든 사내 서비스 접속이 일시 중단되오니 업무에 참고해 주시기 바랍니다.\n감사합니다.",
+    "body_html": "<p>안녕하세요. 인프라팀입니다.</p><p>2026년 3분기 정기 시스템 점검이 아래와 같이 진행될 예정입니다.</p><ul><li><b>점검 일시:</b> 2026-08-28 22:00 ~ 2026-08-29 06:00</li><li><b>대상 서비스:</b> 사내 인트라넷, 빌드 서버, DB 클러스터</li><li><b>작업 내용:</b> OS 보안 패치, DB 정기 백업 및 스토리지 증설</li></ul>",
+    "attachments": [
+      {
+        "filename": "2026_Q3_Infra_Checklist.pdf",
+        "size": "342 KB"
+      }
+    ],
+    "file_path": "",
+    "created_at": "2026-08-20T18:30:00"
+  },
+  {
+    "id": "eml_sample_02",
+    "subject": "[회의록] 차세대 Util-Tools 2.0 시맨틱 AI 검색 및 EML 아카이브 기획 회의",
+    "from": "Product Manager <pm-lead@example.com>",
+    "to": "Dev Team <dev-all@example.com>",
+    "date": "2026-08-22 14:15:00",
+    "category": "회의록",
+    "snippet": "차세대 Util-Tools 2.0 AI 시맨틱 검색 엔진 고도화 및 EML 이메일 아카이브 파싱/카테고리 분류 기능 구현 논의 회의록입니다.",
+    "body_text": "[회의 개요]\n- 일시: 2026-08-22 13:00 ~ 14:00\n- 참석자: PM, 리드 엔지니어, AI 연구원\n- 안건: EML 이메일 로컬 저장소 구축, multilingual-e5-small 임베딩 연동, 카테고리 태깅\n\n[주요 결정 사항]\n1. EML 파일은 Git 추적에서 제외하고 로컬 emails/ 디렉토리에 보관\n2. 제목, 발신자, 본문 텍스트를 추출하여 384차원 단위 벡터 임베딩 생성\n3. 카테고리(업무, 회의록, 견적, 시스템 등) 자동 분류 및 사용자 커스텀 태그 지원\n4. HTML 이메일 뷰어 및 원본 EML OS 기본 메일 클라이언트 실행 연동",
+    "body_html": "<h3>[회의 개요]</h3><p><b>일시:</b> 2026-08-22 13:00 ~ 14:00<br><b>안건:</b> EML 이메일 로컬 저장소 구축 및 AI 검색 연동</p><h3>[주요 결정 사항]</h3><ol><li>EML 파일 Git 추적 제외 및 로컬 보관</li><li>multilingual-e5-small 기반 시맨틱 검색 파이프라인 연동</li><li>카테고리 자동/수동 분류 지원</li></ol>",
+    "attachments": [],
+    "file_path": "",
+    "created_at": "2026-08-22T14:15:00"
+  },
+  {
+    "id": "eml_sample_03",
+    "subject": "클라우드 인프라 서버 라이선스 갱신 견적서 송부의 건",
+    "from": "Sales Rep <partner-sales@cloudvendor.com>",
+    "to": "Finance & Tech <it-finance@example.com>",
+    "date": "2026-08-24 11:00:00",
+    "category": "견적/계약",
+    "snippet": "요청하신 2026-2027 연간 클라우드 서버 라이선스 및 프리미엄 기술 지원 견적서를 송부드립니다.",
+    "body_text": "안녕하십니까, 담당자님.\n\n요청해 주신 2026-2027 연간 클라우드 인프라 라이선스 갱신 견적서를 첨부하여 송부드립니다.\n\n- 품목: Cloud Enterprise 64 Core 연간 구독 (10 Nodes)\n- 견적 금액: 첨부 견적서 참조 (VAT 별도)\n- 납기 및 유효기간: 발행일로부터 30일\n\n확인 후 전자 계약 또는 구매 발주서 회신 부탁드립니다.\n감사합니다.",
+    "body_html": "<p>안녕하십니까, 담당자님.</p><p>요청해 주신 2026-2027 연간 클라우드 인프라 라이선스 갱신 견적서를 첨부하여 송부드립니다.</p><p>확인 후 전자 계약 또는 발주서 회신 부탁드립니다.</p>",
+    "attachments": [
+      {
+        "filename": "2026_Cloud_License_Quote.pdf",
+        "size": "1.2 MB"
+      }
+    ],
+    "file_path": "",
+    "created_at": "2026-08-24T11:00:00"
+  }
+]

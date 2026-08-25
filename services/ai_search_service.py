@@ -348,6 +348,30 @@ def _get_all_system_items(filter_category=None):
                 "action_data": {"shortcut_id": sc.get('id')}
             })
 
+    # 6. EML 이메일 아카이브 (emails.json)
+    em_data = _load_json_file('emails.json')
+    if em_data is None:
+        em_data = _load_json_file('emails.example.json') or []
+    if isinstance(em_data, list) and (not filter_category or filter_category in ('all', 'emails')):
+        for em in em_data:
+            subject = em.get('subject', '(제목 없음)')
+            from_addr = em.get('from', '')
+            to_addr = em.get('to', '')
+            cat = em.get('category', '일반')
+            snippet = em.get('snippet', '')
+            body_text = em.get('body_text', '')
+            all_items.append({
+                "id": em.get('id'),
+                "category": "emails",
+                "category_label": f"이메일 ({cat})",
+                "icon": "📧",
+                "title": subject,
+                "snippet": f"[{from_addr}] {snippet}" if from_addr else snippet,
+                "full_text": f"{subject}\n{from_addr}\n{to_addr}\n{cat}\n{body_text}",
+                "target_tab": "emails",
+                "action_data": {"email_id": em.get('id')}
+            })
+
     return all_items
 
 
