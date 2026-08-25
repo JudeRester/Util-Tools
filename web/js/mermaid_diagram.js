@@ -367,7 +367,7 @@ function initMermaidPanZoom() {
     const viewport = document.getElementById('mermaid-viewport');
     if (!viewport) return;
 
-    // 마우스 휠 줌 (커서 위치 중심 부드러운 확대/축소 및 최대 1500% 지원)
+    // 마우스 휠 줌 (뷰포트 상대 커서 위치 기반 1:1 정밀 줌)
     viewport.addEventListener('wheel', function(e) {
         e.preventDefault();
         
@@ -376,14 +376,18 @@ function initMermaidPanZoom() {
 
         if (targetScale === mermaidZoomScale) return;
 
-        // 마우스 커서 위치 기준 확대 중심점 보정
+        // 뷰포트 좌상단 기준 마우스 커서의 상대 좌표 (Viewport Local Coordinate)
         const rect = viewport.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
 
-        // 새로운 패닝 좌표 계산: 커서 위치가 확대 후에도 고정되도록 조정
-        mermaidPanX = mouseX - (mouseX - mermaidPanX) * (targetScale / mermaidZoomScale);
-        mermaidPanY = mouseY - (mouseY - mermaidPanY) * (targetScale / mermaidZoomScale);
+        // 마우스 커서 아래에 위치한 캔버스 고유 좌표 (Canvas Space Coordinate)
+        const canvasX = (mouseX - mermaidPanX) / mermaidZoomScale;
+        const canvasY = (mouseY - mermaidPanY) / mermaidZoomScale;
+
+        // 새로운 스케일 적용 후에도 마우스 커서 아래에 동일한 캔버스 지점이 고정되도록 Pan 보정
+        mermaidPanX = mouseX - canvasX * targetScale;
+        mermaidPanY = mouseY - canvasY * targetScale;
         mermaidZoomScale = targetScale;
 
         updateCanvasTransform();
@@ -414,15 +418,43 @@ function initMermaidPanZoom() {
 }
 
 function zoomMermaid(delta) {
-    if (delta > 0) {
-        mermaidZoomScale = Math.min(15.0, mermaidZoomScale * 1.25);
-    } else {
-        mermaidZoomScale = Math.max(0.1, mermaidZoomScale * 0.8);
-    }
+    const viewport = document.getElementById('mermaid-viewport');
+    if (!viewport) return;
+
+    const rect = viewport.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    const zoomFactor = delta > 0 ? 1.25 : 0.8;
+    const targetScale = Math.max(0.1, Math.min(15.0, mermaidZoomScale * zoomFactor));
+
+    if (targetScale === mermaidZoomScale) return;
+
+    const canvasX = (centerX - mermaidPanX) / mermaidZoomScale;
+    const canvasY = (centerY - mermaidPanY) / mermaidZoomScale;
+
+    mermaidPanX = centerX - canvasX * targetScale;
+    mermaidPanY = centerY - canvasY * targetScale;
+    mermaidZoomScale = targetScale;
+
     updateCanvasTransform();
 }
 
 function resetMermaidZoom() {
+    const viewport = document.getElementById('mermaid-viewport');
+    const svg = document.querySelector('#mermaid-render-output svg');
+    if (viewport && svg) {
+        const vRect = viewport.getBoundingClientRect();
+        const svgW = svg.viewBox?.baseVal?.width || svg.getBoundingClientRect().width || 600;
+        const svgH = svg.viewBox?.baseVal?.height || svg.getBoundingClientRect().height || 400;
+
+        mermaidZoomScale = 1.0;
+        mermaidPanX = (vRect.width - svgW) / 2;
+        mermaidPanY = (vRect.height - svgH) / 2;
+        updateCanvasTransform();
+        return;
+    }
+
     mermaidZoomScale = 1.0;
     mermaidPanX = 0;
     mermaidPanY = 0;
@@ -434,16 +466,18 @@ function fitMermaidToViewport() {
     const svg = document.querySelector('#mermaid-render-output svg');
     if (viewport && svg) {
         const vRect = viewport.getBoundingClientRect();
-        const sRect = svg.getBoundingClientRect();
-        const svgW = svg.viewBox?.baseVal?.width || sRect.width || 800;
-        const svgH = svg.viewBox?.baseVal?.height || sRect.height || 600;
+        const svgW = svg.viewBox?.baseVal?.width || svg.getBoundingClientRect().width || 600;
+        const svgH = svg.viewBox?.baseVal?.height || svg.getBoundingClientRect().height || 400;
 
         if (svgW > 0 && svgH > 0 && vRect.width > 0 && vRect.height > 0) {
-            const scaleX = (vRect.width - 60) / svgW;
-            const scaleY = (vRect.height - 60) / svgH;
-            mermaidZoomScale = Math.max(0.1, Math.min(3.0, Math.min(scaleX, scaleY)));
-            mermaidPanX = 0;
-            mermaidPanY = 0;
+            const padX = 60;
+            const padY = 60;
+            const scaleX = (vRect.width - padX) / svgW;
+            const scaleY = (vRect.height - padY) / svgH;
+            
+            mermaidZoomScale = Math.max(0.1, Math.min(1.0, Math.min(scaleX, scaleY)));
+            mermaidPanX = (vRect.width - svgW * mermaidZoomScale) / 2;
+            mermaidPanY = (vRect.height - svgH * mermaidZoomScale) / 2;
             updateCanvasTransform();
             return;
         }

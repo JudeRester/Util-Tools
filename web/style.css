@@ -2980,9 +2980,6 @@ body {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     position: relative;
     cursor: grab;
     background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
@@ -2995,26 +2992,25 @@ body {
 }
 
 .mermaid-canvas {
-    transform-origin: center center;
-    transition: transform 0.05s ease-out;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 40px;
-    min-width: 100%;
-    min-height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: 0 0;
+    display: inline-block;
+    padding: 0;
+    margin: 0;
+    will-change: transform;
 }
 
 #mermaid-render-output {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-block;
 }
 
 #mermaid-render-output svg {
     max-width: none !important;
     height: auto !important;
     filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.35));
+    display: block;
 }
 
 /* ==========================================
