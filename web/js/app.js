@@ -186,4 +186,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof initMermaidDiagram === 'function') {
         initMermaidDiagram();
     }
+
+    // 9) CSV 뷰어 초기화
+    if (typeof initCsvViewer === 'function') {
+        initCsvViewer();
+    }
 });

@@ -12,6 +12,7 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 | **🖥️ 시스템 정보** | • OS 사양, CPU, 메모리, Python 버전 확인<br>• 내부망(Local) IP 및 **공인 IP (Public IP)** 실시간 조회<br>• 현재 날짜/시간/ISO 타임스탬프 반환 및 서버 Ping 테스트 |
 | **⚡ 빠른 실행** | • 자주 쓰는 앱/실행 파일(`.exe`, `.bat`), **SSH 터미널 접속**, **웹 URL**, **PowerShell 명령** 원클릭 실행<br>• **[⚙️ 편집]** 팝업을 통한 항목 추가, 인라인 수정(`✏️`), 삭제, 탐색기 파일 선택<br>• **마우스 드래그 앤 드롭(`⋮⋮`)** 및 `▲/▼` 버튼을 통한 실시간 순서 변경 |
 | **📁 파일 / 폴더** | • 프로젝트 작업 디렉토리 바로가기 카드 목록<br>• 상단 우측 인라인 드롭다운을 통해 **원하는 폴더 위치에서 PowerShell / CMD 즉시 실행**<br>• 탐색기 대화상자 기반 폴더 추가/수정/삭제/드래그 앤 드롭 순서 변경 |
+| **📋 CSV 뷰어** | • **대용량 CSV / TSV / 테이블 데이터 초고속 렌더링 & 뷰어**<br>• 인코딩(UTF-8, CP949/EUC-KR) 및 구분자(쉼표, 탭, 세미콜론, 파이프) **자동 감지**<br>• 드래그 앤 드롭 파일 로드, 클립보드(`Ctrl+V`) 표 데이터 즉시 붙여넣기<br>• 컬럼별 정렬(숫자/문자/날짜), 전역 실시간 검색 및 하이라이팅, 페이지네이션<br>• **Markdown 표, JSON 배열, SQL INSERT 문, 필터된 CSV** 원클릭 변환/다운로드 |
 | **🔢 데이터 생성** | • **커스텀 데이터 생성기 스튜디오 (Custom Generator Studio)**<br>• 사용자가 직접 JavaScript 스크립트로 **새로운 생성기 추가/수정/순서 변경** 가능<br>• 기본 내장: 국세청 사업자번호, UUID v4, 16자리 강력 비밀번호, 한국인 가상 더미, 타임스탬프, 32자 HEX 토큰<br>• 원클릭 1개/5개 일괄 생성 및 클립보드 자동 복사 |
 | **🧪 JS 실행기** | • JSFiddle / RunJS 스타일의 **JavaScript 코드 샌드박스** (비동기 `async/await` 완벽 지원)<br>• `console.log/warn/error` 출력 캡처 및 반환값(`return`), 실행 시간 측정<br>• `Ctrl + Enter` 실행, `Tab` 들여쓰기(4칸), 코드 자동 영구 보존 및 다양한 기본 템플릿 |
 | **📝 빠른 메모** | • 자원 소모가 전혀 없는 **초경량 스크래치패드 / 메모장**<br>• 다중 메모 생성, 실시간 자동 저장(Autosave), 실시간 검색, 최근 수정/복사 시 상단 자동 정렬<br>• 메모 목록 & 에디터 간 **마우스 드래그블 스플리터(너비 자동 기억)** 제공<br>• `notes.example.json` 템플릿과 `notes.json` 로컬 저장소 분리로 민감 정보 Git 격리 |
@@ -53,7 +54,11 @@ D:\python
 │   ├── generator_service.py    # 사업자등록번호 체크섬 생성 알고리즘
 │   ├── dialog_service.py       # Tkinter 기반 파일/폴더 선택 대화상자
 │   ├── notes_service.py        # 빠른 메모/스크래치패드 CRUD 및 영속화
-│   └── calendar_service.py     # 구글 캘린더 / iCal(ICS) 파싱 및 일정 동기화
+│   ├── calendar_service.py     # 구글 캘린더 / iCal(ICS) 파싱 및 일정 동기화
+│   ├── diagram_service.py      # Mermaid 다이어그램 스튜디오 백엔드
+│   ├── csv_service.py          # CSV/TSV 파서, 인코딩/구분자 자동 감지 및 저장
+│   ├── backup_service.py       # 전체 설정 데이터 통합 백업/복원
+│   └── ai_search_service.py    # ONNX AI 시맨틱 검색 & 벡터 DB 캐시 엔진
 │
 └── web/                        # [프론트엔드 리소스]
     ├── index.html              # 메인 UI 마크업 (반응형 햄버거 메뉴 포함)
@@ -66,10 +71,15 @@ D:\python
         ├── system.js           # 시스템 사양 & 타임스탬프 & Ping UI 연동
         ├── shortcuts.js        # 폴더 바로가기 렌더링, 인라인 편집 & 터미널 런처
         ├── quick_launch.js     # 빠른 실행 렌더링, 인라인 편집 & 파일 선택 연동
+        ├── csv_viewer.js       # CSV/TSV 데이터 뷰어, 정렬, 검색, 변환/내보내기
         ├── generator.js        # 사업자번호 생성기 & 클립보드 복사 로직
         ├── js_runner.js        # JS 플레이그라운드 (AsyncFunction 샌드박스 엔진)
         ├── notes.js            # 빠른 메모 / 스크래치패드 실시간 에디터 및 자동 저장
-        └── calendar.js         # 월간 캘린더, 일정 동기화, Agenda 및 구독 관리
+        ├── calendar.js         # 월간 캘린더, 일정 동기화, Agenda 및 구독 관리
+        ├── mermaid_templates.js # 다이어그램 템플릿 프리셋 모듈
+        ├── mermaid_diagram.js  # Mermaid 렌더러, 줌/팬 인터랙션 및 SVG 내보내기
+        ├── backup.js           # 통합 백업/복원 모달 제어
+        └── ai_search.js        # AI 문맥 검색 & 문장 의미 비교 UI
 ```
 
 ---

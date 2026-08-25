@@ -40,6 +40,9 @@
                 <button class="tab-btn" data-tab="files">
                     <span class="tab-icon">📁</span> <span class="tab-label">파일 / 폴더</span>
                 </button>
+                <button class="tab-btn" data-tab="csv">
+                    <span class="tab-icon">📋</span> <span class="tab-label">CSV 뷰어</span>
+                </button>
                 <button class="tab-btn" data-tab="generator">
                     <span class="tab-icon">🔢</span> <span class="tab-label">데이터 생성</span>
                 </button>
@@ -162,7 +165,123 @@
                 </div>
             </section>
 
-            <!-- 4. 데이터 생성 (Custom Data Generator Studio) 탭 -->
+            <!-- 4. CSV 뷰어 (Table Data Viewer) 탭 -->
+            <section id="tab-csv" class="tab-pane">
+                <div class="csv-viewer-container">
+                    <!-- 상단 컨트롤 툴바 -->
+                    <div class="pane-toolbar-header csv-toolbar-header">
+                        <div class="csv-toolbar-left">
+                            <button class="form-btn add-btn" onclick="openCsvFileDialog()" title="로컬 CSV/TSV 파일 열기">
+                                <span>📂</span> 파일 열기
+                            </button>
+                            <button class="form-btn select-file-btn" onclick="pasteCsvFromClipboard()" title="클립보드에 복사된 표/텍스트 붙여넣기 (단축키: Ctrl+V)">
+                                <span>📋</span> 붙여넣기
+                            </button>
+                            <button class="play-btn mini-tool-btn" onclick="loadSampleCsvData()" title="이커머스 주문내역 샘플 데이터 불러오기">
+                                <span>✨</span> 샘플 로드
+                            </button>
+                            <button class="play-btn mini-tool-btn clear" onclick="clearCsvViewer()" title="데이터 비우기">
+                                <span>🧹</span> 비우기
+                            </button>
+                        </div>
+
+                        <div class="csv-toolbar-center">
+                            <div class="csv-search-box">
+                                <span class="csv-search-icon">🔍</span>
+                                <input type="text" id="csv-search-input" class="csv-search-input" placeholder="테이블 실시간 검색 (단어, 숫자, 텍스트)..." oninput="onCsvSearchInput(this.value)">
+                                <button type="button" id="csv-search-clear-btn" class="csv-search-clear-btn" onclick="clearCsvSearch()" style="display: none;">&times;</button>
+                            </div>
+                        </div>
+
+                        <div class="csv-toolbar-right">
+                            <div class="csv-select-group">
+                                <span class="csv-select-label">구분자:</span>
+                                <select id="csv-delimiter-select" class="compact-path-select" onchange="applyFilterAndSort()">
+                                    <option value="auto">자동 감지</option>
+                                    <option value=",">쉼표 (,)</option>
+                                    <option value="&#9;">탭 (\t)</option>
+                                    <option value=";">세미콜론 (;)</option>
+                                    <option value="|">파이프 (|)</option>
+                                </select>
+                            </div>
+                            <div class="csv-select-group">
+                                <span class="csv-select-label">인코딩:</span>
+                                <select id="csv-encoding-select" class="compact-path-select">
+                                    <option value="auto">자동 감지</option>
+                                    <option value="utf-8">UTF-8</option>
+                                    <option value="cp949">CP949 / EUC-KR</option>
+                                </select>
+                            </div>
+                            <div class="csv-select-group">
+                                <span class="csv-select-label">표시:</span>
+                                <select id="csv-pagesize-select" class="compact-path-select" onchange="changeCsvPageSize(this.value)">
+                                    <option value="50">50개씩</option>
+                                    <option value="100" selected>100개씩</option>
+                                    <option value="200">200개씩</option>
+                                    <option value="500">500개씩</option>
+                                    <option value="all">전체</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 통계 요약 및 내보내기 액션 바 -->
+                    <div class="csv-stats-bar">
+                        <div class="csv-stats-left">
+                            <div id="csv-stats-summary" class="csv-stats-summary">
+                                <span>📊 데이터 없음</span>
+                            </div>
+                            <span id="csv-file-badge" class="csv-file-badge" style="display: none;"></span>
+                        </div>
+                        <div class="csv-export-actions">
+                            <button class="mini-tool-btn" onclick="copyCsvAsMarkdown()" title="Markdown 표 포맷으로 클립보드 복사">
+                                <span>📋</span> MD 복사
+                            </button>
+                            <button class="mini-tool-btn" onclick="copyCsvAsJson()" title="JSON 객체 배열로 클립보드 복사">
+                                <span>📋</span> JSON 복사
+                            </button>
+                            <button class="mini-tool-btn" onclick="copyCsvAsSqlInsert()" title="SQL INSERT 쿼리로 클립보드 복사">
+                                <span>📋</span> SQL Insert
+                            </button>
+                            <button class="mini-tool-btn primary" onclick="downloadFilteredCsv()" title="필터링된 CSV 파일 다운로드">
+                                <span>💾</span> CSV 다운로드
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 메인 테이블 뷰포트 & 드롭존 -->
+                    <div id="csv-table-container" class="csv-table-container">
+                        <!-- 파일 없을 때 드롭존 플레이스홀더 -->
+                        <div id="csv-drop-zone" class="csv-drop-zone" onclick="openCsvFileDialog()">
+                            <div class="drop-icon">📊</div>
+                            <div class="drop-title">CSV / TSV 파일을 여기로 드래그 앤 드롭하세요</div>
+                            <div class="drop-desc">또는 클릭하여 파일을 선택하거나 클립보드(Ctrl+V)에서 표 데이터를 붙여넣으세요.</div>
+                            <div class="drop-actions">
+                                <button type="button" class="form-btn add-btn" onclick="event.stopPropagation(); openCsvFileDialog();">📂 파일 선택</button>
+                                <button type="button" class="form-btn select-file-btn" onclick="event.stopPropagation(); pasteCsvFromClipboard();">📋 붙여넣기</button>
+                                <button type="button" class="play-btn mini-tool-btn" onclick="event.stopPropagation(); loadSampleCsvData();">✨ 샘플 데이터 로드</button>
+                            </div>
+                        </div>
+
+                        <!-- 데이터 테이블 래퍼 -->
+                        <div id="csv-table-wrapper" class="csv-table-wrapper" style="display: none;">
+                            <table id="csv-main-table" class="csv-main-table">
+                                <!-- JavaScript로 동적 렌더링 -->
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 하단 페이지네이션 바 -->
+                    <div id="csv-pagination-bar" class="csv-pagination-bar" style="display: none;">
+                        <button id="csv-first-page-btn" class="page-btn" onclick="goToCsvPage(1)" title="첫 페이지">⏮️</button>
+                        <button id="csv-prev-page-btn" class="page-btn" onclick="prevCsvPage()" title="이전 페이지">◀ 이전</button>
+                        <span id="csv-page-indicator" class="page-indicator">1 / 1 페이지</span>
+                        <button id="csv-next-page-btn" class="page-btn" onclick="nextCsvPage()" title="다음 페이지">다음 ▶</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. 데이터 생성 (Custom Data Generator Studio) 탭 -->
             <section id="tab-generator" class="tab-pane">
                 <!-- 상단 타이틀 및 관리/검색 툴바 -->
                 <div class="pane-toolbar-header gen-toolbar-header">
@@ -1058,6 +1177,7 @@
     <script src="js/mermaid.min.js"></script>
     <script src="js/mermaid_templates.js"></script>
     <script src="js/mermaid_diagram.js"></script>
+    <script src="js/csv_viewer.js"></script>
     <script src="js/backup.js"></script>
     <script src="js/ai_search.js"></script>
     <script src="js/app.js"></script>
