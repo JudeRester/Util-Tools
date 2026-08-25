@@ -40,9 +40,6 @@
                 <button class="tab-btn" data-tab="files">
                     <span class="tab-icon">📁</span> <span class="tab-label">파일 / 폴더</span>
                 </button>
-                <button class="tab-btn" data-tab="csv">
-                    <span class="tab-icon">📋</span> <span class="tab-label">CSV 뷰어</span>
-                </button>
                 <button class="tab-btn" data-tab="generator">
                     <span class="tab-icon">🔢</span> <span class="tab-label">데이터 생성</span>
                 </button>
@@ -55,9 +52,30 @@
                 <button class="tab-btn" data-tab="calendar">
                     <span class="tab-icon">📅</span> <span class="tab-label">달력 & 일정</span>
                 </button>
-                <button class="tab-btn" data-tab="mermaid">
-                    <span class="tab-icon">📊</span> <span class="tab-label">다이어그램</span>
-                </button>
+                <!-- CSV 뷰어 & 다이어그램 통합 드롭다운 -->
+                <div class="tab-dropdown-group" id="viewer-diagram-dropdown">
+                    <button type="button" class="tab-btn tab-dropdown-trigger" id="viewer-diagram-tab-btn" onclick="toggleViewerDiagramDropdown(event)" title="CSV 뷰어 & 다이어그램">
+                        <span class="tab-icon" id="viewer-diagram-icon">📊</span>
+                        <span class="tab-label" id="viewer-diagram-label">뷰어 / 다이어그램</span>
+                        <span class="tab-dropdown-arrow">▾</span>
+                    </button>
+                    <div class="tab-dropdown-menu" id="viewer-diagram-menu">
+                        <button type="button" class="tab-dropdown-item" data-tab="csv" onclick="selectDropdownTab('csv', '📋', 'CSV 뷰어', event)">
+                            <span class="item-icon">📋</span>
+                            <div class="item-text">
+                                <span class="item-title">CSV 뷰어</span>
+                                <span class="item-desc">테이블 데이터 열람 & 변환</span>
+                            </div>
+                        </button>
+                        <button type="button" class="tab-dropdown-item" data-tab="mermaid" onclick="selectDropdownTab('mermaid', '📊', '다이어그램', event)">
+                            <span class="item-icon">📊</span>
+                            <div class="item-text">
+                                <span class="item-title">다이어그램</span>
+                                <span class="item-desc">Mermaid 실시간 시각화</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
                 <button class="header-ai-btn" onclick="openAiSearchModal()" title="AI 문맥 검색 & 의미 유사도 비교 (단축키: Ctrl+K)">
                     <span class="tab-icon">🧠</span> <span class="tab-label">AI 검색</span>
                 </button>

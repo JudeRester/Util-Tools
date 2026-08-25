@@ -19,7 +19,7 @@ function escapeJsString(str) {
 
 
 // ==========================================
-// 2. 반응형 모바일 햄버거 네비게이션 제어
+// 2. 반응형 모바일 햄버거 & 탭 드롭다운 제어
 // ==========================================
 function toggleMobileNav(e) {
     if (e) e.stopPropagation();
@@ -44,6 +44,27 @@ function closeMobileNav() {
             hamburgerBtn.innerHTML = '<span class="hamburger-icon">☰</span> 메뉴';
         }
     }
+}
+
+function toggleViewerDiagramDropdown(e) {
+    if (e) e.stopPropagation();
+    const dropdown = document.getElementById('viewer-diagram-dropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('open');
+    }
+}
+
+function closeViewerDiagramDropdown() {
+    const dropdown = document.getElementById('viewer-diagram-dropdown');
+    if (dropdown && dropdown.classList.contains('open')) {
+        dropdown.classList.remove('open');
+    }
+}
+
+function selectDropdownTab(tabName, icon, label, e) {
+    if (e) e.stopPropagation();
+    closeViewerDiagramDropdown();
+    switchTab(tabName);
 }
 
 
@@ -94,22 +115,45 @@ function saveAppSettingKey(key, value) {
 
 function switchTab(targetTab) {
     if (!targetTab) return;
-    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabButtons = document.querySelectorAll('.tab-btn:not(.tab-dropdown-trigger)');
+    const dropdownBtn = document.getElementById('viewer-diagram-tab-btn');
+    const dropdownItems = document.querySelectorAll('.tab-dropdown-item');
     const tabPanes = document.querySelectorAll('.tab-pane');
     const mobileActiveText = document.getElementById('mobile-active-tab-text');
 
-    const targetBtn = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
-    if (!targetBtn) return;
-
     // 1) 버튼 활성화 상태 변경
     tabButtons.forEach(b => b.classList.remove('active'));
-    targetBtn.classList.add('active');
+    dropdownItems.forEach(item => item.classList.remove('active'));
+
+    let activeIcon = '';
+    let activeLabel = '';
+
+    if (targetTab === 'csv' || targetTab === 'mermaid') {
+        if (dropdownBtn) dropdownBtn.classList.add('active');
+        const activeItem = document.querySelector(`.tab-dropdown-item[data-tab="${targetTab}"]`);
+        if (activeItem) activeItem.classList.add('active');
+
+        const isCsv = targetTab === 'csv';
+        activeIcon = isCsv ? '📋' : '📊';
+        activeLabel = isCsv ? 'CSV 뷰어' : '다이어그램';
+
+        const dropdownIconEl = document.getElementById('viewer-diagram-icon');
+        const dropdownLabelEl = document.getElementById('viewer-diagram-label');
+        if (dropdownIconEl) dropdownIconEl.textContent = activeIcon;
+        if (dropdownLabelEl) dropdownLabelEl.textContent = activeLabel;
+    } else {
+        if (dropdownBtn) dropdownBtn.classList.remove('active');
+        const targetBtn = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
+        if (targetBtn) {
+            targetBtn.classList.add('active');
+            activeIcon = targetBtn.querySelector('.tab-icon')?.textContent || '';
+            activeLabel = targetBtn.querySelector('.tab-label')?.textContent || targetBtn.textContent.trim();
+        }
+    }
 
     // 2) 좁은 화면용 활성 탭 인디케이터 텍스트 갱신
-    if (mobileActiveText) {
-        const icon = targetBtn.querySelector('.tab-icon')?.textContent || '';
-        const label = targetBtn.querySelector('.tab-label')?.textContent || targetBtn.textContent.trim();
-        mobileActiveText.innerHTML = `<span class="tab-icon">${icon}</span> <span class="active-tab-name">${escapeHtml(label)}</span>`;
+    if (mobileActiveText && activeLabel) {
+        mobileActiveText.innerHTML = `<span class="tab-icon">${activeIcon}</span> <span class="active-tab-name">${escapeHtml(activeLabel)}</span>`;
     }
 
     // 3) 탭 콘텐츠 표시 전환
@@ -123,8 +167,9 @@ function switchTab(targetTab) {
     // 4) 백엔드 파일 및 로컬스토리지에 마지막 활성 탭 영구 저장
     saveAppSettingKey('active_tab_id', targetTab);
 
-    // 5) 모바일 드롭다운 메뉴 자동 닫기
+    // 5) 모바일 드롭다운 및 탭 드롭다운 메뉴 자동 닫기
     closeMobileNav();
+    closeViewerDiagramDropdown();
 
     // 6) 다이어그램 탭 전환 시 뷰포트 맞춤 렌더링
     if (targetTab === 'mermaid' && typeof fitMermaidToViewport === 'function') {
@@ -145,12 +190,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     tabButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             const targetTab = btn.getAttribute('data-tab');
-            switchTab(targetTab);
+            if (targetTab) {
+                switchTab(targetTab);
+            }
         });
     });
 
-    // 햄버거 메뉴 바깥 영역 클릭 시 자동 닫기
+    // 드롭다운 및 햄버거 메뉴 바깥 영역 클릭 시 자동 닫기
     document.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('viewer-diagram-dropdown');
+        if (dropdown && !dropdown.contains(e.target)) {
+            closeViewerDiagramDropdown();
+        }
         const nav = document.getElementById('main-tab-nav');
         if (nav && !nav.contains(e.target)) {
             closeMobileNav();

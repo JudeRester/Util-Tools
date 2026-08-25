@@ -124,6 +124,112 @@ body {
     white-space: nowrap;
 }
 
+/* ==========================================
+ * Tab Navigation Dropdown (CSV 뷰어 & 다이어그램 통합)
+ * ========================================== */
+.tab-dropdown-group {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-width: 0;
+}
+
+.tab-dropdown-trigger {
+    width: 100%;
+    position: relative;
+    justify-content: center;
+}
+
+.tab-dropdown-arrow {
+    font-size: 0.72rem;
+    margin-left: 2px;
+    opacity: 0.8;
+    transition: transform 0.2s ease;
+}
+
+.tab-dropdown-group.open .tab-dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.tab-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 230px;
+    background: #1e2230;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    padding: 6px;
+    z-index: 150;
+    flex-direction: column;
+    gap: 4px;
+    animation: fadeInDropdown 0.15s ease-out;
+}
+
+@keyframes fadeInDropdown {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.tab-dropdown-group.open .tab-dropdown-menu {
+    display: flex;
+}
+
+.tab-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 0.84rem;
+    cursor: pointer;
+    text-align: left;
+    transition: var(--transition);
+    width: 100%;
+}
+
+.tab-dropdown-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-primary);
+}
+
+.tab-dropdown-item.active {
+    background: rgba(79, 70, 229, 0.2);
+    color: #a5b4fc;
+    border: 1px solid rgba(79, 70, 229, 0.4);
+}
+
+.tab-dropdown-item .item-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.tab-dropdown-item .item-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.tab-dropdown-item .item-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+}
+
+.tab-dropdown-item .item-desc {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+}
+
+.tab-dropdown-item.active .item-title {
+    color: #e0e7ff;
+}
+
 /* 좁은 화면/창 크기 축소 시 (880px 이하) 햄버거 메뉴 + 드롭다운으로 자동 전환 */
 @media (max-width: 880px) {
     .nav-brand {
@@ -192,6 +298,24 @@ body {
         width: 100%;
         font-size: 0.9rem;
         border-radius: 6px;
+    }
+
+    .tab-dropdown-group {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .tab-dropdown-trigger {
+        justify-content: flex-start;
+    }
+
+    .tab-dropdown-menu {
+        position: static;
+        box-shadow: none;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px dashed var(--border-color);
+        margin-top: 4px;
+        min-width: 100%;
     }
 }
 
