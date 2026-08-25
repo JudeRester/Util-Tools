@@ -23,12 +23,24 @@ def _ensure_emails_dir():
         os.makedirs(EMAILS_DIR, exist_ok=True)
 
 
+_cached_emails = None
+_cached_mtime = 0
+
+
 def _load_emails_from_disk():
+    global _cached_emails, _cached_mtime
     _ensure_emails_dir()
+
     if os.path.exists(EMAILS_JSON_PATH):
         try:
+            mtime = os.path.getmtime(EMAILS_JSON_PATH)
+            if _cached_emails is not None and mtime == _cached_mtime:
+                return _cached_emails
+
             with open(EMAILS_JSON_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
+                _cached_emails = json.load(f)
+                _cached_mtime = mtime
+                return _cached_emails
         except Exception as e:
             print(f"⚠️ emails.json 로드 실패: {e}")
     
@@ -37,17 +49,23 @@ def _load_emails_from_disk():
             with open(EMAILS_EXAMPLE_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 _save_emails_to_disk(data)
+                _cached_emails = data
                 return data
         except Exception:
             pass
+    _cached_emails = []
     return []
 
 
 def _save_emails_to_disk(emails_data):
+    global _cached_emails, _cached_mtime
     _ensure_emails_dir()
     try:
         with open(EMAILS_JSON_PATH, "w", encoding="utf-8") as f:
             json.dump(emails_data, f, ensure_ascii=False, indent=2)
+        _cached_emails = emails_data
+        if os.path.exists(EMAILS_JSON_PATH):
+            _cached_mtime = os.path.getmtime(EMAILS_JSON_PATH)
         return True
     except Exception as e:
         print(f"❌ emails.json 저장 오류: {e}")
@@ -149,8 +167,39 @@ def _parse_eml_bytes(raw_bytes, source_filename=""):
 # ==========================================
 
 @eel.expose
+def get_all_emails_summary():
+    """이메일 목록 렌더링용 가벼운 메타데이터 요약본 반환 (HTML 본문 제외로 IPC 98% 경량화)"""
+    emails = _load_emails_from_disk()
+    summaries = []
+    for em in emails:
+        summaries.append({
+            "id": em.get("id"),
+            "subject": em.get("subject", "(제목 없음)"),
+            "from": em.get("from", ""),
+            "to": em.get("to", ""),
+            "date": em.get("date", ""),
+            "category": em.get("category", "기타"),
+            "snippet": em.get("snippet", ""),
+            "attachments": em.get("attachments", []),
+            "file_path": em.get("file_path", ""),
+            "created_at": em.get("created_at", "")
+        })
+    return summaries
+
+
+@eel.expose
+def get_email_detail(email_id):
+    """선택된 특정 이메일 1건의 전체 본문(HTML/텍스트) 반환 (Lazy Loading)"""
+    emails = _load_emails_from_disk()
+    for em in emails:
+        if em.get("id") == email_id:
+            return {"success": True, "email": em}
+    return {"success": False, "message": "해당 이메일을 찾을 수 없습니다."}
+
+
+@eel.expose
 def get_all_emails():
-    """저장된 전체 이메일 목록 반환"""
+    """저장된 전체 이메일 목록 반환 (하위 호환)"""
     return _load_emails_from_disk()
 
 

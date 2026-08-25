@@ -4737,6 +4737,25 @@ body {
     color: #f87171;
 }
 
+.email-load-more-card {
+    padding: 12px;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed var(--border-color);
+    border-radius: 8px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: var(--transition);
+    margin-top: 4px;
+}
+
+.email-load-more-card:hover {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: var(--accent-color);
+    color: #c7d2fe;
+}
+
 /* 우측 이메일 상세 리더 패널 */
 .email-reader-panel {
     flex: 1;
