@@ -702,26 +702,35 @@ function updateMarkdownFileBadge() {
 
 function openMarkdownTocModal() {
     const preview = document.getElementById('markdown-preview-output');
-    const headings = preview?.querySelectorAll('h1, h2, h3, h4');
+    const headings = preview?.querySelectorAll('h1, h2, h3, h4, h5, h6');
     if (!headings || headings.length === 0) {
-        showAppAlert('문서에 제목(# 헤더)이 없습니다.', '목차 알림', 'ℹ️');
+        showAppAlert('문서에 제목(# 헤더)이 없습니다.\n마크다운 텍스트에 # 헤더를 추가해 주세요.', '목차 알림', 'ℹ️');
         return;
     }
 
-    let tocHtml = '<div class="md-toc-list">';
+    const listEl = document.getElementById('markdown-toc-modal-list');
+    if (!listEl) return;
+
+    let tocHtml = '';
     headings.forEach(h => {
         const level = h.tagName.toLowerCase();
         const text = h.textContent;
         const id = h.id;
         tocHtml += `<a class="md-toc-item md-toc-${level}" href="#${id}" onclick="jumpToMarkdownHeading('${id}'); return false;">${escapeHtml(text)}</a>`;
     });
-    tocHtml += '</div>';
+    listEl.innerHTML = tocHtml;
 
-    showCustomModal('📑 문서 목차 (Table of Contents)', tocHtml);
+    const modal = document.getElementById('markdown-toc-modal');
+    if (modal) modal.classList.add('show');
+}
+
+function closeMarkdownTocModal() {
+    const modal = document.getElementById('markdown-toc-modal');
+    if (modal) modal.classList.remove('show');
 }
 
 function jumpToMarkdownHeading(id) {
-    closeCustomModal();
+    closeMarkdownTocModal();
     const headingEl = document.getElementById(id);
     if (headingEl) {
         headingEl.scrollIntoView({ behavior: 'smooth', block: 'start' });

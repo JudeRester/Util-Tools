@@ -1077,6 +1077,24 @@
         </div>
     </div>
 
+    <!-- Markdown 문서 목차(TOC) 모달 -->
+    <div id="markdown-toc-modal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 520px; width: 90%;">
+            <div class="modal-header">
+                <h3>📑 문서 목차 (Table of Contents)</h3>
+                <button class="modal-close-btn" onclick="closeMarkdownTocModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="markdown-toc-modal-list" class="md-toc-list">
+                    <!-- JavaScript로 동적 렌더링 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="form-btn close-btn" onclick="closeMarkdownTocModal()">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 통합 데이터 백업 & 복원 (Export / Import) 모달 -->
     <div id="backup-modal" class="modal-overlay">
         <div class="modal-card modal-card-backup" style="max-width: 680px; width: 92%;">
