@@ -1171,6 +1171,28 @@
         </div>
     </div>
 
+    <!-- EML 이메일 일괄 등록 프로그레스 바 모달 -->
+    <div id="eml-progress-modal" class="modal-overlay">
+        <div class="modal-card modal-card-progress" style="max-width: 480px; width: 90%;">
+            <div class="modal-header">
+                <h3>📥 EML 이메일 일괄 등록 중</h3>
+            </div>
+            <div class="modal-body" style="padding: 22px 20px;">
+                <div class="progress-status-row" style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.88rem;">
+                    <span id="eml-progress-count" style="font-weight: 600; color: var(--text-primary);">0 / 0개 처리 중...</span>
+                    <span id="eml-progress-percent" style="font-weight: 700; color: #818cf8;">0%</span>
+                </div>
+                <!-- 프로그레스 바 -->
+                <div class="eml-progress-track" style="width: 100%; height: 12px; background: #1a1e2b; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-color); margin-bottom: 12px;">
+                    <div id="eml-progress-fill" class="eml-progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: 6px; transition: width 0.15s ease;"></div>
+                </div>
+                <div class="eml-progress-current-file" style="font-size: 0.78rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    <span>현재 파일: </span><span id="eml-progress-filename" style="color: #cbd5e1;">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 통합 데이터 백업 & 복원 (Export / Import) 모달 -->
     <div id="backup-modal" class="modal-overlay">
         <div class="modal-card modal-card-backup" style="max-width: 680px; width: 92%;">

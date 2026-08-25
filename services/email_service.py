@@ -184,17 +184,25 @@ def import_eml_files_dialog():
         
     emails = _load_emails_from_disk()
     imported_count = 0
+    total = len(file_paths)
+
+    if total > 1:
+        try:
+            eel.on_eml_import_progress(0, total, "가져오기 준비 중...", 0)()
+        except Exception:
+            pass
     
-    for path in file_paths:
+    for idx, path in enumerate(file_paths, 1):
+        filename = os.path.basename(path)
         try:
             with open(path, "rb") as f:
                 raw_bytes = f.read()
                 
-            parsed = _parse_eml_bytes(raw_bytes, os.path.basename(path))
+            parsed = _parse_eml_bytes(raw_bytes, filename)
             email_id = f"eml_{uuid.uuid4().hex[:10]}"
             
             # 원본 EML 파일 복사본 저장
-            dest_filename = f"{email_id}_{os.path.basename(path)}"
+            dest_filename = f"{email_id}_{filename}"
             dest_path = os.path.join(EMAILS_DIR, dest_filename)
             with open(dest_path, "wb") as f_out:
                 f_out.write(raw_bytes)
@@ -218,6 +226,14 @@ def import_eml_files_dialog():
         except Exception as e:
             print(f"⚠️ EML 파싱 실패 ({path}): {e}")
             
+        if total > 1:
+            pct = int((idx / total) * 100)
+            try:
+                eel.on_eml_import_progress(idx, total, filename, pct)()
+            except Exception:
+                pass
+            eel.sleep(0.002)
+            
     if imported_count > 0:
         _save_emails_to_disk(emails)
         return {
@@ -232,7 +248,7 @@ def import_eml_files_dialog():
 
 @eel.expose
 def import_eml_folder_dialog():
-    """폴더 내의 모든 .eml 파일을 재귀적으로 탐색하여 일괄 가져오기"""
+    """폴더 내의 모든 .eml 파일을 재귀적으로 탐색하여 일괄 가져오기 (프로그레스 지원)"""
     root = tk.Tk()
     root.withdraw()
     root.attributes("-topmost", True)
@@ -254,15 +270,22 @@ def import_eml_folder_dialog():
         
     emails = _load_emails_from_disk()
     imported_count = 0
+    total = len(eml_files)
+
+    try:
+        eel.on_eml_import_progress(0, total, f"총 {total}개 파일 검색 완료, 등록 시작...", 0)()
+    except Exception:
+        pass
     
-    for path in eml_files:
+    for idx, path in enumerate(eml_files, 1):
+        filename = os.path.basename(path)
         try:
             with open(path, "rb") as f:
                 raw_bytes = f.read()
-            parsed = _parse_eml_bytes(raw_bytes, os.path.basename(path))
+            parsed = _parse_eml_bytes(raw_bytes, filename)
             email_id = f"eml_{uuid.uuid4().hex[:10]}"
             
-            dest_filename = f"{email_id}_{os.path.basename(path)}"
+            dest_filename = f"{email_id}_{filename}"
             dest_path = os.path.join(EMAILS_DIR, dest_filename)
             with open(dest_path, "wb") as f_out:
                 f_out.write(raw_bytes)
@@ -285,6 +308,13 @@ def import_eml_folder_dialog():
             imported_count += 1
         except Exception as e:
             print(f"⚠️ EML 파싱 실패 ({path}): {e}")
+            
+        pct = int((idx / total) * 100)
+        try:
+            eel.on_eml_import_progress(idx, total, filename, pct)()
+        except Exception:
+            pass
+        eel.sleep(0.002)
             
     if imported_count > 0:
         _save_emails_to_disk(emails)

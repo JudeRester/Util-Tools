@@ -375,12 +375,49 @@ async function promptAddEmailCategory() {
 }
 
 // ==========================================
-// 6. 파일 가져오기 & 드래그 앤 드롭
+// 6. 파일 가져오기 & 드래그 앤 드롭 (프로그레스 바 지원)
 // ==========================================
+if (window.eel) {
+    try {
+        eel.expose(on_eml_import_progress);
+    } catch (e) {}
+}
+
+function on_eml_import_progress(current, total, filename, percent) {
+    const modal = document.getElementById('eml-progress-modal');
+    const countEl = document.getElementById('eml-progress-count');
+    const percentEl = document.getElementById('eml-progress-percent');
+    const fillEl = document.getElementById('eml-progress-fill');
+    const filenameEl = document.getElementById('eml-progress-filename');
+
+    if (modal) {
+        if (!modal.classList.contains('show') && current < total) {
+            modal.classList.add('show');
+        }
+    }
+
+    if (countEl) countEl.textContent = `${current} / ${total}개 처리 중...`;
+    if (percentEl) percentEl.textContent = `${percent}%`;
+    if (fillEl) fillEl.style.width = `${percent}%`;
+    if (filenameEl) filenameEl.textContent = filename || '-';
+
+    if (current >= total && total > 0) {
+        setTimeout(() => {
+            if (modal) modal.classList.remove('show');
+        }, 400);
+    }
+}
+
+function hideEmlProgressModal() {
+    const modal = document.getElementById('eml-progress-modal');
+    if (modal) modal.classList.remove('show');
+}
+
 async function importEmlFiles() {
     try {
         if (window.eel && typeof eel.import_eml_files_dialog === 'function') {
             const res = await eel.import_eml_files_dialog()();
+            hideEmlProgressModal();
             if (res.success) {
                 emailState.emails = res.emails || [];
                 updateCategoriesList();
@@ -396,6 +433,7 @@ async function importEmlFiles() {
             }
         }
     } catch (e) {
+        hideEmlProgressModal();
         console.error("EML 파일 가져오기 오류:", e);
     }
 }
@@ -404,6 +442,7 @@ async function importEmlFolder() {
     try {
         if (window.eel && typeof eel.import_eml_folder_dialog === 'function') {
             const res = await eel.import_eml_folder_dialog()();
+            hideEmlProgressModal();
             if (res.success) {
                 emailState.emails = res.emails || [];
                 updateCategoriesList();
@@ -419,6 +458,7 @@ async function importEmlFolder() {
             }
         }
     } catch (e) {
+        hideEmlProgressModal();
         console.error("EML 폴더 일괄 등록 오류:", e);
     }
 }
