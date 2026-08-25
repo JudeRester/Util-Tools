@@ -38,15 +38,26 @@ def _compute_text_hash(text):
     return hashlib.md5(text.encode('utf-8')).hexdigest()
 
 
+def _safe_log(msg):
+    try:
+        print(msg, flush=True)
+    except Exception:
+        try:
+            safe_msg = msg.encode(sys.stdout.encoding or 'utf-8', errors='replace').decode(sys.stdout.encoding or 'utf-8', errors='replace')
+            print(safe_msg, flush=True)
+        except Exception:
+            pass
+
+
 def _load_disk_cache():
-    """디스크에서 벡터 DB 캐시 로드"""
+    """디스크(embeddings_cache.json)에서 기저장된 벡터 캐시 복원"""
     global _vector_db_cache
     if os.path.exists(CACHE_FILE_PATH):
         try:
             with open(CACHE_FILE_PATH, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                if isinstance(data, dict) and "cache" in data:
-                    raw_cache = data["cache"]
+                raw_cache = data.get("cache", {})
+                if isinstance(raw_cache, dict):
                     _vector_db_cache = {}
                     for k, v in raw_cache.items():
                         if isinstance(v, dict) and "embedding" in v and "hash" in v:
@@ -56,7 +67,7 @@ def _load_disk_cache():
                             }
                     return
         except Exception as e:
-            print(f"⚠️ [AI Engine] 디스크 캐시 로드 오류: {e}")
+            _safe_log(f"[AI Engine] 디스크 캐시 로드 오류: {e}")
     _vector_db_cache = {}
 
 
@@ -82,7 +93,7 @@ def _save_disk_cache():
             json.dump(payload, f, ensure_ascii=False)
         _cache_dirty = False
     except Exception as e:
-        print(f"⚠️ [AI Engine] 디스크 캐시 저장 오류: {e}")
+        _safe_log(f"[AI Engine] 디스크 캐시 저장 오류: {e}")
 
 
 def _init_ai_engine():
@@ -101,11 +112,11 @@ def _init_ai_engine():
             if not (os.path.exists(TOKENIZER_PATH) and os.path.exists(ONNX_MODEL_PATH)):
                 try:
                     from huggingface_hub import hf_hub_download
-                    print("📥 [AI Engine] multilingual-e5-small 모델 다운로드 중 (약 45MB)...")
+                    _safe_log("[AI Engine] multilingual-e5-small 모델 다운로드 중 (약 45MB)...")
                     hf_hub_download(repo_id="Xenova/multilingual-e5-small", filename="tokenizer.json", local_dir=MODEL_DIR)
                     hf_hub_download(repo_id="Xenova/multilingual-e5-small", filename="onnx/model_quantized.onnx", local_dir=MODEL_DIR)
                 except Exception as dl_err:
-                    print(f"⚠️ [AI Engine] 모델 자동 다운로드 실패: {dl_err}")
+                    _safe_log(f"[AI Engine] 모델 자동 다운로드 실패: {dl_err}")
 
             if os.path.exists(TOKENIZER_PATH) and os.path.exists(ONNX_MODEL_PATH):
                 import onnxruntime as ort
@@ -129,39 +140,32 @@ def _init_ai_engine():
                 )
                 _is_model_ready = True
                 _load_disk_cache()
-                print("🚀 [AI Engine] multilingual-e5-small ONNX 딥러닝 엔진 & 벡터 캐시가 준비되었습니다.")
+                _safe_log("[AI Engine] multilingual-e5-small ONNX 딥러닝 엔진 & 벡터 캐시가 준비되었습니다.")
                 return True
         except Exception as e:
-            print(f"⚠️ [AI Engine] ONNX 모델 로드 실패 (하이브리드 규칙 엔진으로 폴백): {e}")
+            _safe_log(f"[AI Engine] ONNX 모델 로드 실패 (하이브리드 규칙 엔진으로 폴백): {e}")
             _is_model_ready = False
 
     return False
 
 
-def _get_neural_embeddings(texts, is_query=False):
-    """
-    multilingual-e5-small 신경망 임베딩 벡터 추출
-    - 동적 패딩(Dynamic Padding): 배치 내 최대 길이에 맞춰 최소 텐서로 초고속 계산
-    """
-    if not _init_ai_engine() or _onnx_session is None or _tokenizer is None:
-        return None
-
+def _infer_single_batch(texts, is_query=False):
+    """단일 미니 배치(최대 16개) 추론 수행 (메모리 폭증 방지)"""
     if not texts:
         return np.empty((0, 384), dtype=np.float32)
 
     try:
         # E5 모델 접두어: 쿼리는 'query: ', 문서는 'passage: '
         prefix = "query: " if is_query else "passage: "
-        prefixed_texts = [prefix + t for t in texts]
+        prefixed_texts = [prefix + str(t)[:2000] for t in texts]
 
         # 1. 인코딩 (패딩 없이 토큰화)
         encoded_list = _tokenizer.encode_batch(prefixed_texts)
         if not encoded_list:
             return None
 
-        # 2. 동적 패딩 (배치 내 최대 토큰 길이 기준)
+        # 2. 동적 패딩 (배치 내 최대 토큰 길이 기준, 16 ~ 512 사이로 안전 제한)
         max_len = max(len(e.ids) for e in encoded_list)
-        # 최소 16 이상으로 클리핑
         max_len = max(16, min(512, max_len))
 
         batch_size = len(encoded_list)
@@ -196,8 +200,37 @@ def _get_neural_embeddings(texts, is_query=False):
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
         return (embeddings / np.maximum(norms, 1e-9)).astype(np.float32)
     except Exception as e:
-        print(f"⚠️ 임베딩 계산 오류: {e}")
+        _safe_log(f"[AI Engine] 임베딩 계산 오류: {e}")
         return None
+
+
+def _get_neural_embeddings(texts, is_query=False, batch_size=16):
+    """
+    multilingual-e5-small 신경망 임베딩 벡터 추출
+    - 미니배치 분할(Mini-batch Chunking): 대량 문서도 메모리 고갈(OOM 39GB) 없이 안전하게 분할 계산
+    - 동적 패딩(Dynamic Padding): 배치 내 길이에 맞춰 최소 텐서로 초고속 계산
+    """
+    if not _init_ai_engine() or _onnx_session is None or _tokenizer is None:
+        return None
+
+    if not texts:
+        return np.empty((0, 384), dtype=np.float32)
+
+    # 1개 쿼리나 소량 텍스트는 즉시 단일 실행
+    if len(texts) <= batch_size:
+        return _infer_single_batch(texts, is_query=is_query)
+
+    # 대량 문서는 안전한 미니배치(16개) 단위로 분할 실행
+    all_embeddings = []
+    for i in range(0, len(texts), batch_size):
+        chunk = texts[i:i + batch_size]
+        res = _infer_single_batch(chunk, is_query=is_query)
+        if res is not None:
+            all_embeddings.append(res)
+        else:
+            all_embeddings.append(np.zeros((len(chunk), 384), dtype=np.float32))
+
+    return np.vstack(all_embeddings).astype(np.float32)
 
 
 def _sync_document_embeddings(all_items):
@@ -207,6 +240,7 @@ def _sync_document_embeddings(all_items):
     - 새로 추가되거나 수정된 문서만 한 번에 미니 배치로 계산하여 디스크에 저장
     """
     global _cache_dirty
+    _init_ai_engine()
 
     items_to_compute = []
     keys_to_compute = []
@@ -224,7 +258,9 @@ def _sync_document_embeddings(all_items):
 
     # 새로 계산할 문서가 있는 경우에만 배치 계산
     if items_to_compute:
-        new_embs = _get_neural_embeddings(items_to_compute, is_query=False)
+        count = len(items_to_compute)
+        _safe_log(f"[AI Engine] 신규/수정 문서 {count}개 벡터 임베딩 일괄 동기화 시작 (16개 미니배치)...")
+        new_embs = _get_neural_embeddings(items_to_compute, is_query=False, batch_size=16)
         if new_embs is not None:
             for (key, text_hash, item), emb in zip(keys_to_compute, new_embs):
                 item["embedding"] = emb
@@ -234,6 +270,7 @@ def _sync_document_embeddings(all_items):
                 }
             _cache_dirty = True
             _save_disk_cache()
+            _safe_log(f"[AI Engine] 총 {count}개 문서 벡터 캐시 동기화 완료!")
 
 
 def _load_json_file(filename):
@@ -359,7 +396,9 @@ def _get_all_system_items(filter_category=None):
             to_addr = em.get('to', '')
             cat = em.get('category', '일반')
             snippet = em.get('snippet', '')
-            body_text = em.get('body_text', '')
+            body_text = em.get('body_text', '') or ''
+            # 이메일 본문이 수십만 자(HTML 등)일 수 있으므로 텍스트 앞부분 1500자만 인덱싱
+            body_clean = body_text[:1500].strip()
             all_items.append({
                 "id": em.get('id'),
                 "category": "emails",
@@ -367,7 +406,7 @@ def _get_all_system_items(filter_category=None):
                 "icon": "📧",
                 "title": subject,
                 "snippet": f"[{from_addr}] {snippet}" if from_addr else snippet,
-                "full_text": f"{subject}\n{from_addr}\n{to_addr}\n{cat}\n{body_text}",
+                "full_text": f"{subject}\n{from_addr}\n{to_addr}\n{cat}\n{body_clean}",
                 "target_tab": "emails",
                 "action_data": {"email_id": em.get('id')}
             })
