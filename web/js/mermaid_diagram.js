@@ -367,11 +367,26 @@ function initMermaidPanZoom() {
     const viewport = document.getElementById('mermaid-viewport');
     if (!viewport) return;
 
-    // 마우스 휠 줌
+    // 마우스 휠 줌 (커서 위치 중심 부드러운 확대/축소 및 최대 1500% 지원)
     viewport.addEventListener('wheel', function(e) {
         e.preventDefault();
-        const delta = e.deltaY < 0 ? 0.1 : -0.1;
-        zoomMermaid(delta);
+        
+        const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+        const targetScale = Math.max(0.1, Math.min(15.0, mermaidZoomScale * zoomFactor));
+
+        if (targetScale === mermaidZoomScale) return;
+
+        // 마우스 커서 위치 기준 확대 중심점 보정
+        const rect = viewport.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // 새로운 패닝 좌표 계산: 커서 위치가 확대 후에도 고정되도록 조정
+        mermaidPanX = mouseX - (mouseX - mermaidPanX) * (targetScale / mermaidZoomScale);
+        mermaidPanY = mouseY - (mouseY - mermaidPanY) * (targetScale / mermaidZoomScale);
+        mermaidZoomScale = targetScale;
+
+        updateCanvasTransform();
     }, { passive: false });
 
     // 마우스 드래그 패닝
@@ -399,7 +414,11 @@ function initMermaidPanZoom() {
 }
 
 function zoomMermaid(delta) {
-    mermaidZoomScale = Math.max(0.2, Math.min(3.0, mermaidZoomScale + delta));
+    if (delta > 0) {
+        mermaidZoomScale = Math.min(15.0, mermaidZoomScale * 1.25);
+    } else {
+        mermaidZoomScale = Math.max(0.1, mermaidZoomScale * 0.8);
+    }
     updateCanvasTransform();
 }
 
@@ -411,16 +430,35 @@ function resetMermaidZoom() {
 }
 
 function fitMermaidToViewport() {
-    mermaidZoomScale = 1.0;
-    mermaidPanX = 0;
-    mermaidPanY = 0;
-    updateCanvasTransform();
+    const viewport = document.getElementById('mermaid-viewport');
+    const svg = document.querySelector('#mermaid-render-output svg');
+    if (viewport && svg) {
+        const vRect = viewport.getBoundingClientRect();
+        const sRect = svg.getBoundingClientRect();
+        const svgW = svg.viewBox?.baseVal?.width || sRect.width || 800;
+        const svgH = svg.viewBox?.baseVal?.height || sRect.height || 600;
+
+        if (svgW > 0 && svgH > 0 && vRect.width > 0 && vRect.height > 0) {
+            const scaleX = (vRect.width - 60) / svgW;
+            const scaleY = (vRect.height - 60) / svgH;
+            mermaidZoomScale = Math.max(0.1, Math.min(3.0, Math.min(scaleX, scaleY)));
+            mermaidPanX = 0;
+            mermaidPanY = 0;
+            updateCanvasTransform();
+            return;
+        }
+    }
+    resetMermaidZoom();
 }
 
 function updateCanvasTransform() {
     const canvas = document.getElementById('mermaid-canvas');
     if (canvas) {
         canvas.style.transform = `translate(${mermaidPanX}px, ${mermaidPanY}px) scale(${mermaidZoomScale})`;
+    }
+    const badge = document.getElementById('mermaid-zoom-badge');
+    if (badge) {
+        badge.textContent = `${Math.round(mermaidZoomScale * 100)}%`;
     }
 }
 
