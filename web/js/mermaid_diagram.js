@@ -140,6 +140,20 @@ async function renderMermaid(force = false) {
         outputEl.innerHTML = svg;
         outputEl.style.opacity = '1';
 
+        const svgEl = outputEl.querySelector('svg');
+        if (svgEl) {
+            svgEl.style.maxWidth = 'none';
+            svgEl.setAttribute('shape-rendering', 'geometricPrecision');
+            svgEl.setAttribute('text-rendering', 'geometricPrecision');
+            const vb = svgEl.viewBox?.baseVal;
+            if (vb && vb.width > 0 && vb.height > 0) {
+                svgEl.setAttribute('width', vb.width);
+                svgEl.setAttribute('height', vb.height);
+                svgEl.style.width = vb.width + 'px';
+                svgEl.style.height = vb.height + 'px';
+            }
+        }
+
         if (errorBar) errorBar.style.display = 'none';
 
         // 성공 시 로컬스토리지 자동 저장
@@ -147,6 +161,8 @@ async function renderMermaid(force = false) {
 
         if (force) {
             fitMermaidToViewport();
+        } else {
+            updateCanvasTransform();
         }
     } catch (err) {
         console.warn("Mermaid 렌더링 문법 오류:", err);

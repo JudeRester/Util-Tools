@@ -2999,7 +2999,6 @@ body {
     display: inline-block;
     padding: 0;
     margin: 0;
-    will-change: transform;
 }
 
 #mermaid-render-output {
@@ -3008,9 +3007,9 @@ body {
 
 #mermaid-render-output svg {
     max-width: none !important;
-    height: auto !important;
-    filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.35));
     display: block;
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
 }
 
 /* ==========================================
