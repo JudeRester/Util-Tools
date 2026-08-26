@@ -301,8 +301,10 @@ def _get_all_system_items(filter_category=None):
     except Exception:
         conn = None
 
+    is_all = not filter_category or filter_category == 'all'
+
     # (1) 이메일 아카이브
-    if not filter_category or filter_category == 'emails':
+    if is_all or filter_category == 'emails':
         email_items = []
         if conn:
             try:
@@ -338,7 +340,7 @@ def _get_all_system_items(filter_category=None):
         all_items.extend(email_items)
 
     # (2) 메모 (Notes)
-    if not filter_category or filter_category == 'notes':
+    if is_all or filter_category == 'notes':
         if conn:
             try:
                 rows = conn.execute("SELECT id, title, content, category FROM notes ORDER BY is_pinned DESC, updated_at DESC").fetchall()
@@ -361,7 +363,7 @@ def _get_all_system_items(filter_category=None):
                 _safe_log(f"[AI Search] SQLite notes 조회 실패: {e}")
 
     # (3) 다이어그램 (Diagrams)
-    if not filter_category or filter_category == 'diagrams':
+    if is_all or filter_category == 'diagrams':
         if conn:
             try:
                 rows = conn.execute("SELECT id, title, code, category, description, type FROM diagrams ORDER BY updated_at DESC").fetchall()
@@ -385,7 +387,7 @@ def _get_all_system_items(filter_category=None):
                 _safe_log(f"[AI Search] SQLite diagrams 조회 실패: {e}")
 
     # (4) 퀵 런치 (Quick Launch)
-    if not filter_category or filter_category == 'quick_launch':
+    if is_all or filter_category == 'quick_launch':
         if conn:
             try:
                 rows = conn.execute("SELECT id, title, path, icon, category, description FROM quick_launch ORDER BY order_index ASC").fetchall()
@@ -410,7 +412,7 @@ def _get_all_system_items(filter_category=None):
                 _safe_log(f"[AI Search] SQLite quick_launch 조회 실패: {e}")
 
     # (5) 단축키 / 바로가기 (Shortcuts)
-    if not filter_category or filter_category == 'shortcuts':
+    if is_all or filter_category == 'shortcuts':
         if conn:
             try:
                 rows = conn.execute("SELECT id, title, key_combo, url_or_path, category, description, icon FROM shortcuts ORDER BY id ASC").fetchall()
@@ -436,7 +438,7 @@ def _get_all_system_items(filter_category=None):
                 _safe_log(f"[AI Search] SQLite shortcuts 조회 실패: {e}")
 
     # (6) 코드/데이터 제너레이터 (Generators)
-    if not filter_category or filter_category == 'generators':
+    if is_all or filter_category == 'generators':
         if conn:
             try:
                 rows = conn.execute("SELECT id, title, language, template, description, category, icon FROM generators ORDER BY id ASC").fetchall()
