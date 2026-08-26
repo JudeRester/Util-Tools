@@ -295,21 +295,30 @@ def get_email_detail(email_id):
 
 
 def _get_eml_file_path(email_id):
-    """email_id에 해당하는 실제 .eml 물리 파일 경로 검색"""
+    """email_id에 해당하는 실제 .eml 물리 파일 경로 검색 (상대/절대/파일명 정규화 지원)"""
     if not email_id:
         return None
     
     conn = get_db_connection()
     try:
         row = conn.execute("SELECT file_path FROM emails WHERE id = ?", (email_id,)).fetchone()
-        if row and row['file_path'] and os.path.exists(row['file_path']):
-            return row['file_path']
+        if row and row['file_path']:
+            fp = row['file_path']
+            if os.path.exists(fp):
+                return fp
+            rel_path = os.path.join(base_dir, fp)
+            if os.path.exists(rel_path):
+                return rel_path
+            emails_fp = os.path.join(EMAILS_DIR, os.path.basename(fp))
+            if os.path.exists(emails_fp):
+                return emails_fp
     finally:
         conn.close()
     
-    # DB에 저장된 경로가 없거나 유효하지 않은 경우 emails 디렉토리에서 검색
+    # DB에 저장된 경로가 유효하지 않은 경우 emails 디렉토리에서 glob 검색
     import glob
-    candidates = glob.glob(os.path.join(EMAILS_DIR, f"{email_id}*.eml"))
+    escaped_id = glob.escape(str(email_id))
+    candidates = glob.glob(os.path.join(EMAILS_DIR, f"*{escaped_id}*.eml"))
     if candidates and os.path.exists(candidates[0]):
         return candidates[0]
         
@@ -369,17 +378,57 @@ def _extract_attachments_from_eml(file_path):
         return []
 
 
+def _extract_attachments_for_email(email_id):
+    """이메일 ID에 대한 첨부파일 목록 추출 (물리 EML 파싱 및 샘플 데이터 가상 생성 지원)"""
+    file_path = _get_eml_file_path(email_id)
+    if file_path and os.path.exists(file_path):
+        atts = _extract_attachments_from_eml(file_path)
+        if atts:
+            return atts
+            
+    # 물리 파일이 없거나 파싱 실패 시, DB의 attachments_json 메타데이터 기반 가상 첨부 생성 (샘플 데이터 호환)
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT subject, attachments_json FROM emails WHERE id = ?", (email_id,)).fetchone()
+        if row and row['attachments_json']:
+            raw_att = row['attachments_json']
+            meta_list = json.loads(raw_att) if isinstance(raw_att, str) else raw_att
+            if isinstance(meta_list, list) and len(meta_list) > 0:
+                virtual_atts = []
+                for idx, m in enumerate(meta_list):
+                    fn = m.get('filename') or f'attachment_{idx + 1}.txt'
+                    dummy_text = (
+                        f"[샘플 데이터 안내]\n"
+                        f"이메일 제목: {row['subject']}\n"
+                        f"첨부파일명: {fn}\n\n"
+                        f"※ 본 데이터는 프로그램 초기 제공 샘플 데이터입니다.\n"
+                        f"실제 .eml 파일을 등록(드래그&드롭)하시면 원본 파일이 정상 추출 및 다운로드됩니다.\n"
+                    )
+                    payload = dummy_text.encode('utf-8')
+                    virtual_atts.append({
+                        "index": idx,
+                        "filename": fn,
+                        "size": m.get('size', f"{len(payload)} B"),
+                        "size_bytes": len(payload),
+                        "payload": payload,
+                        "content_type": "application/octet-stream"
+                    })
+                return virtual_atts
+    except Exception as e:
+        print(f"[EmailService] 가상 첨부파일 생성 오류: {e}")
+    finally:
+        conn.close()
+        
+    return []
+
+
 @eel.expose
 def open_email_attachment(email_id, attachment_index=0, filename=None):
     """선택된 첨부파일을 임시 폴더에 추출한 후 Windows 기본 연결 프로그램으로 즉시 실행"""
     try:
-        file_path = _get_eml_file_path(email_id)
-        if not file_path:
-            return {"status": "error", "message": "원본 EML 파일을 찾을 수 없습니다."}
-            
-        attachments = _extract_attachments_from_eml(file_path)
+        attachments = _extract_attachments_for_email(email_id)
         if not attachments:
-            return {"status": "error", "message": "메일에 첨부파일이 없거나 추출에 실패했습니다."}
+            return {"status": "error", "message": "해당 메일에 첨부파일이 없거나 추출에 실패했습니다."}
             
         # 파일명 또는 인덱스로 타깃 첨부파일 매칭
         target_att = None
@@ -415,13 +464,9 @@ def open_email_attachment(email_id, attachment_index=0, filename=None):
 def save_email_attachment_dialog(email_id, attachment_index=0, filename=None):
     """첨부파일 1건 다른 이름으로 저장 (Tkinter 파일 저장 대화상자)"""
     try:
-        file_path = _get_eml_file_path(email_id)
-        if not file_path:
-            return {"status": "error", "message": "원본 EML 파일을 찾을 수 없습니다."}
-            
-        attachments = _extract_attachments_from_eml(file_path)
+        attachments = _extract_attachments_for_email(email_id)
         if not attachments:
-            return {"status": "error", "message": "메일에 첨부파일이 없습니다."}
+            return {"status": "error", "message": "해당 메일에 첨부파일이 없습니다."}
             
         target_att = None
         if filename:
@@ -467,13 +512,9 @@ def save_email_attachment_dialog(email_id, attachment_index=0, filename=None):
 def save_all_email_attachments_dialog(email_id):
     """메일에 포함된 모든 첨부파일을 지정한 폴더에 일괄 저장"""
     try:
-        file_path = _get_eml_file_path(email_id)
-        if not file_path:
-            return {"status": "error", "message": "원본 EML 파일을 찾을 수 없습니다."}
-            
-        attachments = _extract_attachments_from_eml(file_path)
+        attachments = _extract_attachments_for_email(email_id)
         if not attachments:
-            return {"status": "error", "message": "메일에 첨부파일이 없습니다."}
+            return {"status": "error", "message": "해당 메일에 첨부파일이 없습니다."}
             
         root = tk.Tk()
         root.withdraw()
