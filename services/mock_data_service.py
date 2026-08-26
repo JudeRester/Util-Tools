@@ -83,33 +83,60 @@ PUBLIC_DOMAINS = [
 ]
 
 
-def _romanize_korean_str(text):
-    """한글 문자열 또는 식별자를 영문 로마자/소문자 아이디로 변환"""
+CHOSUNG = ['g', 'kk', 'n', 'd', 'tt', 'r', 'm', 'b', 'pp', 's', 'ss', '', 'j', 'jj', 'ch', 'k', 't', 'p', 'h']
+JUNGSUNG = ['a', 'ae', 'ya', 'yae', 'eo', 'e', 'yeo', 'ye', 'o', 'wa', 'wae', 'oe', 'yo', 'u', 'wo', 'we', 'wi', 'yu', 'eu', 'ui', 'i']
+JONGSUNG = ['', 'k', 'k', 'ks', 'n', 'nj', 'nh', 't', 'l', 'lg', 'lm', 'lb', 'ls', 'lt', 'lp', 'lh', 'm', 'p', 'ps', 's', 'ss', 'ng', 'j', 'ch', 'k', 't', 'p', 'h']
+
+KOREAN_FAMILY_NAMES = {
+    '김': 'kim', '이': 'lee', '박': 'park', '최': 'choi', '정': 'jung', '강': 'kang',
+    '조': 'cho', '윤': 'yoon', '장': 'jang', '임': 'lim', '한': 'han', '오': 'oh',
+    '서': 'seo', '신': 'shin', '권': 'kwon', '황': 'hwang', '안': 'ahn', '송': 'song',
+    '류': 'ryu', '홍': 'hong', '고': 'ko', '문': 'moon', '양': 'yang', '손': 'sohn',
+    '배': 'bae', '백': 'baek', '허': 'heo', '유': 'yoo', '남': 'nam', '심': 'shim',
+    '노': 'noh', '하': 'ha', '곽': 'kwak', '성': 'sung', '차': 'cha', '주': 'joo'
+}
+
+
+def hangul_to_roman_syllables(text):
+    """한글 음절을 정확한 자모 결합 발음 영문 표기로 변환"""
+    result = []
+    for ch in str(text or ''):
+        code = ord(ch)
+        if 0xAC00 <= code <= 0xD7A3:
+            s_idx = code - 0xAC00
+            cho = s_idx // (21 * 28)
+            jung = (s_idx % (21 * 28)) // 28
+            jong = s_idx % 28
+            syllable = CHOSUNG[cho] + JUNGSUNG[jung] + JONGSUNG[jong]
+            result.append(syllable)
+        elif ch.isalnum() or ch in '._-':
+            result.append(ch)
+        elif ch == ' ':
+            result.append('.')
+    return "".join(result).lower()
+
+
+def romanize_korean_name_smart(text):
+    """한글 이름 또는 문자열을 스마트한 영문 ID로 변환 (예: '홍길동' -> 'hong.gildong', 'EMP-1001' -> 'emp-1001')"""
+    text = str(text or '').strip()
     if not text:
         return ""
-    text = str(text).strip()
-    # 영문/숫자/특수문자 위주인 경우 (예: 'EMP-1001' -> 'emp1001')
+
+    # 영문/숫자/식별자 형태인 경우 원형 소문자 유지
     if re.search(r'^[a-zA-Z0-9._-]+$', text):
-        return text.lower().replace('-', '')
+        return text.lower()
 
-    if len(text) >= 2:
-        last = text[0]
-        first = text[1:]
-        r_last = KOREAN_ROMAN_MAP.get(last, "user")
-        r_first = KOREAN_ROMAN_MAP.get(first, "")
-        if not r_first:
-            r_first = "".join(KOREAN_ROMAN_MAP.get(ch, str(ord(ch) % 100)) for ch in first)
-        patterns = [
-            f"{r_first}.{r_last}",
-            f"{r_last}_{r_first}",
-            f"{r_first}{random.randint(1, 99)}",
-            f"{r_last[0]}{r_first}",
-            f"{r_first}_{random.randint(10, 99)}"
-        ]
-        return random.choice(patterns).lower()
+    # 2~4글자 한글 이름인 경우: 성.이름 형태 (예: '홍길동' -> 'hong.gildong')
+    if len(text) in (2, 3, 4) and all(0xAC00 <= ord(ch) <= 0xD7A3 for ch in text):
+        last_ch = text[0]
+        first_ch = text[1:]
+        r_last = KOREAN_FAMILY_NAMES.get(last_ch, hangul_to_roman_syllables(last_ch))
+        r_first = hangul_to_roman_syllables(first_ch)
+        return f"{r_last}.{r_first}"
 
-    clean = re.sub(r'[^a-zA-Z0-9]', '', text).lower()
-    return clean or f"user_{random.randint(100, 999)}"
+    # 일반 단어 변환
+    res = hangul_to_roman_syllables(text)
+    return res if res else f"user_{random.randint(100, 999)}"
 
 
 def _generate_email_advanced(name="", domain_list="", domain_mode="fixed", id_source="name_roman", source_value=""):
@@ -130,18 +157,20 @@ def _generate_email_advanced(name="", domain_list="", domain_mode="fixed", id_so
             domain = domain[1:]
 
     # 2. 아이디 결정
-    if id_source == "column" and source_value:
-        raw_val = str(source_value).strip()
-        user_id = _romanize_korean_str(raw_val)
+    raw_val = str(source_value or '').strip()
+    if id_source == "column" and raw_val:
+        user_id = romanize_korean_name_smart(raw_val)
     elif id_source == "random_id":
         adjs = ["dev", "tech", "pro", "smart", "cool", "super", "blue", "star", "code", "wave", "apex", "core"]
         adj = random.choice(adjs)
         num = random.randint(100, 9999)
         user_id = f"{adj}_{num}"
     else:
-        target_name = source_value or name or _generate_korean_name()[0]
-        user_id = _romanize_korean_str(target_name)
+        target_name = raw_val or name or _generate_korean_name()[0]
+        user_id = romanize_korean_name_smart(target_name)
 
+    # 로컬파트 특수문자 정제
+    user_id = re.sub(r'[^a-zA-Z0-9._-]', '', user_id).strip('._-')
     if not user_id:
         user_id = f"user_{random.randint(1000, 9999)}"
 
@@ -234,10 +263,38 @@ def _lookup_kv(mapping, source_val, fallback=""):
     return fallback or random.choice(list(mapping.values())) if mapping else s_val
 
 
+def _find_referenced_value(row, schema, target_ref):
+    """행(row)에서 참조 컬럼의 값을 다각도로 탐색 (정확한 컬럼명, ID, 대소문자 무시)"""
+    if not target_ref:
+        return None
+
+    target_ref_str = str(target_ref).strip()
+
+    # 1. 정확한 컬럼명 매칭
+    if target_ref_str in row:
+        return row[target_ref_str]
+
+    # 2. 대소문자/공백 무시 매칭
+    for k, v in row.items():
+        if k.strip().lower() == target_ref_str.lower():
+            return v
+
+    # 3. schema의 id 매칭
+    for col in schema:
+        if col.get("id") == target_ref_str or col.get("name") == target_ref_str:
+            c_name = col.get("name")
+            if c_name and c_name in row:
+                return row[c_name]
+
+    return None
+
+
 def generate_mock_rows(schema, count=50):
     """
-    사용자가 정의한 스키마에 따라 모의 데이터 행(Row) 생성
-    - 부서:부서코드, 직급:직급코드 등 연계 키-값(Key-Value) 매핑 지원
+    사용자가 정의한 스키마에 따라 모의 데이터 행(Row) 생성 (3-Pass 의존성 해결 엔진)
+    - Pass 1: 독립 기본 컬럼 생성 (이름, 선택항목, 일련번호, 전화번호, 날짜, 숫자 등)
+    - Pass 2: 연계 키-값(Key-Value) 매핑 컬럼 생성 (부서:코드, 직급:코드 등)
+    - Pass 3: 이메일 컬럼 생성 (도메인 모드 및 사번/이름/부서코드 등 모든 컬럼 참조 완벽 지원)
     """
     count = max(1, min(int(count), 50000))
     rows = []
@@ -246,6 +303,7 @@ def generate_mock_rows(schema, count=50):
         row = {}
         cached_name = None
         deferred_kv_cols = []
+        deferred_email_cols = []
 
         # 1차 패스: 기본 독립 컬럼 생성
         for col in schema:
@@ -254,8 +312,11 @@ def generate_mock_rows(schema, count=50):
             col_type = col.get("type", "text")
             opts = col.get("options", {})
 
-            if col_type in ("key_value", "linked_map", "email"):
+            if col_type in ("key_value", "linked_map"):
                 deferred_kv_cols.append(col)
+                continue
+            if col_type == "email":
+                deferred_email_cols.append(col)
                 continue
 
             val = ""
@@ -304,40 +365,59 @@ def generate_mock_rows(schema, count=50):
 
             row[col_name] = val
 
-        # 2차 패스: 참조 대상 컬럼의 값을 기반으로 연계 키-값(Key-Value) 및 이메일 생성
+        # 2차 패스: 참조 대상 컬럼의 값을 기반으로 연계 키-값(Key-Value) 매핑 생성
         for col in deferred_kv_cols:
             col_name = col.get("name", "연계컬럼")
-            col_type = col.get("type", "text")
             opts = col.get("options", {})
+            mapping = _parse_kv_mapping(opts.get("mapping", ""))
+            target_col = opts.get("target_column", "")
+            output_part = opts.get("output_part", "value")  # "value" or "key"
 
-            if col_type == "email":
-                src_col = opts.get("source_column") or opts.get("name_column")
-                src_val = row.get(src_col, "") if src_col else (cached_name or "")
-                val = _generate_email_advanced(
-                    name=cached_name or "",
-                    domain_list=opts.get("domains", ""),
-                    domain_mode=opts.get("domain_mode", "fixed"),
-                    id_source=opts.get("id_source", "name_roman"),
-                    source_value=src_val
-                )
-            elif col_type in ("key_value", "linked_map"):
-                mapping = _parse_kv_mapping(opts.get("mapping", ""))
-                target_col = opts.get("target_column", "")
-                output_part = opts.get("output_part", "value")  # "value" or "key"
-
-                source_val = row.get(target_col, "") if target_col else ""
-                if source_val and mapping:
-                    val = _lookup_kv(mapping, source_val)
-                elif mapping:
-                    pair = random.choice(list(mapping.items()))
-                    val = pair[0] if output_part == "key" else pair[1]
-                    if target_col and target_col not in row:
-                        row[target_col] = pair[1] if output_part == "key" else pair[0]
-                else:
-                    val = f"KV_{row_idx + 1}"
+            source_val = _find_referenced_value(row, schema, target_col)
+            if source_val and mapping:
+                val = _lookup_kv(mapping, source_val)
+            elif mapping:
+                pair = random.choice(list(mapping.items()))
+                val = pair[0] if output_part == "key" else pair[1]
+                if target_col and target_col not in row:
+                    row[target_col] = pair[1] if output_part == "key" else pair[0]
             else:
-                val = ""
+                val = f"KV_{row_idx + 1}"
 
+            row[col_name] = val
+
+        # 3차 패스: 모든 컬럼(독립 컬럼 및 Key-Value 컬럼) 생성 완료 후 이메일 컬럼 생성
+        for col in deferred_email_cols:
+            col_name = col.get("name", "이메일")
+            opts = col.get("options", {})
+            src_col = opts.get("source_column") or opts.get("name_column") or ""
+
+            # 지정된 참조 컬럼 값 탐색
+            src_val = _find_referenced_value(row, schema, src_col)
+
+            # 참조 컬럼이 지정되지 않았거나 비어있는 경우 스마트 자동 탐색
+            if not src_val:
+                if opts.get("id_source") == "column":
+                    # 사번/ID(sequence), 이름(name) 순서로 자동 탐색
+                    for c in schema:
+                        if c.get("type") == "sequence" and c.get("name") in row:
+                            src_val = row[c.get("name")]
+                            break
+                    if not src_val:
+                        for c in schema:
+                            if c.get("type") == "name" and c.get("name") in row:
+                                src_val = row[c.get("name")]
+                                break
+                else:
+                    src_val = cached_name or ""
+
+            val = _generate_email_advanced(
+                name=cached_name or "",
+                domain_list=opts.get("domains", ""),
+                domain_mode=opts.get("domain_mode", "fixed"),
+                id_source=opts.get("id_source", "name_roman"),
+                source_value=src_val
+            )
             row[col_name] = val
 
         rows.append(row)

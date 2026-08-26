@@ -620,12 +620,22 @@ function updateColumnOption(colId, optKey, optVal) {
         if (!col.options) col.options = {};
         col.options[optKey] = optVal;
 
-        // 도메인 모드나 아이디 소스 변경 시 세부 옵션 UI 즉시 다시 렌더링
-        if (optKey === 'domain_mode' || optKey === 'id_source') {
+        // 아이디 규칙을 컬럼 참조로 변경 시 아직 대상 컬럼이 없으면 첫 번째 컬럼으로 자동 지정
+        if (optKey === 'id_source' && optVal === 'column' && !col.options.source_column) {
+            const firstOther = mockStudioSchema.find(c => c.id !== colId);
+            if (firstOther) {
+                col.options.source_column = firstOther.name;
+            }
+        }
+
+        // 도메인 모드나 아이디 소스/참조 컬럼 변경 시 세부 옵션 UI 즉시 다시 렌더링 & 미리보기 즉시 갱신
+        if (optKey === 'domain_mode' || optKey === 'id_source' || optKey === 'source_column') {
             const optsContainer = document.getElementById(`mock-opts-${colId}`);
             if (optsContainer) {
                 optsContainer.innerHTML = getColumnTypeOptionsHtml(col);
             }
+            triggerMockPreview();
+            return;
         }
 
         debouncedMockPreview();
