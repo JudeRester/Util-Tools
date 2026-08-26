@@ -1,6 +1,7 @@
 /**
  * 엑셀 및 모의 데이터(Mock Data) 대량 생성 스튜디오 모듈
  * - 한국인 이름, 전화번호, 이메일(커스텀 도메인 지정), 사용자 정의 문자열 목록(부서/직급/직책 등)
+ * - 연계 키-값(Key-Value) 매핑: 부서:부서코드, 직급:직급코드, 결제수단:결제코드 등 종속 컬럼 완벽 연동
  * - 실시간 테이블 미리보기, openpyxl 기반 .xlsx 엑셀 다운로드, CSV 내보내기 지원
  */
 
@@ -8,7 +9,7 @@ let mockStudioSchema = [];
 let currentMockPreviewRows = [];
 
 // ==========================================
-// 1. 프리셋 템플릿 정의
+// 1. 프리셋 템플릿 정의 (연계 키-값 컬럼 포함)
 // ==========================================
 const MOCK_PRESETS = {
     employee: {
@@ -17,14 +18,16 @@ const MOCK_PRESETS = {
         schema: [
             { id: "col_1", name: "사번", type: "sequence", options: { prefix: "EMP-", start_num: 1001, padding: 4 } },
             { id: "col_2", name: "이름", type: "name", options: { gender: "any" } },
-            { id: "col_3", name: "부서", type: "choices", options: { choices: "스마트개발팀, 웹서비스팀, AI연구팀, 품질보증팀, 경영기획팀, 인사총무팀, 영업마케팅팀" } },
-            { id: "col_4", name: "직급", type: "choices", options: { choices: "사원, 주임, 선임연구원, 책임연구원, 수석연구원, 팀장" } },
-            { id: "col_5", name: "직책", type: "choices", options: { choices: "팀원, 파트장, 팀장, 실장" } },
-            { id: "col_6", name: "이메일", type: "email", options: { domains: "cuchen.com" } },
-            { id: "col_7", name: "연락처", type: "phone", options: { format: "010-XXXX-XXXX" } },
-            { id: "col_8", name: "입사일", type: "date", options: { start_year: 2021, end_year: 2026, format: "%Y-%m-%d" } },
-            { id: "col_9", name: "재직상태", type: "choices", options: { choices: "재직, 재택근무, 휴직" } },
-            { id: "col_10", name: "기본급여", type: "number", options: { min: 3500000, max: 7500000, step: 100000 } }
+            { id: "col_3", name: "부서명", type: "choices", options: { choices: "스마트개발팀, 웹서비스팀, AI연구팀, 품질보증팀, 경영기획팀, 인사총무팀, 영업마케팅팀" } },
+            { id: "col_4", name: "부서코드", type: "key_value", options: { target_column: "부서명", output_part: "value", mapping: "스마트개발팀:DEV, 웹서비스팀:WEB, AI연구팀:AI, 품질보증팀:QA, 경영기획팀:MGT, 인사총무팀:HR, 영업마케팅팀:SAL" } },
+            { id: "col_5", name: "직급", type: "choices", options: { choices: "사원, 주임, 선임연구원, 책임연구원, 수석연구원, 팀장" } },
+            { id: "col_6", name: "직급코드", type: "key_value", options: { target_column: "직급", output_part: "value", mapping: "사원:J1, 주임:J2, 선임연구원:S1, 책임연구원:S2, 수석연구원:P1, 팀장:L1" } },
+            { id: "col_7", name: "직책", type: "choices", options: { choices: "팀원, 파트장, 팀장, 실장" } },
+            { id: "col_8", name: "이메일", type: "email", options: { domains: "cuchen.com" } },
+            { id: "col_9", name: "연락처", type: "phone", options: { format: "010-XXXX-XXXX" } },
+            { id: "col_10", name: "입사일", type: "date", options: { start_year: 2021, end_year: 2026, format: "%Y-%m-%d" } },
+            { id: "col_11", name: "재직상태", type: "choices", options: { choices: "재직, 재택근무, 휴직" } },
+            { id: "col_12", name: "기본급여", type: "number", options: { min: 3500000, max: 7500000, step: 100000 } }
         ]
     },
     customer: {
@@ -40,7 +43,8 @@ const MOCK_PRESETS = {
             { id: "col_7", name: "거주지주소", type: "address", options: { city: "" } },
             { id: "col_8", name: "가입일", type: "date", options: { start_year: 2022, end_year: 2026, format: "%Y-%m-%d" } },
             { id: "col_9", name: "회원등급", type: "choices", options: { choices: "VIP, GOLD, SILVER, BRONZE, 일반" } },
-            { id: "col_10", name: "적립포인트", type: "number", options: { min: 500, max: 80000, step: 500 } }
+            { id: "col_10", name: "등급코드", type: "key_value", options: { target_column: "회원등급", output_part: "value", mapping: "VIP:LV5, GOLD:LV4, SILVER:LV3, BRONZE:LV2, 일반:LV1" } },
+            { id: "col_11", name: "적립포인트", type: "number", options: { min: 500, max: 80000, step: 500 } }
         ]
     },
     partner: {
@@ -55,7 +59,8 @@ const MOCK_PRESETS = {
             { id: "col_6", name: "담당자명", type: "name", options: { gender: "any" } },
             { id: "col_7", name: "담당자이메일", type: "email", options: { domains: "partner.co.kr, vendor.com" } },
             { id: "col_8", name: "대표연락처", type: "phone", options: { format: "02-XXX-XXXX" } },
-            { id: "col_9", name: "거래상태", type: "choices", options: { choices: "정상거래, 신규계약, 심사중, 거래보류" } }
+            { id: "col_9", name: "거래상태", type: "choices", options: { choices: "정상거래, 신규계약, 심사중, 거래보류" } },
+            { id: "col_10", name: "상태코드", type: "key_value", options: { target_column: "거래상태", output_part: "value", mapping: "정상거래:ACT, 신규계약:NEW, 심사중:REV, 거래보류:HOLD" } }
         ]
     },
     order: {
@@ -69,7 +74,9 @@ const MOCK_PRESETS = {
             { id: "col_5", name: "수량", type: "number", options: { min: 1, max: 4, step: 1 } },
             { id: "col_6", name: "결제금액", type: "number", options: { min: 45000, max: 690000, step: 1000 } },
             { id: "col_7", name: "결제수단", type: "choices", options: { choices: "신용카드, 카카오페이, 네이버페이, 계좌이체, 무통장입금" } },
-            { id: "col_8", name: "배송상태", type: "choices", options: { choices: "결제완료, 배송준비중, 배송중, 배송완료, 구매확정" } }
+            { id: "col_8", name: "결제코드", type: "key_value", options: { target_column: "결제수단", output_part: "value", mapping: "신용카드:CARD, 카카오페이:KPAY, 네이버페이:NPAY, 계좌이체:BANK, 무통장입금:VBANK" } },
+            { id: "col_9", name: "배송상태", type: "choices", options: { choices: "결제완료, 배송준비중, 배송중, 배송완료, 구매확정" } },
+            { id: "col_10", name: "배송코드", type: "key_value", options: { target_column: "배송상태", output_part: "value", mapping: "결제완료:PAID, 배송준비중:PREP, 배송중:SHIP, 배송완료:DONE, 구매확정:CONFIRM" } }
         ]
     }
 };
@@ -78,7 +85,6 @@ const MOCK_PRESETS = {
 // 2. 초기화 및 서브탭 제어
 // ==========================================
 function initMockDataStudio() {
-    // 기본 프리셋(임직원 명부) 로드
     loadMockPreset('employee');
 }
 
@@ -113,11 +119,12 @@ function loadMockPreset(presetKey) {
 
     if (presetKey === 'empty') {
         mockStudioSchema = [
-            { id: `col_${Date.now()}_1`, name: "이름", type: "name", options: { gender: "any" } },
-            { id: `col_${Date.now()}_2`, name: "이메일", type: "email", options: { domains: "cuchen.com" } }
+            { id: `col_${Date.now()}_1`, name: "부서명", type: "choices", options: { choices: "스마트개발팀, 웹서비스팀, AI연구팀, 품질보증팀" } },
+            { id: `col_${Date.now()}_2`, name: "부서코드", type: "key_value", options: { target_column: "부서명", output_part: "value", mapping: "스마트개발팀:DEV, 웹서비스팀:WEB, AI연구팀:AI, 품질보증팀:QA" } },
+            { id: `col_${Date.now()}_3`, name: "이름", type: "name", options: { gender: "any" } },
+            { id: `col_${Date.now()}_4`, name: "이메일", type: "email", options: { domains: "cuchen.com" } }
         ];
     } else if (MOCK_PRESETS[presetKey]) {
-        // 깊은 복사
         mockStudioSchema = JSON.parse(JSON.stringify(MOCK_PRESETS[presetKey].schema));
     }
 
@@ -159,6 +166,7 @@ function renderMockSchemaBuilder() {
                     <select class="mock-col-select" onchange="updateColumnType('${col.id}', this.value)">
                         <option value="name" ${col.type === 'name' ? 'selected' : ''}>👤 한국인 이름</option>
                         <option value="choices" ${col.type === 'choices' ? 'selected' : ''}>🔘 사용자 지정 목록 (문자열 리스트)</option>
+                        <option value="key_value" ${col.type === 'key_value' ? 'selected' : ''}>🔗 연계 키-값 (부서:코드 등 Key-Value 매핑)</option>
                         <option value="email" ${col.type === 'email' ? 'selected' : ''}>📧 이메일 (도메인 지정)</option>
                         <option value="phone" ${col.type === 'phone' ? 'selected' : ''}>📞 전화번호 (010)</option>
                         <option value="date" ${col.type === 'date' ? 'selected' : ''}>📅 날짜/일시</option>
@@ -191,6 +199,43 @@ function renderMockSchemaBuilder() {
 function getColumnTypeOptionsHtml(col) {
     const opts = col.options || {};
     switch (col.type) {
+        case 'key_value': {
+            const otherCols = mockStudioSchema.filter(c => c.id !== col.id);
+            const targetColOptions = otherCols.map(c => 
+                `<option value="${escapeHtmlAttr(c.name)}" ${opts.target_column === c.name ? 'selected' : ''}>${escapeHtml(c.name)}</option>`
+            ).join('');
+
+            return `
+                <div class="mock-opt-kv-block">
+                    <div class="mock-opt-inline" style="margin-bottom: 4px;">
+                        <span class="mock-opt-tag">🔗 참조 컬럼:</span>
+                        <select class="mock-col-select opt-select-sm" style="width: 140px;" onchange="updateColumnOption('${col.id}', 'target_column', this.value)">
+                            <option value="">(자동 랜덤 생성)</option>
+                            ${targetColOptions}
+                        </select>
+                        <span class="mock-opt-tag" style="margin-left: 6px;">출력 형태:</span>
+                        <select class="mock-col-select opt-select-sm" style="width: 100px;" onchange="updateColumnOption('${col.id}', 'output_part', this.value)">
+                            <option value="value" ${opts.output_part !== 'key' ? 'selected' : ''}>값 (Value)</option>
+                            <option value="key" ${opts.output_part === 'key' ? 'selected' : ''}>키 (Key)</option>
+                        </select>
+                    </div>
+                    <div class="mock-opt-inline">
+                        <span class="mock-opt-tag">키:값 매핑:</span>
+                        <input type="text" class="mock-col-input opt-input" value="${escapeHtml(opts.mapping || '')}" 
+                               placeholder="예: 스마트개발팀:DEV, 웹서비스팀:WEB, AI연구팀:AI, 인사팀:HR"
+                               oninput="updateColumnOption('${col.id}', 'mapping', this.value)">
+                    </div>
+                    <div class="mock-opt-presets-row" style="margin-top: 3px;">
+                        <span class="mock-opt-hint" style="margin-right: 4px;">프리셋:</span>
+                        <button type="button" class="mock-kv-preset-btn" onclick="applyKvPreset('${col.id}', 'dept')">부서:코드</button>
+                        <button type="button" class="mock-kv-preset-btn" onclick="applyKvPreset('${col.id}', 'position')">직급:코드</button>
+                        <button type="button" class="mock-kv-preset-btn" onclick="applyKvPreset('${col.id}', 'region')">지역:지역번호</button>
+                        <button type="button" class="mock-kv-preset-btn" onclick="applyKvPreset('${col.id}', 'bank')">은행:코드</button>
+                        <button type="button" class="mock-kv-preset-btn" onclick="applyKvPreset('${col.id}', 'pay')">결제:코드</button>
+                    </div>
+                </div>
+            `;
+        }
         case 'email':
             return `
                 <div class="mock-opt-inline">
@@ -267,6 +312,43 @@ function getColumnTypeOptionsHtml(col) {
     }
 }
 
+// 키-값 프리셋 적용
+function applyKvPreset(colId, presetKey) {
+    const col = mockStudioSchema.find(c => c.id === colId);
+    if (!col) return;
+    if (!col.options) col.options = {};
+
+    if (presetKey === 'dept') {
+        col.name = "부서코드";
+        col.options.target_column = "부서명";
+        col.options.output_part = "value";
+        col.options.mapping = "스마트개발팀:DEV, 웹서비스팀:WEB, AI연구팀:AI, 품질보증팀:QA, 경영기획팀:MGT, 인사총무팀:HR, 영업마케팅팀:SAL";
+    } else if (presetKey === 'position') {
+        col.name = "직급코드";
+        col.options.target_column = "직급";
+        col.options.output_part = "value";
+        col.options.mapping = "사원:J1, 주임:J2, 선임연구원:S1, 책임연구원:S2, 수석연구원:P1, 팀장:L1";
+    } else if (presetKey === 'region') {
+        col.name = "지역코드";
+        col.options.target_column = "거주지주소";
+        col.options.output_part = "value";
+        col.options.mapping = "서울특별시:02, 경기도:031, 인천광역시:032, 부산광역시:051, 대구광역시:053, 대전광역시:042";
+    } else if (presetKey === 'bank') {
+        col.name = "은행코드";
+        col.options.target_column = "은행명";
+        col.options.output_part = "value";
+        col.options.mapping = "국민은행:004, 신한은행:088, 우리은행:020, 하나은행:081, 농협은행:011, 카카오뱅크:090";
+    } else if (presetKey === 'pay') {
+        col.name = "결제코드";
+        col.options.target_column = "결제수단";
+        col.options.output_part = "value";
+        col.options.mapping = "신용카드:CARD, 카카오페이:KPAY, 네이버페이:NPAY, 계좌이체:BANK, 무통장입금:VBANK";
+    }
+
+    renderMockSchemaBuilder();
+    triggerMockPreview();
+}
+
 // ==========================================
 // 4. 컬럼 추가/삭제/변경 이벤트
 // ==========================================
@@ -302,6 +384,7 @@ function updateColumnName(colId, newName) {
     const col = mockStudioSchema.find(c => c.id === colId);
     if (col) {
         col.name = newName;
+        // 다른 컬럼들이 이 컬럼을 참조하고 있을 수 있으므로 참조 컬럼 select 갱신
         debouncedMockPreview();
     }
 }
@@ -310,8 +393,15 @@ function updateColumnType(colId, newType) {
     const col = mockStudioSchema.find(c => c.id === colId);
     if (col) {
         col.type = newType;
-        // 타입 변경 시 기본 옵션 자동 설정
-        if (newType === 'email' && !col.options?.domains) {
+        if (newType === 'key_value') {
+            if (!col.options?.mapping) {
+                col.options = {
+                    target_column: "",
+                    output_part: "value",
+                    mapping: "스마트개발팀:DEV, 웹서비스팀:WEB, AI연구팀:AI, 품질보증팀:QA, 경영지원팀:MGT"
+                };
+            }
+        } else if (newType === 'email' && !col.options?.domains) {
             col.options = { domains: "cuchen.com" };
         } else if (newType === 'choices' && !col.options?.choices) {
             col.options = { choices: "스마트개발팀, 웹서비스팀, AI연구팀, 품질보증팀, 경영지원팀" };

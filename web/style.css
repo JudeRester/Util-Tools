@@ -5688,6 +5688,43 @@ body {
     width: 65px;
 }
 
+.opt-select-sm {
+    height: 28px;
+    padding: 2px 6px;
+    font-size: 0.78rem;
+}
+
+.mock-opt-kv-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+}
+
+.mock-opt-presets-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.mock-kv-preset-btn {
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #1e2538;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mock-kv-preset-btn:hover {
+    background: #2a344e;
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.4);
+}
+
 .mock-opt-hint {
     font-size: 0.76rem;
     color: #64748b;

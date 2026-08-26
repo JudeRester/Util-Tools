@@ -143,9 +143,50 @@ def _generate_address(city_filter=None):
     return f"{city} {dist} {bldg_num} ({room_num})"
 
 
+def _parse_kv_mapping(mapping_str):
+    """'키:값, 키2:값2' 문자열을 딕셔너리로 파싱"""
+    mapping = {}
+    if not mapping_str:
+        return mapping
+    pairs = [p.strip() for p in mapping_str.replace('\n', ',').split(',') if p.strip()]
+    for p in pairs:
+        if ':' in p:
+            k, v = p.split(':', 1)
+            mapping[k.strip()] = v.strip()
+        elif '=' in p:
+            k, v = p.split('=', 1)
+            mapping[k.strip()] = v.strip()
+        elif '->' in p:
+            k, v = p.split('->', 1)
+            mapping[k.strip()] = v.strip()
+    return mapping
+
+
+def _lookup_kv(mapping, source_val, fallback=""):
+    """키-값 매핑에서 정방향(Key->Val) 및 역방향(Val->Key) 검색"""
+    if not mapping:
+        return fallback
+    if not source_val:
+        return random.choice(list(mapping.values())) if mapping else fallback
+    s_val = str(source_val).strip()
+    # 1. 정방향 일치
+    if s_val in mapping:
+        return mapping[s_val]
+    # 2. 역방향 일치
+    for k, v in mapping.items():
+        if v == s_val:
+            return k
+    # 3. 대소문자 무시 일치
+    for k, v in mapping.items():
+        if k.lower() == s_val.lower():
+            return v
+    return fallback or random.choice(list(mapping.values())) if mapping else s_val
+
+
 def generate_mock_rows(schema, count=50):
     """
     사용자가 정의한 스키마에 따라 모의 데이터 행(Row) 생성
+    - 부서:부서코드, 직급:직급코드 등 연계 키-값(Key-Value) 매핑 지원
     """
     count = max(1, min(int(count), 50000))
     rows = []
@@ -153,12 +194,18 @@ def generate_mock_rows(schema, count=50):
     for row_idx in range(count):
         row = {}
         cached_name = None
+        deferred_kv_cols = []
 
+        # 1차 패스: 기본 독립 컬럼 생성
         for col in schema:
             col_id = col.get("id", f"col_{random.randint(100, 999)}")
             col_name = col.get("name", "컬럼")
             col_type = col.get("type", "text")
             opts = col.get("options", {})
+
+            if col_type in ("key_value", "linked_map"):
+                deferred_kv_cols.append(col)
+                continue
 
             val = ""
             if col_type == "name":
@@ -208,6 +255,30 @@ def generate_mock_rows(schema, count=50):
                 val = f"데이터_{row_idx + 1}"
 
             row[col_name] = val
+
+        # 2차 패스: 참조 대상 컬럼의 값을 기반으로 연계 키-값(Key-Value) 매핑 생성
+        for col in deferred_kv_cols:
+            col_name = col.get("name", "연계컬럼")
+            opts = col.get("options", {})
+            mapping = _parse_kv_mapping(opts.get("mapping", ""))
+            target_col = opts.get("target_column", "")
+            output_part = opts.get("output_part", "value")  # "value" or "key"
+
+            source_val = row.get(target_col, "") if target_col else ""
+            if source_val and mapping:
+                val = _lookup_kv(mapping, source_val)
+            elif mapping:
+                # 참조 컬럼이 비어있거나 매핑이 없으면 랜덤 키/값 선택
+                pair = random.choice(list(mapping.items()))
+                val = pair[0] if output_part == "key" else pair[1]
+                # 참조 컬럼이 정의되어 있고 아직 행에 없다면 동기화
+                if target_col and target_col not in row:
+                    row[target_col] = pair[1] if output_part == "key" else pair[0]
+            else:
+                val = f"KV_{row_idx + 1}"
+
+            row[col_name] = val
+
         rows.append(row)
 
     return rows
