@@ -236,13 +236,13 @@ async function navigateToAiSearchResult(item) {
         if (typeof selectNote === 'function') {
             selectNote(item.action_data.note_id);
         }
-        showAppAlert(`'${item.title}' 메모로 이동했습니다. 📝`, '이동 완료', '✅');
+        logToConsole('AI 검색 이동', `'${item.title}' 메모로 이동`);
     } else if (item.category === 'emails' && item.action_data?.email_id) {
         // 해당 이메일 선택 및 열람
         if (typeof openEmailFromAiSearch === 'function') {
             openEmailFromAiSearch(item.action_data.email_id);
         }
-        showAppAlert(`'${item.title}' 이메일로 이동했습니다. 📧`, '이동 완료', '✅');
+        logToConsole('AI 검색 이동', `'${item.title}' 이메일로 이동`);
     } else if (item.category === 'diagrams' && item.action_data?.code) {
         // 다이어그램 에디터에 로드
         const editor = document.getElementById('mermaid-code-editor');
@@ -250,9 +250,9 @@ async function navigateToAiSearchResult(item) {
             editor.value = item.action_data.code;
             if (typeof renderMermaid === 'function') renderMermaid(true);
         }
-        showAppAlert(`'${item.title}' 다이어그램을 에디터에 불러왔습니다! 📊`, '불러오기 완료', '✅');
+        logToConsole('AI 검색 이동', `'${item.title}' 다이어그램 로드`);
     } else {
-        showAppAlert(`[${item.category_label}] '${item.title}' 항목으로 이동했습니다.`, '이동 완료', '✅');
+        logToConsole('AI 검색 이동', `[${item.category_label}] '${item.title}' 항목으로 이동`);
     }
 }
 
