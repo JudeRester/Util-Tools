@@ -488,7 +488,7 @@ async function renderSingleEmailDetail(summary) {
                 const res = await eel.get_email_detail(summary.id)();
                 if (res.success && res.email) {
                     email = res.email;
-                    emailState.detailCache[summary.id] = email;
+                    cacheEmailDetail(summary.id, email);
                 }
             }
         } catch (e) {
@@ -836,7 +836,7 @@ async function fetchAndRenderThreadCardBody(emailId) {
                 const res = await eel.get_email_detail(emailId)();
                 if (res.success && res.email) {
                     email = res.email;
-                    emailState.detailCache[emailId] = email;
+                    cacheEmailDetail(emailId, email);
                 }
             }
         } catch (e) {
@@ -1373,4 +1373,40 @@ function escapeHtmlAttr(str) {
     return String(str)
         .replace(/&/g, '&amp;')
         .replace(/"/g, '&quot;');
+}
+
+// ==========================================
+// 12. 메모리 최적화: LRU 캐시 및 탭 이탈 정리
+// ==========================================
+function cacheEmailDetail(emailId, detailObj) {
+    if (!emailId || !detailObj) return;
+    emailState.detailCache[emailId] = detailObj;
+
+    // LRU 캐시: 최대 10개만 메모리에 유지하고 오래된 본문 해제
+    const keys = Object.keys(emailState.detailCache);
+    if (keys.length > 10) {
+        const removeCount = keys.length - 10;
+        for (let i = 0; i < removeCount; i++) {
+            if (keys[i] !== emailState.selectedEmailId) {
+                delete emailState.detailCache[keys[i]];
+            }
+        }
+    }
+}
+
+function teardownEmailViewer() {
+    // 탭을 벗어날 때 iframe 본문 및 오래된 캐시 정리
+    const iframes = document.querySelectorAll('.email-html-iframe, .thread-body-html-frame');
+    iframes.forEach(f => {
+        try {
+            f.srcdoc = '';
+        } catch (e) {}
+    });
+    // 현재 열람 중인 메일 1개만 남기고 캐시 비우기
+    const selId = emailState.selectedEmailId;
+    if (selId && emailState.detailCache[selId]) {
+        emailState.detailCache = { [selId]: emailState.detailCache[selId] };
+    } else {
+        emailState.detailCache = {};
+    }
 }

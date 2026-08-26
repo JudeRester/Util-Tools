@@ -864,3 +864,23 @@ function clearDiagramSearch() {
     if (input) input.focus();
 }
 
+// ==========================================
+// 8. 탭 이탈 시 메모리 해제(GC) & 복귀 시 재개
+// ==========================================
+function teardownMermaidDiagram() {
+    // 탭을 벗어날 때 무거운 D3 SVG 및 임시 렌더링 노드를 비워 메모리 즉시 반환
+    const previewContainer = document.getElementById('mermaid-preview-container');
+    if (previewContainer) {
+        previewContainer.innerHTML = '';
+    }
+    document.querySelectorAll('[id^="dmermaid-svg-"]').forEach(el => el.remove());
+}
+
+function resumeMermaidDiagram() {
+    // 탭으로 복귀 시 에디터에 적힌 코드로 즉시 가볍게 재렌더링
+    const previewContainer = document.getElementById('mermaid-preview-container');
+    if (previewContainer && (!previewContainer.innerHTML || previewContainer.innerHTML.trim() === '')) {
+        renderMermaid(true);
+    }
+}
+

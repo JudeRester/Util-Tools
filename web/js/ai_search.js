@@ -16,6 +16,11 @@ function openAiSearchModal(initialQuery = '') {
     modal.classList.add('show');
     switchAiSubTab('search');
 
+    // 모달을 열었을 때 비동기로 AI 엔진 준비 (온디맨드)
+    if (window.eel && typeof eel.warmup_ai_engine_async === 'function') {
+        eel.warmup_ai_engine_async()().catch(() => {});
+    }
+
     const input = document.getElementById('ai-search-input');
     if (input) {
         if (initialQuery) {

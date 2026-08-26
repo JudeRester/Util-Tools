@@ -127,10 +127,12 @@ def _init_ai_engine():
                 # 고정 512 패딩 대신 동적 패딩 설정 (no fixed length padding)
                 _tokenizer.no_padding()
 
-                # CPU 고속 추론 세션 생성
+                # CPU 고속 & 초경량 메모리 추론 세션 생성 (메모리 풀 독점 방지)
                 opts = ort.SessionOptions()
                 opts.intra_op_num_threads = 2
                 opts.inter_op_num_threads = 1
+                opts.enable_cpu_mem_arena = False  # ONNX 메모리 아레나 풀 독점 방지 (RAM 반환)
+                opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
                 opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
                 _onnx_session = ort.InferenceSession(
@@ -140,7 +142,7 @@ def _init_ai_engine():
                 )
                 _is_model_ready = True
                 _load_disk_cache()
-                _safe_log("[AI Engine] multilingual-e5-small ONNX 딥러닝 엔진 & 벡터 캐시가 준비되었습니다.")
+                _safe_log("[AI Engine] multilingual-e5-small ONNX 초경량 엔진 & 벡터 캐시가 준비되었습니다.")
                 return True
         except Exception as e:
             _safe_log(f"[AI Engine] ONNX 모델 로드 실패 (하이브리드 규칙 엔진으로 폴백): {e}")
@@ -580,13 +582,15 @@ def ai_compare_similarity(text1, text2):
         return {"status": "error", "message": str(e)}
 
 
-# 백그라운드 사전 워밍업 스레드 시작
-def _warmup_background():
-    try:
-        _init_ai_engine()
-        items = _get_all_system_items('all')
-        _sync_document_embeddings(items)
-    except Exception:
-        pass
-
-threading.Thread(target=_warmup_background, daemon=True).start()
+@eel.expose
+def warmup_ai_engine_async():
+    """AI 스마트 검색 모달 진입 시 백그라운드에서 조용히 엔진 준비"""
+    def _warmup():
+        try:
+            _init_ai_engine()
+            items = _get_all_system_items('all')
+            _sync_document_embeddings(items)
+        except Exception:
+            pass
+    threading.Thread(target=_warmup, daemon=True).start()
+    return {"status": "started"}

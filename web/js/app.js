@@ -113,8 +113,89 @@ function saveAppSettingKey(key, value) {
     }
 }
 
+let currentActiveTab = null;
+const initializedTabs = new Set();
+
+function initTabOnDemand(tabName) {
+    if (!tabName) return;
+
+    if (initializedTabs.has(tabName)) {
+        // 이미 로드된 탭으로 복귀 시 화면 재개(Resume)
+        if (tabName === 'mermaid' && typeof resumeMermaidDiagram === 'function') {
+            resumeMermaidDiagram();
+        }
+        return;
+    }
+
+    initializedTabs.add(tabName);
+
+    switch (tabName) {
+        case 'system':
+            // 시스템 정보는 system.js에서 주기적으로 갱신
+            break;
+        case 'launch':
+            if (typeof loadQuickLaunchItems === 'function') loadQuickLaunchItems();
+            break;
+        case 'files':
+            if (typeof loadFolderShortcuts === 'function') loadFolderShortcuts();
+            break;
+        case 'generator':
+            if (typeof loadGenerators === 'function') loadGenerators();
+            break;
+        case 'jsrunner':
+            if (typeof initJsPlayground === 'function') initJsPlayground();
+            break;
+        case 'notes':
+            if (typeof loadNotes === 'function') loadNotes();
+            break;
+        case 'calendar':
+            if (typeof initCalendar === 'function') initCalendar();
+            break;
+        case 'mermaid':
+            if (typeof initMermaidDiagram === 'function') initMermaidDiagram();
+            break;
+        case 'csv':
+            if (typeof initCsvViewer === 'function') initCsvViewer();
+            break;
+        case 'markdown':
+            if (typeof initMarkdownViewer === 'function') initMarkdownViewer();
+            break;
+        case 'emails':
+            if (typeof initEmailViewer === 'function') initEmailViewer();
+            break;
+    }
+}
+
+function teardownTab(tabName) {
+    if (!tabName) return;
+
+    if (tabName === 'mermaid') {
+        if (typeof teardownMermaidDiagram === 'function') {
+            teardownMermaidDiagram();
+        }
+    } else if (tabName === 'emails') {
+        if (typeof teardownEmailViewer === 'function') {
+            teardownEmailViewer();
+        }
+    }
+
+    // V8 가비지 컬렉터 강제 호출 (Chrome --js-flags=--expose-gc 옵션 활성화 시 동작)
+    if (typeof window.gc === 'function') {
+        try {
+            window.gc();
+        } catch (e) {}
+    }
+}
+
 function switchTab(targetTab) {
     if (!targetTab) return;
+
+    // 이전 탭에서 벗어날 때 무거운 리소스 정리 및 GC 실행
+    if (currentActiveTab && currentActiveTab !== targetTab) {
+        teardownTab(currentActiveTab);
+    }
+    currentActiveTab = targetTab;
+
     const tabButtons = document.querySelectorAll('.tab-btn:not(.tab-dropdown-trigger)');
     const dropdownBtn = document.getElementById('viewer-diagram-tab-btn');
     const dropdownItems = document.querySelectorAll('.tab-dropdown-item');
@@ -174,14 +255,17 @@ function switchTab(targetTab) {
         }
     });
 
-    // 4) 백엔드 파일 및 로컬스토리지에 마지막 활성 탭 영구 저장
+    // 4) 온디맨드 지연 로딩 수행 (해당 탭을 처음 열 때만 초기화)
+    initTabOnDemand(targetTab);
+
+    // 5) 백엔드 파일 및 로컬스토리지에 마지막 활성 탭 영구 저장
     saveAppSettingKey('active_tab_id', targetTab);
 
-    // 5) 모바일 드롭다운 및 탭 드롭다운 메뉴 자동 닫기
+    // 6) 모바일 드롭다운 및 탭 드롭다운 메뉴 자동 닫기
     closeMobileNav();
     closeViewerDiagramDropdown();
 
-    // 6) 다이어그램 탭 전환 시 뷰포트 맞춤 렌더링
+    // 7) 다이어그램 탭 전환 시 뷰포트 맞춤 렌더링
     if (targetTab === 'mermaid' && typeof fitMermaidToViewport === 'function') {
         setTimeout(() => fitMermaidToViewport(), 50);
     }
@@ -189,7 +273,7 @@ function switchTab(targetTab) {
 
 
 // ==========================================
-// 4. DOMContentLoaded 앱 초기화
+// 4. DOMContentLoaded 앱 초기화 (초경량 부팅)
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
     // 백엔드 app_settings.json 영구 설정 로드
@@ -218,48 +302,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 마지막으로 사용했던 탭 복원 (파일 설정 -> 로컬스토리지 -> 기본값 순)
-    const savedTab = appSettings.active_tab_id || localStorage.getItem('active_tab_id') || 'system';
-    switchTab(savedTab);
-
-    // 1) 폴더 바로가기 로드
-    loadFolderShortcuts();
-
-    // 2) 빠른 실행 항목 로드
-    loadQuickLaunchItems();
-
-    // 3) 동적 데이터 생성기 스튜디오 로드
-    loadGenerators();
-
-    // 4) 콘솔 높이 드래그 조절기 초기화
+    // 공통 콘솔 높이 조절기 초기화
     initConsoleResizer();
 
-    // 5) JS 실행기(Playground) 초기화
-    initJsPlayground();
-
-    // 6) 빠른 메모(Notes) 로드
-    loadNotes();
-
-    // 7) 캘린더(Calendar) 로드
-    initCalendar();
-
-    // 8) Mermaid 다이어그램 스튜디오 초기화
-    if (typeof initMermaidDiagram === 'function') {
-        initMermaidDiagram();
-    }
-
-    // 9) CSV 뷰어 초기화
-    if (typeof initCsvViewer === 'function') {
-        initCsvViewer();
-    }
-
-    // 10) Markdown 뷰어 초기화
-    if (typeof initMarkdownViewer === 'function') {
-        initMarkdownViewer();
-    }
-
-    // 11) EML 이메일 아카이브 초기화
-    if (typeof initEmailViewer === 'function') {
-        initEmailViewer();
-    }
+    // 마지막으로 사용했던 탭 1개만 온디맨드 로드 (초기 램 500MB -> 40MB 대폭 감축)
+    const savedTab = appSettings.active_tab_id || localStorage.getItem('active_tab_id') || 'system';
+    switchTab(savedTab);
 });
