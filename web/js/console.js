@@ -85,16 +85,26 @@ function showToast(title, content) {
 
     startTimer();
 
-    container.appendChild(toast);
-
-    // 최대 3개까지만 유지 (화면 가림 방지)
+    // 최대 3개까지만 유지 (화면 가림 방지 및 초과분 즉시 DOM 제거)
     while (container.children.length > 3) {
-        removeToast(container.firstElementChild);
+        const first = container.firstElementChild;
+        if (first) {
+            container.removeChild(first);
+        } else {
+            break;
+        }
     }
 }
 
-function removeToast(toast) {
-    if (!toast || toast.classList.contains('hide')) return;
+function removeToast(toast, immediate = false) {
+    if (!toast) return;
+    if (immediate) {
+        if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+        return;
+    }
+    if (toast.classList.contains('hide')) return;
     toast.classList.add('hide');
     setTimeout(() => {
         if (toast && toast.parentNode) {

@@ -184,6 +184,7 @@ function loadCustomTemplate(tplId) {
     const tpl = customMockTemplates.find(t => t.id === tplId);
     if (!tpl || !tpl.schema) return;
 
+    const isAlreadyActive = activeCustomTemplateId === tplId;
     activeCustomTemplateId = tplId;
     document.querySelectorAll('.mock-preset-chip:not(.custom)').forEach(chip => {
         chip.classList.remove('active');
@@ -194,7 +195,9 @@ function loadCustomTemplate(tplId) {
     renderMockSchemaBuilder();
     triggerMockPreview();
 
-    showAppToast(`"${tpl.title}" 커스텀 템플릿을 불러왔습니다! 📋`, "success");
+    if (!isAlreadyActive) {
+        showAppToast(`"${tpl.title}" 커스텀 템플릿을 불러왔습니다! 📋`, "success");
+    }
 }
 
 function openSaveTemplateModal() {
