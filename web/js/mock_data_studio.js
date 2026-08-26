@@ -173,6 +173,7 @@ function renderCustomPresetChips() {
                         onclick="loadCustomTemplate('${tpl.id}')" title="${escapeHtml(tpl.description || tpl.title)}">
                     <span class="custom-chip-icon">${icon}</span>
                     <span class="custom-chip-title">${escapeHtml(tpl.title)}</span>
+                    <span class="custom-chip-edit" onclick="event.stopPropagation(); openEditTemplateModal('${tpl.id}')" title="양식 및 템플릿 정보 수정">✏️</span>
                     <span class="custom-chip-del" onclick="event.stopPropagation(); deleteCustomTemplate('${tpl.id}', '${escapeHtmlAttr(tpl.title)}')" title="템플릿 삭제">&times;</span>
                 </button>
             </div>
@@ -200,7 +201,14 @@ function loadCustomTemplate(tplId) {
     }
 }
 
-function openSaveTemplateModal() {
+function openEditTemplateModal(tplId) {
+    const tpl = customMockTemplates.find(t => t.id === tplId);
+    if (!tpl) return;
+    loadCustomTemplate(tplId);
+    openSaveTemplateModal('update', tplId);
+}
+
+function openSaveTemplateModal(forceMode = null, targetTplId = null) {
     if (mockStudioSchema.length === 0) {
         showAppAlert("저장할 컬럼이 최소 1개 이상 필요합니다.", "알림", "⚠️");
         return;
@@ -209,10 +217,43 @@ function openSaveTemplateModal() {
     const modal = document.getElementById('modal-save-mock-template');
     const titleInput = document.getElementById('mock-tpl-title-input');
     const descInput = document.getElementById('mock-tpl-desc-input');
+    const idInput = document.getElementById('mock-tpl-id-input');
+    const modeSelector = document.getElementById('mock-tpl-mode-selector');
+    const modalTitle = document.getElementById('mock-tpl-modal-title');
+    const submitBtn = document.getElementById('mock-tpl-submit-btn');
     const summaryEl = document.getElementById('mock-tpl-save-summary');
 
-    if (titleInput) titleInput.value = '';
-    if (descInput) descInput.value = '';
+    const effectiveTplId = targetTplId || activeCustomTemplateId;
+    const activeTpl = effectiveTplId ? customMockTemplates.find(t => t.id === effectiveTplId) : null;
+    const isUpdateMode = forceMode === 'update' || (activeTpl && forceMode !== 'new');
+
+    if (isUpdateMode && activeTpl) {
+        if (idInput) idInput.value = activeTpl.id;
+        if (titleInput) titleInput.value = activeTpl.title || '';
+        if (descInput) descInput.value = activeTpl.description || '';
+
+        // 해당 아이콘 라디오 체크
+        const iconRadio = document.querySelector(`input[name="mock-tpl-icon"][value="${activeTpl.icon || '⭐'}"]`);
+        if (iconRadio) iconRadio.checked = true;
+
+        if (modeSelector) modeSelector.style.display = 'flex';
+        const updateRadio = document.querySelector('input[name="mock-save-mode"][value="update"]');
+        if (updateRadio) updateRadio.checked = true;
+
+        if (modalTitle) modalTitle.textContent = `커스텀 템플릿 수정 (${activeTpl.title})`;
+        if (submitBtn) submitBtn.innerHTML = `<span>✏️</span> 수정 저장하기`;
+    } else {
+        if (idInput) idInput.value = '';
+        if (titleInput) titleInput.value = '';
+        if (descInput) descInput.value = '';
+
+        const defIconRadio = document.querySelector('input[name="mock-tpl-icon"][value="⭐"]');
+        if (defIconRadio) defIconRadio.checked = true;
+
+        if (modeSelector) modeSelector.style.display = 'none';
+        if (modalTitle) modalTitle.textContent = '새 커스텀 템플릿 저장';
+        if (submitBtn) submitBtn.innerHTML = `<span>💾</span> 저장하기`;
+    }
 
     if (summaryEl) {
         const colNames = mockStudioSchema.map(c => c.name).join(', ');
@@ -228,6 +269,19 @@ function openSaveTemplateModal() {
     }
 }
 
+function toggleMockSaveMode(mode) {
+    const idInput = document.getElementById('mock-tpl-id-input');
+    const submitBtn = document.getElementById('mock-tpl-submit-btn');
+
+    if (mode === 'update') {
+        if (idInput) idInput.value = activeCustomTemplateId || '';
+        if (submitBtn) submitBtn.innerHTML = `<span>✏️</span> 수정 저장하기`;
+    } else {
+        if (idInput) idInput.value = '';
+        if (submitBtn) submitBtn.innerHTML = `<span>➕</span> 새로운 템플릿으로 저장`;
+    }
+}
+
 function closeSaveTemplateModal() {
     const modal = document.getElementById('modal-save-mock-template');
     if (modal) modal.style.display = 'none';
@@ -236,10 +290,13 @@ function closeSaveTemplateModal() {
 async function submitSaveTemplate() {
     const titleInput = document.getElementById('mock-tpl-title-input');
     const descInput = document.getElementById('mock-tpl-desc-input');
+    const idInput = document.getElementById('mock-tpl-id-input');
     const selectedIcon = document.querySelector('input[name="mock-tpl-icon"]:checked')?.value || '⭐';
+    const saveMode = document.querySelector('input[name="mock-save-mode"]:checked')?.value || 'update';
 
     const title = titleInput?.value?.trim();
     const desc = descInput?.value?.trim() || '';
+    const templateId = (saveMode === 'update' && idInput?.value) ? idInput.value : null;
 
     if (!title) {
         showAppAlert("템플릿 이름을 입력해주세요.", "알림", "⚠️");
@@ -249,14 +306,16 @@ async function submitSaveTemplate() {
 
     try {
         if (window.eel && typeof eel.save_custom_mock_template === 'function') {
-            const res = await eel.save_custom_mock_template(title, desc, mockStudioSchema, null, selectedIcon)();
+            const res = await eel.save_custom_mock_template(title, desc, mockStudioSchema, templateId, selectedIcon)();
             if (res.status === 'success') {
                 closeSaveTemplateModal();
                 await loadCustomMockTemplates();
-                if (res.template_id) {
-                    loadCustomTemplate(res.template_id);
+                const targetId = templateId || res.template_id;
+                if (targetId) {
+                    loadCustomTemplate(targetId);
                 }
-                showAppToast(`"${title}" 템플릿이 성공적으로 저장되었습니다! 💾`, "success");
+                const msg = templateId ? `"${title}" 템플릿이 성공적으로 수정되었습니다! ✏️` : `"${title}" 템플릿이 성공적으로 저장되었습니다! 💾`;
+                showAppToast(msg, "success");
             } else {
                 showAppAlert(`저장 실패: ${res.message}`, "오류", "❌");
             }

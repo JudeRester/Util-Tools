@@ -1487,12 +1487,26 @@
         <div class="modal-card" style="max-width: 460px;">
             <div class="modal-header">
                 <div class="modal-title-wrap">
-                    <span class="modal-icon">💾</span>
-                    <h3 class="modal-title">커스텀 템플릿 양식 저장</h3>
+                    <span class="modal-icon" id="mock-tpl-modal-icon">💾</span>
+                    <h3 class="modal-title" id="mock-tpl-modal-title">커스텀 템플릿 양식 저장 / 수정</h3>
                 </div>
                 <button type="button" class="modal-close-btn" onclick="closeSaveTemplateModal()">&times;</button>
             </div>
             <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 16px 20px;">
+                <input type="hidden" id="mock-tpl-id-input" value="">
+                
+                <!-- 저장 방식 선택 (수정 모드일 때만 표시) -->
+                <div class="mock-tpl-mode-selector" id="mock-tpl-mode-selector" style="display: none;">
+                    <label class="mock-mode-radio">
+                        <input type="radio" name="mock-save-mode" value="update" checked onchange="toggleMockSaveMode(this.value)">
+                        <span>✏️ 현재 템플릿에 덮어쓰기 (수정)</span>
+                    </label>
+                    <label class="mock-mode-radio">
+                        <input type="radio" name="mock-save-mode" value="new" onchange="toggleMockSaveMode(this.value)">
+                        <span>➕ 새로운 템플릿으로 추가 저장</span>
+                    </label>
+                </div>
+
                 <div class="form-group">
                     <label class="form-label">템플릿 이름 <span style="color: #ef4444;">*</span></label>
                     <input type="text" id="mock-tpl-title-input" class="form-input" placeholder="예: 연구소 임직원 명부, 제휴사 정산 양식" maxlength="50">
@@ -1520,7 +1534,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="form-btn close-btn" onclick="closeSaveTemplateModal()">취소</button>
-                <button type="button" class="form-btn add-btn" onclick="submitSaveTemplate()">
+                <button type="button" class="form-btn add-btn" id="mock-tpl-submit-btn" onclick="submitSaveTemplate()">
                     <span>💾</span> 저장하기
                 </button>
             </div>
