@@ -172,12 +172,14 @@ def get_emails_chunk(offset=0, limit=300):
             raw_att = em.pop("attachments_json", "[]") or "[]"
             try:
                 att_list = json.loads(raw_att) if isinstance(raw_att, str) else raw_att
-                att_len = len(att_list) if isinstance(att_list, list) else 0
+                if isinstance(att_list, list):
+                    em["attachments"] = [{"filename": a.get("filename", "첨부파일"), "size": a.get("size", ""), "type": a.get("type", "")} for a in att_list]
+                else:
+                    em["attachments"] = []
             except Exception:
-                att_len = 0
+                em["attachments"] = []
             
-            em["attachments"] = [{"name": "attachment"}] * att_len if att_len > 0 else []
-            em["attachment_count"] = att_len
+            em["attachment_count"] = len(em["attachments"])
             if not em.get("clean_subject"):
                 em["clean_subject"] = _clean_subject(em.get("subject", ""))
             if not em.get("thread_key"):
@@ -227,12 +229,14 @@ def get_all_emails_summary():
             raw_att = em.pop("attachments_json", "[]") or "[]"
             try:
                 att_list = json.loads(raw_att) if isinstance(raw_att, str) else raw_att
-                att_len = len(att_list) if isinstance(att_list, list) else 0
+                if isinstance(att_list, list):
+                    em["attachments"] = [{"filename": a.get("filename", "첨부파일"), "size": a.get("size", ""), "type": a.get("type", "")} for a in att_list]
+                else:
+                    em["attachments"] = []
             except Exception:
-                att_len = 0
+                em["attachments"] = []
             
-            em["attachments"] = [{"name": "attachment"}] * att_len if att_len > 0 else []
-            em["attachment_count"] = att_len
+            em["attachment_count"] = len(em["attachments"])
             if not em.get("clean_subject"):
                 em["clean_subject"] = _clean_subject(em.get("subject", ""))
             if not em.get("thread_key"):

@@ -500,6 +500,48 @@ async function renderSingleEmailDetail(summary) {
     renderSingleEmailContent(email);
 }
 
+// 공통 첨부파일 칩 렌더러 (단일 뷰 및 스레드 타임라인 공용)
+function renderEmailAttachmentsBar(email, customStyle = '') {
+    if (!email || !email.attachments || email.attachments.length === 0) return '';
+    const styleAttr = customStyle ? `style="${customStyle}"` : '';
+    const attList = email.attachments;
+    return `
+        <div class="email-attachments-bar" ${styleAttr}>
+            <div class="attach-bar-header">
+                <span class="attach-title">📎 첨부파일 (${attList.length}개)</span>
+                ${attList.length > 1 ? `
+                    <button class="attach-save-all-btn" onclick="event.stopPropagation(); saveAllEmailAttachments('${email.id}')" title="이 메일의 모든 첨부파일을 선택한 폴더에 일괄 저장">
+                        <span>💾</span> 전체 저장
+                    </button>
+                ` : ''}
+            </div>
+            <div class="attach-items-list">
+                ${attList.map((att, idx) => {
+                    const fname = att.filename || att.name || '첨부파일';
+                    const fsize = att.size || '';
+                    return `
+                        <div class="attach-item-chip" title="${escapeHtml(fname)} ${fsize ? '(' + fsize + ')' : ''}" onclick="event.stopPropagation();">
+                            <span class="attach-chip-main" onclick="openEmailAttachment('${email.id}', ${idx}, '${escapeHtmlAttr(fname)}')" title="클릭하여 즉시 열기">
+                                <span class="attach-icon">${getFileIcon(fname)}</span>
+                                <span class="attach-name">${escapeHtml(fname)}</span>
+                                ${fsize ? `<span class="attach-size">(${fsize})</span>` : ''}
+                            </span>
+                            <div class="attach-chip-actions">
+                                <button class="attach-action-btn" onclick="openEmailAttachment('${email.id}', ${idx}, '${escapeHtmlAttr(fname)}')" title="열기">
+                                    👁️ 열기
+                                </button>
+                                <button class="attach-action-btn" onclick="saveEmailAttachment('${email.id}', ${idx}, '${escapeHtmlAttr(fname)}')" title="다른 이름으로 저장">
+                                    💾 저장
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+}
+
 function renderSingleEmailContent(email) {
     const container = document.getElementById('email-detail-container');
     if (!container) return;
@@ -511,40 +553,7 @@ function renderSingleEmailContent(email) {
         .map(c => `<option value="${escapeHtml(c)}" ${c === cat ? 'selected' : ''}>${escapeHtml(c)}</option>`)
         .join('');
 
-    let attachmentsHtml = '';
-    if (hasAttach) {
-        attachmentsHtml = `
-            <div class="email-attachments-bar">
-                <div class="attach-bar-header">
-                    <span class="attach-title">📎 첨부파일 (${email.attachments.length}개)</span>
-                    ${email.attachments.length > 1 ? `
-                        <button class="attach-save-all-btn" onclick="saveAllEmailAttachments('${email.id}')" title="모든 첨부파일을 선택한 폴더에 일괄 다운로드">
-                            <span>💾</span> 전체 저장
-                        </button>
-                    ` : ''}
-                </div>
-                <div class="attach-items-list">
-                    ${email.attachments.map((att, idx) => `
-                        <div class="attach-item-chip" title="${escapeHtml(att.filename)} (${att.size})">
-                            <span class="attach-chip-main" onclick="openEmailAttachment('${email.id}', ${idx}, '${escapeHtmlAttr(att.filename)}')" title="클릭하여 즉시 열기">
-                                <span class="attach-icon">${getFileIcon(att.filename)}</span>
-                                <span class="attach-name">${escapeHtml(att.filename)}</span>
-                                <span class="attach-size">(${att.size})</span>
-                            </span>
-                            <div class="attach-chip-actions">
-                                <button class="attach-action-btn" onclick="openEmailAttachment('${email.id}', ${idx}, '${escapeHtmlAttr(att.filename)}')" title="열기">
-                                    👁️ 열기
-                                </button>
-                                <button class="attach-action-btn" onclick="saveEmailAttachment('${email.id}', ${idx}, '${escapeHtmlAttr(att.filename)}')" title="다른 이름으로 저장">
-                                    💾 저장
-                                </button>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-    }
+    const attachmentsHtml = renderEmailAttachmentsBar(email);
 
     let bodyContentHtml = '';
     if (emailState.viewMode === 'html' && email.body_html) {
@@ -700,37 +709,7 @@ async function renderConversationTimeline(threadObj, threadEmails) {
                 </div>
 
                 <div class="email-thread-card-body">
-                    ${hasAttach ? `
-                        <div class="email-attachments-bar" style="margin-bottom: 8px;">
-                            <div class="attach-bar-header">
-                                <span class="attach-title">📎 첨부 (${cached.attachments.length}개)</span>
-                                ${cached.attachments.length > 1 ? `
-                                    <button class="attach-save-all-btn" onclick="saveAllEmailAttachments('${em.id}')" title="이 메일의 모든 첨부파일 일괄 저장">
-                                        <span>💾</span> 전체 저장
-                                    </button>
-                                ` : ''}
-                            </div>
-                            <div class="attach-items-list">
-                                ${cached.attachments.map((att, idx) => `
-                                    <div class="attach-item-chip" title="${escapeHtml(att.filename)} (${att.size})">
-                                        <span class="attach-chip-main" onclick="openEmailAttachment('${em.id}', ${idx}, '${escapeHtmlAttr(att.filename)}')" title="클릭하여 즉시 열기">
-                                            <span class="attach-icon">${getFileIcon(att.filename)}</span>
-                                            <span class="attach-name">${escapeHtml(att.filename)}</span>
-                                            <span class="attach-size">(${att.size})</span>
-                                        </span>
-                                        <div class="attach-chip-actions">
-                                            <button class="attach-action-btn" onclick="openEmailAttachment('${em.id}', ${idx}, '${escapeHtmlAttr(att.filename)}')" title="열기">
-                                                👁️ 열기
-                                            </button>
-                                            <button class="attach-action-btn" onclick="saveEmailAttachment('${em.id}', ${idx}, '${escapeHtmlAttr(att.filename)}')" title="다른 이름으로 저장">
-                                                💾 저장
-                                            </button>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
+                    ${renderEmailAttachmentsBar(cached, 'margin-bottom: 8px;')}
                     ${bodyHtml}
                 </div>
             </div>
@@ -871,16 +850,7 @@ async function fetchAndRenderThreadCardBody(emailId) {
     }
 
     bodyContainer.innerHTML = `
-        ${hasAttach ? `
-            <div class="email-attachments-bar" style="margin-bottom: 8px;">
-                <span class="attach-title">📎 첨부 (${email.attachments.length}개):</span>
-                <div class="attach-items-list">
-                    ${email.attachments.map(att => `
-                        <span class="attach-item-chip">📄 ${escapeHtml(att.filename)} (${att.size})</span>
-                    `).join('')}
-                </div>
-            </div>
-        ` : ''}
+        ${renderEmailAttachmentsBar(email, 'margin-bottom: 8px;')}
         ${contentHtml}
     `;
 }
