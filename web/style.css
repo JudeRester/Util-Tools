@@ -5520,6 +5520,123 @@ body {
     font-weight: 600;
 }
 
+.mock-preset-divider {
+    color: rgba(255, 255, 255, 0.15);
+    margin: 0 4px;
+    font-size: 0.8rem;
+}
+
+.mock-custom-presets-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.mock-custom-chip-wrap {
+    display: inline-flex;
+    align-items: center;
+}
+
+.mock-preset-chip.custom {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px 5px 10px;
+    background: #182033;
+    border-color: rgba(234, 179, 8, 0.3);
+    color: #fef08a;
+}
+
+.mock-preset-chip.custom:hover {
+    border-color: #eab308;
+    background: #242f4c;
+}
+
+.mock-preset-chip.custom.active {
+    background: rgba(234, 179, 8, 0.2);
+    border-color: #eab308;
+    color: #fef08a;
+    box-shadow: 0 0 10px rgba(234, 179, 8, 0.2);
+}
+
+.custom-chip-del {
+    font-size: 0.95rem;
+    line-height: 1;
+    color: #94a3b8;
+    padding: 0 2px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.custom-chip-del:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.2);
+}
+
+.mock-save-tpl-btn {
+    padding: 5px 12px;
+    border-radius: 8px;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px dashed rgba(16, 185, 129, 0.5);
+    color: #34d399;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mock-save-tpl-btn:hover {
+    background: #10b981;
+    color: #ffffff;
+    border-style: solid;
+}
+
+.mock-no-custom-tip {
+    font-size: 0.76rem;
+    color: #64748b;
+    font-style: italic;
+}
+
+.mock-tpl-icon-picker {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 6px 0;
+}
+
+.icon-radio-lbl {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    color: #cbd5e1;
+}
+
+.mock-tpl-save-summary {
+    background: #101422;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mock-summary-count {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #38bdf8;
+}
+
+.mock-summary-names {
+    font-size: 0.76rem;
+    color: #94a3b8;
+    line-height: 1.4;
+}
+
 .mock-builder-card,
 .mock-preview-card {
     background: #151a2b;

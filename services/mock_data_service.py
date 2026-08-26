@@ -4,6 +4,7 @@
 - openpyxl 기반 스타일 서식 엑셀 파일 생성 및 CSV/JSON 내보내기 지원
 """
 import os
+import json
 import random
 import datetime
 import openpyxl
@@ -453,3 +454,84 @@ def save_mock_data_csv_dialog(schema, count=100, default_filename="mock_data.csv
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+# ==========================================
+# 커스텀 템플릿(양식) SQLite 영구 저장 CRUD API
+# ==========================================
+
+@eel.expose
+def get_custom_mock_templates():
+    """저장된 사용자 커스텀 모의 데이터 템플릿 목록 반환"""
+    from services.db_service import get_db_connection
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, title, description, icon, schema_json, created_at, updated_at FROM mock_templates ORDER BY updated_at DESC, created_at DESC")
+        rows = cursor.fetchall()
+        templates = []
+        for r in rows:
+            t = dict(r)
+            try:
+                t["schema"] = json.loads(t.pop("schema_json", "[]"))
+            except Exception:
+                t["schema"] = []
+            templates.append(t)
+        return {"status": "success", "templates": templates}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "templates": []}
+    finally:
+        conn.close()
+
+
+@eel.expose
+def save_custom_mock_template(title, description, schema_list, template_id=None, icon="⭐"):
+    """사용자가 구성한 컬럼 양식을 커스텀 템플릿으로 저장/수정"""
+    import uuid
+    from services.db_service import get_db_connection
+    if not title or not str(title).strip():
+        return {"status": "error", "message": "템플릿 이름을 입력해주세요."}
+
+    now_iso = datetime.datetime.now().isoformat()
+    schema_json = json.dumps(schema_list, ensure_ascii=False)
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        if template_id:
+            cursor.execute("""
+                UPDATE mock_templates 
+                SET title = ?, description = ?, icon = ?, schema_json = ?, updated_at = ?
+                WHERE id = ?
+            """, (str(title).strip(), str(description or '').strip(), str(icon or '⭐'), schema_json, now_iso, template_id))
+            saved_id = template_id
+        else:
+            saved_id = f"tpl_{uuid.uuid4().hex[:10]}"
+            cursor.execute("""
+                INSERT INTO mock_templates (id, title, description, icon, schema_json, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (saved_id, str(title).strip(), str(description or '').strip(), str(icon or '⭐'), schema_json, now_iso, now_iso))
+        conn.commit()
+        return {"status": "success", "template_id": saved_id, "message": "커스텀 템플릿이 성공적으로 저장되었습니다."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+
+
+@eel.expose
+def delete_custom_mock_template(template_id):
+    """저장된 커스텀 템플릿 삭제"""
+    from services.db_service import get_db_connection
+    if not template_id:
+        return {"status": "error", "message": "템플릿 ID가 지정되지 않았습니다."}
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM mock_templates WHERE id = ?", (template_id,))
+        conn.commit()
+        return {"status": "success", "message": "템플릿이 삭제되었습니다."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+

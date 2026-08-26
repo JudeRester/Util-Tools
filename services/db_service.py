@@ -557,6 +557,20 @@ def init_db():
                 """)
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_generators_category ON generators(category);")
 
+                # 7. mock_templates 테이블 (커스텀 모의 데이터 양식)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS mock_templates (
+                        id TEXT PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        description TEXT DEFAULT '',
+                        icon TEXT DEFAULT '📋',
+                        schema_json TEXT NOT NULL,
+                        created_at TEXT,
+                        updated_at TEXT
+                    );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_mock_templates_updated ON mock_templates(updated_at);")
+
             # 1회 자동 마이그레이션 실행
             _migrate_emails_from_json_if_needed(conn)
             _migrate_notes_from_json_if_needed(conn)

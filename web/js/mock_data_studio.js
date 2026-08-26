@@ -2,14 +2,17 @@
  * 엑셀 및 모의 데이터(Mock Data) 대량 생성 스튜디오 모듈
  * - 한국인 이름, 전화번호, 이메일(커스텀 도메인 지정), 사용자 정의 문자열 목록(부서/직급/직책 등)
  * - 연계 키-값(Key-Value) 매핑: 부서:부서코드, 직급:직급코드, 결제수단:결제코드 등 종속 컬럼 완벽 연동
+ * - 커스텀 템플릿 양식 SQLite 영구 저장, 불러오기 및 관리 기능
  * - 실시간 테이블 미리보기, openpyxl 기반 .xlsx 엑셀 다운로드, CSV 내보내기 지원
  */
 
 let mockStudioSchema = [];
 let currentMockPreviewRows = [];
+let customMockTemplates = [];
+let activeCustomTemplateId = null;
 
 // ==========================================
-// 1. 프리셋 템플릿 정의 (연계 키-값 컬럼 포함)
+// 1. 기본 시스템 프리셋 템플릿 정의
 // ==========================================
 const MOCK_PRESETS = {
     employee: {
@@ -84,8 +87,9 @@ const MOCK_PRESETS = {
 // ==========================================
 // 2. 초기화 및 서브탭 제어
 // ==========================================
-function initMockDataStudio() {
+async function initMockDataStudio() {
     loadMockPreset('employee');
+    await loadCustomMockTemplates();
 }
 
 function switchGenSubTab(subTab) {
@@ -111,8 +115,9 @@ function switchGenSubTab(subTab) {
     }
 }
 
-// 프리셋 로드
+// 시스템 기본 프리셋 로드
 function loadMockPreset(presetKey) {
+    activeCustomTemplateId = null;
     document.querySelectorAll('.mock-preset-chip').forEach(chip => {
         chip.classList.toggle('active', chip.getAttribute('data-preset') === presetKey);
     });
@@ -128,12 +133,161 @@ function loadMockPreset(presetKey) {
         mockStudioSchema = JSON.parse(JSON.stringify(MOCK_PRESETS[presetKey].schema));
     }
 
+    renderCustomPresetChips();
     renderMockSchemaBuilder();
     triggerMockPreview();
 }
 
 // ==========================================
-// 3. 스키마(컬럼) 빌더 렌더링
+// 3. 커스텀 템플릿(양식) 로드/저장/삭제
+// ==========================================
+async function loadCustomMockTemplates() {
+    try {
+        if (window.eel && typeof eel.get_custom_mock_templates === 'function') {
+            const res = await eel.get_custom_mock_templates()();
+            if (res.status === 'success') {
+                customMockTemplates = res.templates || [];
+                renderCustomPresetChips();
+            }
+        }
+    } catch (e) {
+        console.error("커스텀 템플릿 목록 로드 실패:", e);
+    }
+}
+
+function renderCustomPresetChips() {
+    const container = document.getElementById('mock-custom-presets-list');
+    if (!container) return;
+
+    if (customMockTemplates.length === 0) {
+        container.innerHTML = `<span class="mock-no-custom-tip">(저장된 커스텀 양식이 없습니다)</span>`;
+        return;
+    }
+
+    container.innerHTML = customMockTemplates.map(tpl => {
+        const isActive = activeCustomTemplateId === tpl.id;
+        const icon = tpl.icon || '⭐';
+        return `
+            <div class="mock-custom-chip-wrap">
+                <button type="button" class="mock-preset-chip custom ${isActive ? 'active' : ''}" 
+                        onclick="loadCustomTemplate('${tpl.id}')" title="${escapeHtml(tpl.description || tpl.title)}">
+                    <span class="custom-chip-icon">${icon}</span>
+                    <span class="custom-chip-title">${escapeHtml(tpl.title)}</span>
+                    <span class="custom-chip-del" onclick="event.stopPropagation(); deleteCustomTemplate('${tpl.id}', '${escapeHtmlAttr(tpl.title)}')" title="템플릿 삭제">&times;</span>
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+function loadCustomTemplate(tplId) {
+    const tpl = customMockTemplates.find(t => t.id === tplId);
+    if (!tpl || !tpl.schema) return;
+
+    activeCustomTemplateId = tplId;
+    document.querySelectorAll('.mock-preset-chip:not(.custom)').forEach(chip => {
+        chip.classList.remove('active');
+    });
+
+    mockStudioSchema = JSON.parse(JSON.stringify(tpl.schema));
+    renderCustomPresetChips();
+    renderMockSchemaBuilder();
+    triggerMockPreview();
+
+    showAppToast(`"${tpl.title}" 커스텀 템플릿을 불러왔습니다! 📋`, "success");
+}
+
+function openSaveTemplateModal() {
+    if (mockStudioSchema.length === 0) {
+        showAppAlert("저장할 컬럼이 최소 1개 이상 필요합니다.", "알림", "⚠️");
+        return;
+    }
+
+    const modal = document.getElementById('modal-save-mock-template');
+    const titleInput = document.getElementById('mock-tpl-title-input');
+    const descInput = document.getElementById('mock-tpl-desc-input');
+    const summaryEl = document.getElementById('mock-tpl-save-summary');
+
+    if (titleInput) titleInput.value = '';
+    if (descInput) descInput.value = '';
+
+    if (summaryEl) {
+        const colNames = mockStudioSchema.map(c => c.name).join(', ');
+        summaryEl.innerHTML = `
+            <span class="mock-summary-count">총 ${mockStudioSchema.length}개 컬럼 저장</span>
+            <span class="mock-summary-names">(${escapeHtml(colNames)})</span>
+        `;
+    }
+
+    if (modal) {
+        modal.style.display = 'flex';
+        titleInput?.focus();
+    }
+}
+
+function closeSaveTemplateModal() {
+    const modal = document.getElementById('modal-save-mock-template');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitSaveTemplate() {
+    const titleInput = document.getElementById('mock-tpl-title-input');
+    const descInput = document.getElementById('mock-tpl-desc-input');
+    const selectedIcon = document.querySelector('input[name="mock-tpl-icon"]:checked')?.value || '⭐';
+
+    const title = titleInput?.value?.trim();
+    const desc = descInput?.value?.trim() || '';
+
+    if (!title) {
+        showAppAlert("템플릿 이름을 입력해주세요.", "알림", "⚠️");
+        titleInput?.focus();
+        return;
+    }
+
+    try {
+        if (window.eel && typeof eel.save_custom_mock_template === 'function') {
+            const res = await eel.save_custom_mock_template(title, desc, mockStudioSchema, null, selectedIcon)();
+            if (res.status === 'success') {
+                closeSaveTemplateModal();
+                await loadCustomMockTemplates();
+                if (res.template_id) {
+                    loadCustomTemplate(res.template_id);
+                }
+                showAppToast(`"${title}" 템플릿이 성공적으로 저장되었습니다! 💾`, "success");
+            } else {
+                showAppAlert(`저장 실패: ${res.message}`, "오류", "❌");
+            }
+        }
+    } catch (e) {
+        console.error("템플릿 저장 오류:", e);
+        showAppAlert(`템플릿 저장 중 오류가 발생했습니다: ${e.message}`, "오류", "❌");
+    }
+}
+
+async function deleteCustomTemplate(tplId, tplTitle) {
+    const confirmed = confirm(`"${tplTitle}" 템플릿을 삭제하시겠습니까?`);
+    if (!confirmed) return;
+
+    try {
+        if (window.eel && typeof eel.delete_custom_mock_template === 'function') {
+            const res = await eel.delete_custom_mock_template(tplId)();
+            if (res.status === 'success') {
+                if (activeCustomTemplateId === tplId) {
+                    activeCustomTemplateId = null;
+                }
+                await loadCustomMockTemplates();
+                showAppToast(`"${tplTitle}" 템플릿이 삭제되었습니다.`, "info");
+            } else {
+                showAppAlert(`삭제 실패: ${res.message}`, "오류", "❌");
+            }
+        }
+    } catch (e) {
+        console.error("템플릿 삭제 오류:", e);
+    }
+}
+
+// ==========================================
+// 4. 스키마(컬럼) 빌더 렌더링
 // ==========================================
 function renderMockSchemaBuilder() {
     const listEl = document.getElementById('mock-schema-columns-list');
@@ -350,7 +504,7 @@ function applyKvPreset(colId, presetKey) {
 }
 
 // ==========================================
-// 4. 컬럼 추가/삭제/변경 이벤트
+// 5. 컬럼 추가/삭제/변경 이벤트
 // ==========================================
 function addNewMockColumn() {
     const newId = `col_${Date.now()}`;
@@ -384,7 +538,6 @@ function updateColumnName(colId, newName) {
     const col = mockStudioSchema.find(c => c.id === colId);
     if (col) {
         col.name = newName;
-        // 다른 컬럼들이 이 컬럼을 참조하고 있을 수 있으므로 참조 컬럼 select 갱신
         debouncedMockPreview();
     }
 }
@@ -431,7 +584,7 @@ function updateColumnOption(colId, optKey, optVal) {
 }
 
 // ==========================================
-// 5. 실시간 미리보기 & 엑셀 저장
+// 6. 실시간 미리보기 & 엑셀 저장
 // ==========================================
 let mockPreviewDebounceTimer = null;
 

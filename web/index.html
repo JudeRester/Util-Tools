@@ -531,12 +531,19 @@
                                 <span class="mock-header-desc">원하는 컬럼 양식을 자유롭게 구성하고 실제 Excel(.xlsx) 또는 CSV 파일로 대량 생성합니다.</span>
                             </div>
                             <div class="mock-preset-selector">
-                                <span class="mock-preset-label">템플릿 프리셋:</span>
+                                <span class="mock-preset-label">기본 템플릿:</span>
                                 <button type="button" class="mock-preset-chip active" data-preset="employee" onclick="loadMockPreset('employee')">👔 임직원 명부</button>
                                 <button type="button" class="mock-preset-chip" data-preset="customer" onclick="loadMockPreset('customer')">🛍️ 회원/고객</button>
                                 <button type="button" class="mock-preset-chip" data-preset="partner" onclick="loadMockPreset('partner')">🏢 거래처</button>
                                 <button type="button" class="mock-preset-chip" data-preset="order" onclick="loadMockPreset('order')">💳 주문/결제</button>
                                 <button type="button" class="mock-preset-chip" data-preset="empty" onclick="loadMockPreset('empty')">➕ 빈 양식</button>
+                                
+                                <span class="mock-preset-divider">|</span>
+                                <span class="mock-preset-label">내 커스텀 양식:</span>
+                                <div id="mock-custom-presets-list" class="mock-custom-presets-inline"></div>
+                                <button type="button" class="mock-save-tpl-btn" onclick="openSaveTemplateModal()" title="현재 구성된 컬럼 양식을 새로운 커스텀 템플릿으로 저장">
+                                    💾 현재 양식 저장
+                                </button>
                             </div>
                         </div>
 
@@ -1471,6 +1478,51 @@
             <div class="modal-footer">
                 <span class="shortcut-tip" style="margin-right: auto;">단축키: <code>Ctrl + K</code></span>
                 <button class="form-btn close-btn" onclick="closeAiSearchModal()">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모의 데이터 커스텀 템플릿 저장 모달 -->
+    <div id="modal-save-mock-template" class="modal-overlay" style="display: none;">
+        <div class="modal-card" style="max-width: 460px;">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <span class="modal-icon">💾</span>
+                    <h3 class="modal-title">커스텀 템플릿 양식 저장</h3>
+                </div>
+                <button type="button" class="modal-close-btn" onclick="closeSaveTemplateModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 16px 20px;">
+                <div class="form-group">
+                    <label class="form-label">템플릿 이름 <span style="color: #ef4444;">*</span></label>
+                    <input type="text" id="mock-tpl-title-input" class="form-input" placeholder="예: 연구소 임직원 명부, 제휴사 정산 양식" maxlength="50">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">아이콘</label>
+                    <div class="mock-tpl-icon-picker">
+                        <label class="icon-radio-lbl"><input type="radio" name="mock-tpl-icon" value="⭐" checked> ⭐</label>
+                        <label class="icon-radio-lbl"><input type="radio" name="mock-tpl-icon" value="📋"> 📋</label>
+                        <label class="icon-radio-lbl"><input type="radio" name="mock-tpl-icon" value="🏢"> 🏢</label>
+                        <label class="icon-radio-lbl"><input type="radio" name="mock-tpl-icon" value="👥"> 👥</label>
+                        <label class="icon-radio-lbl"><input type="radio" name="mock-tpl-icon" value="🛍️"> 🛍️</label>
+                        <label class="icon-radio-lbl"><input type="radio" name="mock-tpl-icon" value="💳"> 💳</label>
+                        <label class="icon-radio-lbl"><input type="radio" name="mock-tpl-icon" value="🔬"> 🔬</label>
+                        <label class="icon-radio-lbl"><input type="radio" name="mock-tpl-icon" value="📦"> 📦</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">설명 (선택 사항)</label>
+                    <input type="text" id="mock-tpl-desc-input" class="form-input" placeholder="양식에 대한 간단한 메모나 용도..." maxlength="100">
+                </div>
+                <div class="mock-tpl-save-summary" id="mock-tpl-save-summary">
+                    <!-- 컬럼 N개 요약 안내 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="form-btn close-btn" onclick="closeSaveTemplateModal()">취소</button>
+                <button type="button" class="form-btn add-btn" onclick="submitSaveTemplate()">
+                    <span>💾</span> 저장하기
+                </button>
             </div>
         </div>
     </div>
