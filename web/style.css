@@ -4887,41 +4887,121 @@ body {
 }
 
 /* 첨부파일 바 */
+/* 첨부파일 바 */
 .email-attachments-bar {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 6px;
     background: rgba(99, 102, 241, 0.08);
     border: 1px solid rgba(99, 102, 241, 0.2);
-    padding: 6px 10px;
-    border-radius: 6px;
+    padding: 8px 12px;
+    border-radius: 8px;
     font-size: 0.78rem;
-    overflow-x: auto;
+    margin-top: 4px;
+}
+
+.attach-bar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
 
 .email-attachments-bar .attach-title {
     color: #a5b4fc;
     font-weight: 600;
     white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.attach-save-all-btn {
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(99, 102, 241, 0.4);
+    color: #c7d2fe;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+
+.attach-save-all-btn:hover {
+    background: #6366f1;
+    color: #ffffff;
+    border-color: #6366f1;
+    transform: translateY(-1px);
 }
 
 .attach-items-list {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
 }
 
 .attach-item-chip {
+    display: inline-flex;
+    align-items: center;
     background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 2px 8px;
-    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
     color: #e2e8f0;
     font-size: 0.74rem;
-    white-space: nowrap;
+    padding: 3px 6px;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.attach-item-chip:hover {
+    background: rgba(99, 102, 241, 0.18);
+    border-color: rgba(99, 102, 241, 0.5);
+}
+
+.attach-chip-main {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.attach-chip-main:hover .attach-name {
+    text-decoration: underline;
+    color: #93c5fd;
 }
 
 .attach-item-chip .attach-size {
     color: #94a3b8;
+    font-size: 0.7rem;
+}
+
+.attach-chip-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 2px;
+}
+
+.attach-action-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #e2e8f0;
+    font-size: 0.7rem;
+    padding: 1px 4px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.attach-action-btn:hover {
+    background: #6366f1;
+    color: #ffffff;
+    border-color: #818cf8;
 }
 
 /* 이메일 본문 */

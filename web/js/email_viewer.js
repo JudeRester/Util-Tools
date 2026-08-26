@@ -510,12 +510,31 @@ function renderSingleEmailContent(email) {
     if (hasAttach) {
         attachmentsHtml = `
             <div class="email-attachments-bar">
-                <span class="attach-title">📎 첨부파일 (${email.attachments.length}개):</span>
+                <div class="attach-bar-header">
+                    <span class="attach-title">📎 첨부파일 (${email.attachments.length}개)</span>
+                    ${email.attachments.length > 1 ? `
+                        <button class="attach-save-all-btn" onclick="saveAllEmailAttachments('${email.id}')" title="모든 첨부파일을 선택한 폴더에 일괄 다운로드">
+                            <span>💾</span> 전체 저장
+                        </button>
+                    ` : ''}
+                </div>
                 <div class="attach-items-list">
-                    ${email.attachments.map(att => `
-                        <span class="attach-item-chip" title="${escapeHtml(att.filename)} (${att.size})">
-                            📄 ${escapeHtml(att.filename)} <span class="attach-size">(${att.size})</span>
-                        </span>
+                    ${email.attachments.map((att, idx) => `
+                        <div class="attach-item-chip" title="${escapeHtml(att.filename)} (${att.size})">
+                            <span class="attach-chip-main" onclick="openEmailAttachment('${email.id}', ${idx}, '${escapeHtmlAttr(att.filename)}')" title="클릭하여 즉시 열기">
+                                <span class="attach-icon">${getFileIcon(att.filename)}</span>
+                                <span class="attach-name">${escapeHtml(att.filename)}</span>
+                                <span class="attach-size">(${att.size})</span>
+                            </span>
+                            <div class="attach-chip-actions">
+                                <button class="attach-action-btn" onclick="openEmailAttachment('${email.id}', ${idx}, '${escapeHtmlAttr(att.filename)}')" title="열기">
+                                    👁️ 열기
+                                </button>
+                                <button class="attach-action-btn" onclick="saveEmailAttachment('${email.id}', ${idx}, '${escapeHtmlAttr(att.filename)}')" title="다른 이름으로 저장">
+                                    💾 저장
+                                </button>
+                            </div>
+                        </div>
                     `).join('')}
                 </div>
             </div>
@@ -678,10 +697,31 @@ async function renderConversationTimeline(threadObj, threadEmails) {
                 <div class="email-thread-card-body">
                     ${hasAttach ? `
                         <div class="email-attachments-bar" style="margin-bottom: 8px;">
-                            <span class="attach-title">📎 첨부 (${cached.attachments.length}개):</span>
+                            <div class="attach-bar-header">
+                                <span class="attach-title">📎 첨부 (${cached.attachments.length}개)</span>
+                                ${cached.attachments.length > 1 ? `
+                                    <button class="attach-save-all-btn" onclick="saveAllEmailAttachments('${em.id}')" title="이 메일의 모든 첨부파일 일괄 저장">
+                                        <span>💾</span> 전체 저장
+                                    </button>
+                                ` : ''}
+                            </div>
                             <div class="attach-items-list">
-                                ${cached.attachments.map(att => `
-                                    <span class="attach-item-chip">📄 ${escapeHtml(att.filename)} (${att.size})</span>
+                                ${cached.attachments.map((att, idx) => `
+                                    <div class="attach-item-chip" title="${escapeHtml(att.filename)} (${att.size})">
+                                        <span class="attach-chip-main" onclick="openEmailAttachment('${em.id}', ${idx}, '${escapeHtmlAttr(att.filename)}')" title="클릭하여 즉시 열기">
+                                            <span class="attach-icon">${getFileIcon(att.filename)}</span>
+                                            <span class="attach-name">${escapeHtml(att.filename)}</span>
+                                            <span class="attach-size">(${att.size})</span>
+                                        </span>
+                                        <div class="attach-chip-actions">
+                                            <button class="attach-action-btn" onclick="openEmailAttachment('${em.id}', ${idx}, '${escapeHtmlAttr(att.filename)}')" title="열기">
+                                                👁️ 열기
+                                            </button>
+                                            <button class="attach-action-btn" onclick="saveEmailAttachment('${em.id}', ${idx}, '${escapeHtmlAttr(att.filename)}')" title="다른 이름으로 저장">
+                                                💾 저장
+                                            </button>
+                                        </div>
+                                    </div>
                                 `).join('')}
                             </div>
                         </div>
@@ -1065,8 +1105,72 @@ function initEmailDropZone() {
 }
 
 // ==========================================
-// 9. 액션 (복사, 열기, 삭제, 비우기)
+// 9. 첨부파일 & 이메일 액션 (열기, 저장, 일괄저장, 복사, 삭제, 비우기)
 // ==========================================
+function getFileIcon(filename) {
+    if (!filename) return '📎';
+    const ext = filename.split('.').pop().toLowerCase();
+    if (['pdf'].includes(ext)) return '📄';
+    if (['xlsx', 'xls', 'csv'].includes(ext)) return '📊';
+    if (['docx', 'doc', 'hwp', 'hwpx', 'txt', 'rtf', 'md'].includes(ext)) return '📝';
+    if (['pptx', 'ppt'].includes(ext)) return '📑';
+    if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'webp'].includes(ext)) return '🖼️';
+    if (['zip', '7z', 'rar', 'tar', 'gz', 'iso'].includes(ext)) return '📦';
+    if (['mp3', 'wav', 'ogg', 'mp4', 'avi', 'mkv'].includes(ext)) return '🎬';
+    if (['json', 'js', 'py', 'java', 'cpp', 'html', 'css', 'xml'].includes(ext)) return '💻';
+    return '📎';
+}
+
+async function openEmailAttachment(emailId, index, filename) {
+    try {
+        if (window.eel && typeof eel.open_email_attachment === 'function') {
+            logToConsole('첨부파일 열기', `'${filename}' 파일을 임시 폴더에 추출하여 여는 중...`);
+            const res = await eel.open_email_attachment(emailId, index, filename)();
+            if (res.status === 'success') {
+                logToConsole('첨부파일 열기 완료', res.message);
+            } else {
+                await showAppAlert(`첨부파일 열기 실패: ${res.message}`, '오류', '⚠️');
+            }
+        }
+    } catch (e) {
+        console.error("첨부파일 열기 오류:", e);
+        await showAppAlert(`첨부파일 열기 중 오류가 발생했습니다: ${e.message || e}`, '오류', '⚠️');
+    }
+}
+
+async function saveEmailAttachment(emailId, index, filename) {
+    try {
+        if (window.eel && typeof eel.save_email_attachment_dialog === 'function') {
+            const res = await eel.save_email_attachment_dialog(emailId, index, filename)();
+            if (res.status === 'success') {
+                logToConsole('첨부파일 저장 완료', res.message);
+                await showAppAlert(`'${filename}' 파일이 성공적으로 저장되었습니다! 💾`, '저장 완료', '✅');
+            } else if (res.status === 'error') {
+                await showAppAlert(`첨부파일 저장 실패: ${res.message}`, '저장 실패', '⚠️');
+            }
+        }
+    } catch (e) {
+        console.error("첨부파일 저장 오류:", e);
+    }
+}
+
+async function saveAllEmailAttachments(emailId) {
+    try {
+        if (window.eel && typeof eel.save_all_email_attachments_dialog === 'function') {
+            logToConsole('첨부파일 일괄 저장', '저장할 대상 폴더를 선택해주세요...');
+            const res = await eel.save_all_email_attachments_dialog(emailId)();
+            if (res.status === 'success') {
+                logToConsole('첨부파일 일괄 저장 완료', res.message);
+                await showAppAlert(`총 ${res.count}개의 첨부파일이 저장되었습니다! 📦\n경로: ${res.folder}`, '일괄 저장 완료', '✅');
+            } else if (res.status === 'error') {
+                await showAppAlert(`일괄 저장 실패: ${res.message}`, '저장 실패', '⚠️');
+            }
+        }
+    } catch (e) {
+        console.error("첨부파일 일괄 저장 오류:", e);
+    }
+}
+
 async function openEmailInOsApp(emailId) {
     try {
         if (window.eel && typeof eel.open_eml_in_os === 'function') {

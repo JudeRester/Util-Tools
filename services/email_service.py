@@ -294,6 +294,236 @@ def get_email_detail(email_id):
         conn.close()
 
 
+def _get_eml_file_path(email_id):
+    """email_id에 해당하는 실제 .eml 물리 파일 경로 검색"""
+    if not email_id:
+        return None
+    
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT file_path FROM emails WHERE id = ?", (email_id,)).fetchone()
+        if row and row['file_path'] and os.path.exists(row['file_path']):
+            return row['file_path']
+    finally:
+        conn.close()
+    
+    # DB에 저장된 경로가 없거나 유효하지 않은 경우 emails 디렉토리에서 검색
+    import glob
+    candidates = glob.glob(os.path.join(EMAILS_DIR, f"{email_id}*.eml"))
+    if candidates and os.path.exists(candidates[0]):
+        return candidates[0]
+        
+    direct_path = os.path.join(EMAILS_DIR, f"{email_id}.eml")
+    if os.path.exists(direct_path):
+        return direct_path
+        
+    return None
+
+
+def _extract_attachments_from_eml(file_path):
+    """EML 파일로부터 첨부파일 바이너리 데이터 및 메타데이터 추출"""
+    if not file_path or not os.path.exists(file_path):
+        return []
+        
+    try:
+        with open(file_path, "rb") as f:
+            raw_bytes = f.read()
+        msg = BytesParser(policy=policy.default).parsebytes(raw_bytes)
+        attachments = []
+        
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_disposition = str(part.get("Content-Disposition") or "")
+                filename = part.get_filename()
+                
+                if "attachment" in content_disposition or filename:
+                    if not filename:
+                        filename = f"attachment_{len(attachments) + 1}"
+                    
+                    # 파일명에 유효하지 않은 문자 정제
+                    clean_fn = re.sub(r'[\\/*?:"<>|]', '_', filename).strip()
+                    if not clean_fn:
+                        clean_fn = f"attachment_{len(attachments) + 1}"
+                        
+                    payload = part.get_payload(decode=True)
+                    if payload is not None:
+                        size_bytes = len(payload)
+                        if size_bytes > 1024 * 1024:
+                            size_str = f"{size_bytes / (1024 * 1024):.1f} MB"
+                        elif size_bytes > 1024:
+                            size_str = f"{size_bytes / 1024:.1f} KB"
+                        else:
+                            size_str = f"{size_bytes} B"
+                            
+                        attachments.append({
+                            "index": len(attachments),
+                            "filename": clean_fn,
+                            "size": size_str,
+                            "size_bytes": size_bytes,
+                            "payload": payload,
+                            "content_type": part.get_content_type()
+                        })
+        return attachments
+    except Exception as e:
+        print(f"[EmailService] 첨부파일 파싱 오류: {e}")
+        return []
+
+
+@eel.expose
+def open_email_attachment(email_id, attachment_index=0, filename=None):
+    """선택된 첨부파일을 임시 폴더에 추출한 후 Windows 기본 연결 프로그램으로 즉시 실행"""
+    try:
+        file_path = _get_eml_file_path(email_id)
+        if not file_path:
+            return {"status": "error", "message": "원본 EML 파일을 찾을 수 없습니다."}
+            
+        attachments = _extract_attachments_from_eml(file_path)
+        if not attachments:
+            return {"status": "error", "message": "메일에 첨부파일이 없거나 추출에 실패했습니다."}
+            
+        # 파일명 또는 인덱스로 타깃 첨부파일 매칭
+        target_att = None
+        if filename:
+            for att in attachments:
+                if att["filename"] == filename:
+                    target_att = att
+                    break
+        if not target_att:
+            idx = max(0, min(int(attachment_index), len(attachments) - 1))
+            target_att = attachments[idx]
+            
+        # 임시 폴더에 파일 쓰기
+        temp_dir = os.path.join(base_dir, "data", "temp_attachments", str(email_id))
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        dest_path = os.path.join(temp_dir, target_att["filename"])
+        with open(dest_path, "wb") as f:
+            f.write(target_att["payload"])
+            
+        # OS 기본 앱으로 파일 실행
+        os.startfile(dest_path)
+        return {
+            "status": "success",
+            "message": f"'{target_att['filename']}' 파일을 열었습니다.",
+            "path": dest_path
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"첨부파일 열기 실패: {str(e)}"}
+
+
+@eel.expose
+def save_email_attachment_dialog(email_id, attachment_index=0, filename=None):
+    """첨부파일 1건 다른 이름으로 저장 (Tkinter 파일 저장 대화상자)"""
+    try:
+        file_path = _get_eml_file_path(email_id)
+        if not file_path:
+            return {"status": "error", "message": "원본 EML 파일을 찾을 수 없습니다."}
+            
+        attachments = _extract_attachments_from_eml(file_path)
+        if not attachments:
+            return {"status": "error", "message": "메일에 첨부파일이 없습니다."}
+            
+        target_att = None
+        if filename:
+            for att in attachments:
+                if att["filename"] == filename:
+                    target_att = att
+                    break
+        if not target_att:
+            idx = max(0, min(int(attachment_index), len(attachments) - 1))
+            target_att = attachments[idx]
+            
+        initial_name = target_att["filename"]
+        ext = os.path.splitext(initial_name)[1]
+        
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        save_path = filedialog.asksaveasfilename(
+            title="첨부파일 저장",
+            initialfile=initial_name,
+            defaultextension=ext,
+            filetypes=[("기본 확장자", f"*{ext}"), ("모든 파일", "*.*")] if ext else [("모든 파일", "*.*")]
+        )
+        root.destroy()
+        
+        if not save_path:
+            return {"status": "cancelled", "message": "저장이 취소되었습니다."}
+            
+        save_path = os.path.normpath(save_path)
+        with open(save_path, "wb") as f:
+            f.write(target_att["payload"])
+            
+        return {
+            "status": "success",
+            "message": f"'{initial_name}' 파일이 저장되었습니다.",
+            "path": save_path
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"첨부파일 저장 실패: {str(e)}"}
+
+
+@eel.expose
+def save_all_email_attachments_dialog(email_id):
+    """메일에 포함된 모든 첨부파일을 지정한 폴더에 일괄 저장"""
+    try:
+        file_path = _get_eml_file_path(email_id)
+        if not file_path:
+            return {"status": "error", "message": "원본 EML 파일을 찾을 수 없습니다."}
+            
+        attachments = _extract_attachments_from_eml(file_path)
+        if not attachments:
+            return {"status": "error", "message": "메일에 첨부파일이 없습니다."}
+            
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        dest_dir = filedialog.askdirectory(title="첨부파일들을 일괄 저장할 대상 폴더 선택")
+        root.destroy()
+        
+        if not dest_dir:
+            return {"status": "cancelled", "message": "저장이 취소되었습니다."}
+            
+        dest_dir = os.path.normpath(dest_dir)
+        saved_files = []
+        
+        for att in attachments:
+            base_name, ext = os.path.splitext(att["filename"])
+            target_path = os.path.join(dest_dir, att["filename"])
+            counter = 1
+            while os.path.exists(target_path):
+                target_path = os.path.join(dest_dir, f"{base_name} ({counter}){ext}")
+                counter += 1
+                
+            with open(target_path, "wb") as f:
+                f.write(att["payload"])
+            saved_files.append(os.path.basename(target_path))
+            
+        return {
+            "status": "success",
+            "count": len(saved_files),
+            "folder": dest_dir,
+            "saved_files": saved_files,
+            "message": f"총 {len(saved_files)}개의 첨부파일이 '{dest_dir}'에 성공적으로 저장되었습니다."
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"일괄 저장 실패: {str(e)}"}
+
+
+@eel.expose
+def open_email_source_file(email_id):
+    """원본 .eml 파일을 시스템 기본 이메일 프로그램(Outlook 등)으로 열기"""
+    try:
+        file_path = _get_eml_file_path(email_id)
+        if not file_path or not os.path.exists(file_path):
+            return {"status": "error", "message": "해당 이메일의 원본 .eml 파일을 찾을 수 없습니다."}
+            
+        os.startfile(file_path)
+        return {"status": "success", "message": f"EML 원본 파일을 열었습니다: {os.path.basename(file_path)}"}
+    except Exception as e:
+        return {"status": "error", "message": f"EML 파일 열기 실패: {str(e)}"}
+
+
 @eel.expose
 def get_all_emails():
     """저장된 전체 이메일 목록 반환 (하위 호환)"""
@@ -726,21 +956,11 @@ def open_eml_in_os(email_id):
     """원본 EML 파일을 Windows 기본 메일 클라이언트(Outlook 등)로 열기"""
     if not email_id:
         return {"success": False, "message": "이메일 ID가 유효하지 않습니다."}
-    conn = get_db_connection()
     try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT file_path FROM emails WHERE id = ?", (email_id,))
-        row = cursor.fetchone()
-        if row:
-            file_path = row["file_path"]
-            if file_path and os.path.exists(file_path):
-                try:
-                    os.startfile(file_path)
-                    return {"success": True}
-                except Exception as e:
-                    return {"success": False, "message": f"실행 실패: {e}"}
-            else:
-                return {"success": False, "message": "원본 .eml 파일이 디스크에 존재하지 않습니다."}
-        return {"success": False, "message": "해당 이메일을 찾을 수 없습니다."}
-    finally:
-        conn.close()
+        file_path = _get_eml_file_path(email_id)
+        if file_path and os.path.exists(file_path):
+            os.startfile(file_path)
+            return {"success": True, "message": f"EML 원본 파일 열기 성공: {os.path.basename(file_path)}"}
+        return {"success": False, "message": "원본 .eml 파일이 디스크에 존재하지 않습니다."}
+    except Exception as e:
+        return {"success": False, "message": f"실행 실패: {e}"}
