@@ -5811,7 +5811,8 @@ body {
     font-size: 0.78rem;
 }
 
-.mock-opt-kv-block {
+.mock-opt-kv-block,
+.mock-opt-email-block {
     display: flex;
     flex-direction: column;
     gap: 4px;

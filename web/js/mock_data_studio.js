@@ -395,15 +395,50 @@ function getColumnTypeOptionsHtml(col) {
                 </div>
             `;
         }
-        case 'email':
+        case 'email': {
+            const otherCols = mockStudioSchema.filter(c => c.id !== col.id);
+            const sourceColOptions = otherCols.map(c => 
+                `<option value="${escapeHtmlAttr(c.name)}" ${opts.source_column === c.name ? 'selected' : ''}>${escapeHtml(c.name)}</option>`
+            ).join('');
+            const isDomainRandom = opts.domain_mode === 'random';
+            const isIdFromCol = opts.id_source === 'column';
+
             return `
-                <div class="mock-opt-inline">
-                    <span class="mock-opt-tag">@도메인:</span>
-                    <input type="text" class="mock-col-input opt-input" value="${escapeHtml(opts.domains || '')}" 
-                           placeholder="예: cuchen.com 또는 cuchen.com, partner.co.kr"
-                           oninput="updateColumnOption('${col.id}', 'domains', this.value)">
+                <div class="mock-opt-email-block">
+                    <div class="mock-opt-inline" style="margin-bottom: 4px;">
+                        <span class="mock-opt-tag">🌐 도메인:</span>
+                        <select class="mock-col-select opt-select-sm" style="width: 125px;" onchange="updateColumnOption('${col.id}', 'domain_mode', this.value)">
+                            <option value="fixed" ${!isDomainRandom ? 'selected' : ''}>📌 고정/직접지정</option>
+                            <option value="random" ${isDomainRandom ? 'selected' : ''}>🎲 공용 포털 랜덤</option>
+                        </select>
+                        ${!isDomainRandom ? `
+                            <input type="text" class="mock-col-input opt-input" value="${escapeHtml(opts.domains || 'cuchen.com')}" 
+                                   placeholder="예: cuchen.com 또는 cuchen.com, partner.co.kr"
+                                   oninput="updateColumnOption('${col.id}', 'domains', this.value)">
+                        ` : `
+                            <span class="mock-opt-hint" style="color: #38bdf8;">(gmail, naver, kakao, daum, outlook 등 랜덤)</span>
+                        `}
+                    </div>
+                    <div class="mock-opt-inline">
+                        <span class="mock-opt-tag">👤 아이디 규칙:</span>
+                        <select class="mock-col-select opt-select-sm" style="width: 145px;" onchange="updateColumnOption('${col.id}', 'id_source', this.value)">
+                            <option value="name_roman" ${opts.id_source === 'name_roman' || !opts.id_source ? 'selected' : ''}>🔤 이름 로마자 변환</option>
+                            <option value="column" ${isIdFromCol ? 'selected' : ''}>🔗 특정 컬럼 참조 (사번/ID 등)</option>
+                            <option value="random_id" ${opts.id_source === 'random_id' ? 'selected' : ''}>🎲 랜덤 영문/숫자</option>
+                        </select>
+                        ${isIdFromCol ? `
+                            <span class="mock-opt-tag" style="margin-left: 4px;">참조 컬럼:</span>
+                            <select class="mock-col-select opt-select-sm" style="width: 130px;" onchange="updateColumnOption('${col.id}', 'source_column', this.value)">
+                                <option value="">(자동 선택)</option>
+                                ${sourceColOptions}
+                            </select>
+                        ` : `
+                            <span class="mock-opt-hint">(이름 또는 랜덤 생성)</span>
+                        `}
+                    </div>
                 </div>
             `;
+        }
         case 'choices':
             return `
                 <div class="mock-opt-inline">
@@ -584,6 +619,15 @@ function updateColumnOption(colId, optKey, optVal) {
     if (col) {
         if (!col.options) col.options = {};
         col.options[optKey] = optVal;
+
+        // 도메인 모드나 아이디 소스 변경 시 세부 옵션 UI 즉시 다시 렌더링
+        if (optKey === 'domain_mode' || optKey === 'id_source') {
+            const optsContainer = document.getElementById(`mock-opts-${colId}`);
+            if (optsContainer) {
+                optsContainer.innerHTML = getColumnTypeOptionsHtml(col);
+            }
+        }
+
         debouncedMockPreview();
     }
 }
