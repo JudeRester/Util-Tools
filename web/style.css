@@ -5710,6 +5710,52 @@ body {
     font-weight: 500;
 }
 
+.mock-active-template-badge {
+    display: inline-flex;
+    align-items: center;
+}
+
+.active-tpl-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    font-size: 0.78rem;
+    color: #cbd5e1;
+    transition: all 0.15s ease;
+}
+
+.active-tpl-pill.custom {
+    background: rgba(234, 179, 8, 0.1);
+    border-color: rgba(234, 179, 8, 0.35);
+}
+
+.active-tpl-pill .pill-icon {
+    font-size: 0.85rem;
+}
+
+.active-tpl-pill .pill-title {
+    font-weight: 600;
+    color: #f1f5f9;
+}
+
+.active-tpl-pill.custom .pill-title {
+    color: #fef08a;
+}
+
+.active-tpl-pill .pill-desc {
+    color: #94a3b8;
+    font-size: 0.74rem;
+    font-style: italic;
+    max-width: 360px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .mock-add-col-btn {
     display: flex;
     align-items: center;

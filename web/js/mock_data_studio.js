@@ -17,6 +17,8 @@ let activeCustomTemplateId = null;
 const MOCK_PRESETS = {
     employee: {
         title: "임직원 / 인사 명부",
+        icon: "👔",
+        description: "사번, 이름, 부서/직급 매핑, 도메인 이메일, 급여 등이 포함된 인사 관리 명부 양식",
         filename: "임직원_명부",
         schema: [
             { id: "col_1", name: "사번", type: "sequence", options: { prefix: "EMP-", start_num: 1001, padding: 4 } },
@@ -35,6 +37,8 @@ const MOCK_PRESETS = {
     },
     customer: {
         title: "고객 / 회원 목록",
+        icon: "🛍️",
+        description: "회원번호, 성별/나이, 공용 포털 이메일, 거주지 주소, 회원등급/포인트 관리 양식",
         filename: "회원목록",
         schema: [
             { id: "col_1", name: "회원번호", type: "sequence", options: { prefix: "CUST-", start_num: 10001, padding: 5 } },
@@ -52,6 +56,8 @@ const MOCK_PRESETS = {
     },
     partner: {
         title: "거래처 / 파트너사 목록",
+        icon: "🏢",
+        description: "거래처코드, 사업자번호, 대표자, 업태종목, 담당자 연락처, 계약상태 관리 양식",
         filename: "거래처_목록",
         schema: [
             { id: "col_1", name: "거래처코드", type: "sequence", options: { prefix: "VD-", start_num: 101, padding: 3 } },
@@ -68,6 +74,8 @@ const MOCK_PRESETS = {
     },
     order: {
         title: "주문 / 결제 내역",
+        icon: "💳",
+        description: "주문번호, 가전 상품명, 수량, 결제수단/코드, 배송상태/코드 관리 양식",
         filename: "주문내역",
         schema: [
             { id: "col_1", name: "주문번호", type: "sequence", options: { prefix: "ORD-2026-", start_num: 1001, padding: 4 } },
@@ -81,8 +89,38 @@ const MOCK_PRESETS = {
             { id: "col_9", name: "배송상태", type: "choices", options: { choices: "결제완료, 배송준비중, 배송중, 배송완료, 구매확정" } },
             { id: "col_10", name: "배송코드", type: "key_value", options: { target_column: "배송상태", output_part: "value", mapping: "결제완료:PAID, 배송준비중:PREP, 배송중:SHIP, 배송완료:DONE, 구매확정:CONFIRM" } }
         ]
+    },
+    empty: {
+        title: "빈 양식",
+        icon: "➕",
+        description: "새로운 컬럼을 처음부터 자유롭게 추가하여 구성하는 기본 양식",
+        filename: "모의데이터",
+        schema: []
     }
 };
+
+function updateActiveTemplateDisplay(title, icon, description, isCustom = false) {
+    const descEl = document.getElementById('mock-header-desc');
+    const badgeContainer = document.getElementById('mock-active-template-badge');
+
+    if (descEl) {
+        if (description) {
+            descEl.innerHTML = `<strong>${icon} ${escapeHtml(title)}</strong> &mdash; <span>${escapeHtml(description)}</span>`;
+        } else {
+            descEl.innerHTML = `<strong>${icon} ${escapeHtml(title)}</strong> &mdash; <span>원하는 컬럼 양식을 자유롭게 구성하고 대량 생성합니다.</span>`;
+        }
+    }
+
+    if (badgeContainer) {
+        badgeContainer.innerHTML = `
+            <div class="active-tpl-pill ${isCustom ? 'custom' : ''}" title="${escapeHtml(description || title)}">
+                <span class="pill-icon">${icon}</span>
+                <span class="pill-title">${escapeHtml(title)}</span>
+                ${description ? `<span class="pill-desc">"${escapeHtml(description)}"</span>` : ''}
+            </div>
+        `;
+    }
+}
 
 // ==========================================
 // 2. 초기화 및 서브탭 제어
@@ -122,6 +160,8 @@ function loadMockPreset(presetKey) {
         chip.classList.toggle('active', chip.getAttribute('data-preset') === presetKey);
     });
 
+    const p = MOCK_PRESETS[presetKey] || (presetKey === 'empty' ? MOCK_PRESETS.empty : null);
+
     if (presetKey === 'empty') {
         mockStudioSchema = [
             { id: `col_${Date.now()}_1`, name: "부서명", type: "choices", options: { choices: "스마트개발팀, 웹서비스팀, AI연구팀, 품질보증팀" } },
@@ -131,6 +171,10 @@ function loadMockPreset(presetKey) {
         ];
     } else if (MOCK_PRESETS[presetKey]) {
         mockStudioSchema = JSON.parse(JSON.stringify(MOCK_PRESETS[presetKey].schema));
+    }
+
+    if (p) {
+        updateActiveTemplateDisplay(p.title, p.icon || '📋', p.description || '', false);
     }
 
     renderCustomPresetChips();
@@ -192,6 +236,7 @@ function loadCustomTemplate(tplId) {
     });
 
     mockStudioSchema = JSON.parse(JSON.stringify(tpl.schema));
+    updateActiveTemplateDisplay(tpl.title, tpl.icon || '⭐', tpl.description || '', true);
     renderCustomPresetChips();
     renderMockSchemaBuilder();
     triggerMockPreview();
