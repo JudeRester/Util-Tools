@@ -103,6 +103,11 @@ function removeToast(toast) {
     }, 350);
 }
 
+function showAppToast(message, type = 'info') {
+    const title = type === 'success' ? '완료' : type === 'error' ? '오류' : type === 'warning' ? '경고' : '알림';
+    showToast(title, message);
+}
+
 function clearConsole() {
     const consoleEl = document.getElementById('console-output');
     if (consoleEl) {

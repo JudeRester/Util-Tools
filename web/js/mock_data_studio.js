@@ -265,7 +265,12 @@ async function submitSaveTemplate() {
 }
 
 async function deleteCustomTemplate(tplId, tplTitle) {
-    const confirmed = confirm(`"${tplTitle}" 템플릿을 삭제하시겠습니까?`);
+    const confirmed = await showAppConfirm(`"${tplTitle}" 템플릿을 삭제하시겠습니까?`, {
+        title: "템플릿 삭제",
+        icon: "🗑️",
+        confirmText: "삭제",
+        isDanger: true
+    });
     if (!confirmed) return;
 
     try {
