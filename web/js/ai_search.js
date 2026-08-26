@@ -229,24 +229,52 @@ function quickAiSearch(term) {
 async function navigateToAiSearchResult(item) {
     closeAiSearchModal();
 
-    if (!item || !item.target_tab) return;
+    if (!item) return;
+
+    // 탭 이름 정규화 (구버전 캐시 데이터 및 호환성 보장)
+    let targetTab = item.target_tab;
+    if (!targetTab) {
+        if (item.category === 'notes') targetTab = 'notes';
+        else if (item.category === 'emails') targetTab = 'emails';
+        else if (item.category === 'diagrams') targetTab = 'mermaid';
+        else if (item.category === 'quick_launch') targetTab = 'launch';
+        else if (item.category === 'shortcuts') targetTab = 'files';
+        else if (item.category === 'generators') targetTab = 'generator';
+    }
+    if (targetTab === 'scratchpad') targetTab = 'notes';
+    if (targetTab === 'diagram-viewer' || targetTab === 'diagram') targetTab = 'mermaid';
+    if (targetTab === 'quick-launch' || targetTab === 'quick_launch') targetTab = 'launch';
+    if (targetTab === 'shortcuts') targetTab = 'files';
+    if (targetTab === 'generators') targetTab = 'generator';
 
     // 해당 탭으로 전환
     if (typeof switchTab === 'function') {
-        switchTab(item.target_tab);
+        switchTab(targetTab);
     }
 
     if (item.category === 'notes' && item.action_data?.note_id) {
-        // 해당 메모 선택
-        if (typeof selectNote === 'function') {
-            selectNote(item.action_data.note_id);
-        }
+        // 지연 로딩된 메모가 준비될 때까지 안전하게 선택 (재시도 폴링)
+        const noteId = item.action_data.note_id;
+        const trySelectNote = (retries = 10) => {
+            if (typeof currentNotes !== 'undefined' && currentNotes.length > 0 && typeof selectNote === 'function') {
+                selectNote(noteId);
+            } else if (retries > 0) {
+                setTimeout(() => trySelectNote(retries - 1), 50);
+            }
+        };
+        trySelectNote();
         logToConsole('AI 검색 이동', `'${item.title}' 메모로 이동`);
     } else if (item.category === 'emails' && item.action_data?.email_id) {
-        // 해당 이메일 선택 및 열람
-        if (typeof openEmailFromAiSearch === 'function') {
-            openEmailFromAiSearch(item.action_data.email_id);
-        }
+        // 지연 로딩된 이메일이 준비될 때까지 안전하게 열람
+        const emailId = item.action_data.email_id;
+        const tryOpenEmail = (retries = 10) => {
+            if (typeof openEmailFromAiSearch === 'function' && typeof emailState !== 'undefined' && emailState.emails.length > 0) {
+                openEmailFromAiSearch(emailId);
+            } else if (retries > 0) {
+                setTimeout(() => tryOpenEmail(retries - 1), 50);
+            }
+        };
+        tryOpenEmail();
         logToConsole('AI 검색 이동', `'${item.title}' 이메일로 이동`);
     } else if (item.category === 'diagrams' && item.action_data?.code) {
         // 다이어그램 에디터에 로드
@@ -257,7 +285,7 @@ async function navigateToAiSearchResult(item) {
         }
         logToConsole('AI 검색 이동', `'${item.title}' 다이어그램 로드`);
     } else {
-        logToConsole('AI 검색 이동', `[${item.category_label}] '${item.title}' 항목으로 이동`);
+        logToConsole('AI 검색 이동', `[${item.category_label || item.category}] '${item.title}' 항목으로 이동`);
     }
 }
 

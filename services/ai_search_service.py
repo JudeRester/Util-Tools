@@ -354,7 +354,7 @@ def _get_all_system_items(filter_category=None):
                         "title": title,
                         "snippet": content[:120].replace("\n", " ").strip(),
                         "full_text": f"{title}\n{cat}\n{content[:1500]}",
-                        "target_tab": "scratchpad",
+                        "target_tab": "notes",
                         "action_data": {"note_id": str(r['id'])}
                     })
             except Exception as e:
@@ -378,7 +378,7 @@ def _get_all_system_items(filter_category=None):
                         "title": title,
                         "snippet": desc if desc else code[:100].replace("\n", " ").strip(),
                         "full_text": f"{title}\n{cat}\n{desc}\n{code[:1500]}",
-                        "target_tab": "diagram-viewer",
+                        "target_tab": "mermaid",
                         "action_data": {"diagram_id": str(r['id'])}
                     })
             except Exception as e:
@@ -403,7 +403,7 @@ def _get_all_system_items(filter_category=None):
                         "title": title,
                         "snippet": f"{desc} ({path})" if desc else path,
                         "full_text": f"{title}\n{cat}\n{desc}\n{path}",
-                        "target_tab": "quick-launch",
+                        "target_tab": "launch",
                         "action_data": {"ql_id": str(r['id']), "command": path, "type": cat}
                     })
             except Exception as e:
@@ -429,7 +429,7 @@ def _get_all_system_items(filter_category=None):
                         "title": title,
                         "snippet": f"{key} - {path}" if key else path,
                         "full_text": f"{title}\n{cat}\n{desc}\n{key}\n{path}",
-                        "target_tab": "shortcuts",
+                        "target_tab": "files",
                         "action_data": {"sc_id": str(r['id']), "path": path}
                     })
             except Exception as e:
@@ -455,7 +455,7 @@ def _get_all_system_items(filter_category=None):
                         "title": title,
                         "snippet": desc if desc else tmpl[:100].replace("\n", " ").strip(),
                         "full_text": f"{title}\n{lang}\n{cat}\n{desc}\n{tmpl[:1500]}",
-                        "target_tab": "generators",
+                        "target_tab": "generator",
                         "action_data": {"gen_id": str(r['id'])}
                     })
             except Exception as e:
