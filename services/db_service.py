@@ -571,6 +571,17 @@ def init_db():
                 """)
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_mock_templates_updated ON mock_templates(updated_at);")
 
+                # 8. ai_embeddings 테이블 (초경량 바이너리 벡터 DB 캐시)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS ai_embeddings (
+                        key TEXT PRIMARY KEY,
+                        hash TEXT NOT NULL,
+                        vector BLOB NOT NULL,
+                        updated_at TEXT
+                    );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_embeddings_hash ON ai_embeddings(hash);")
+
             # 1회 자동 마이그레이션 실행
             _migrate_emails_from_json_if_needed(conn)
             _migrate_notes_from_json_if_needed(conn)

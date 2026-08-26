@@ -585,14 +585,11 @@ def get_all_emails():
                 to_addr as 'to', 
                 date_str as 'date', 
                 category, 
-                snippet, 
-                body_text, 
-                body_html, 
+                substr(snippet, 1, 100) as snippet, 
                 attachments_json as attachments, 
                 message_id, 
                 in_reply_to, 
                 references_header as 'references', 
-                file_path, 
                 created_at 
             FROM emails 
             ORDER BY created_at DESC, date_str DESC
