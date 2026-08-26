@@ -38,6 +38,12 @@ emails/
 *.local.json
 *.log
 
+# SQLite Database & Storage
+data/
+*.db
+*.db-wal
+*.db-shm
+
 # Allow public templates
 !*.example.json
 

@@ -385,31 +385,63 @@ def _get_all_system_items(filter_category=None):
                 "action_data": {"shortcut_id": sc.get('id')}
             })
 
-    # 6. EML 이메일 아카이브 (emails.json)
-    em_data = _load_json_file('emails.json')
-    if em_data is None:
-        em_data = _load_json_file('emails.example.json') or []
-    if isinstance(em_data, list) and (not filter_category or filter_category in ('all', 'emails')):
-        for em in em_data:
-            subject = em.get('subject', '(제목 없음)')
-            from_addr = em.get('from', '')
-            to_addr = em.get('to', '')
-            cat = em.get('category', '일반')
-            snippet = em.get('snippet', '')
-            body_text = em.get('body_text', '') or ''
-            # 이메일 본문이 수십만 자(HTML 등)일 수 있으므로 텍스트 앞부분 1500자만 인덱싱
-            body_clean = body_text[:1500].strip()
-            all_items.append({
-                "id": em.get('id'),
-                "category": "emails",
-                "category_label": f"이메일 ({cat})",
-                "icon": "📧",
-                "title": subject,
-                "snippet": f"[{from_addr}] {snippet}" if from_addr else snippet,
-                "full_text": f"{subject}\n{from_addr}\n{to_addr}\n{cat}\n{body_clean}",
-                "target_tab": "emails",
-                "action_data": {"email_id": em.get('id')}
-            })
+    # 6. EML 이메일 아카이브 (SQLite app.db 고속 조회)
+    if not filter_category or filter_category in ('all', 'emails'):
+        try:
+            from services.db_service import get_db_connection
+            conn = get_db_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT id, subject, from_addr, to_addr, category, snippet, substr(body_text, 1, 1500) as body_clean 
+                    FROM emails
+                """)
+                for row in cursor.fetchall():
+                    em_id = row['id']
+                    subject = row['subject'] or '(제목 없음)'
+                    from_addr = row['from_addr'] or ''
+                    to_addr = row['to_addr'] or ''
+                    cat = row['category'] or '기타'
+                    snippet = row['snippet'] or ''
+                    body_clean = (row['body_clean'] or '').strip()
+                    all_items.append({
+                        "id": em_id,
+                        "category": "emails",
+                        "category_label": f"이메일 ({cat})",
+                        "icon": "📧",
+                        "title": subject,
+                        "snippet": f"[{from_addr}] {snippet}" if from_addr else snippet,
+                        "full_text": f"{subject}\n{from_addr}\n{to_addr}\n{cat}\n{body_clean}",
+                        "target_tab": "emails",
+                        "action_data": {"email_id": em_id}
+                    })
+            finally:
+                conn.close()
+        except Exception as e:
+            _safe_log(f"[AI Engine] 이메일 SQLite 인덱싱 오류: {e}, JSON 폴백 시도")
+            em_data = _load_json_file('emails.json')
+            if em_data is None:
+                em_data = _load_json_file('emails.example.json') or []
+            if isinstance(em_data, list):
+                for em in em_data:
+                    subject = em.get('subject', '(제목 없음)')
+                    from_addr = em.get('from', '')
+                    to_addr = em.get('to', '')
+                    cat = em.get('category', '일반')
+                    snippet = em.get('snippet', '')
+                    body_text = em.get('body_text', '') or ''
+                    body_clean = body_text[:1500].strip()
+                    all_items.append({
+                        "id": em.get('id'),
+                        "category": "emails",
+                        "category_label": f"이메일 ({cat})",
+                        "icon": "📧",
+                        "title": subject,
+                        "snippet": f"[{from_addr}] {snippet}" if from_addr else snippet,
+                        "full_text": f"{subject}\n{from_addr}\n{to_addr}\n{cat}\n{body_clean}",
+                        "target_tab": "emails",
+                        "action_data": {"email_id": em.get('id')}
+                    })
 
     return all_items
 

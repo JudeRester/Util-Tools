@@ -16,6 +16,7 @@ web_dir = os.path.join(base_dir, 'web')
 eel.init(web_dir)
 
 # 2. 백엔드 서비스 모듈 등록 (@eel.expose 함수들 바인딩)
+import services.db_service
 import services.system_service
 import services.shortcuts_service
 import services.quick_launch_service
