@@ -3,7 +3,6 @@ import json
 import uuid
 import time
 import re
-import email
 from email import policy
 from email.parser import BytesParser
 import tkinter as tk
@@ -553,67 +552,6 @@ def save_all_email_attachments_dialog(email_id):
         }
     except Exception as e:
         return {"status": "error", "message": f"일괄 저장 실패: {str(e)}"}
-
-
-@eel.expose
-def open_email_source_file(email_id):
-    """원본 .eml 파일을 시스템 기본 이메일 프로그램(Outlook 등)으로 열기"""
-    try:
-        file_path = _get_eml_file_path(email_id)
-        if not file_path or not os.path.exists(file_path):
-            return {"status": "error", "message": "해당 이메일의 원본 .eml 파일을 찾을 수 없습니다."}
-            
-        os.startfile(file_path)
-        return {"status": "success", "message": f"EML 원본 파일을 열었습니다: {os.path.basename(file_path)}"}
-    except Exception as e:
-        return {"status": "error", "message": f"EML 파일 열기 실패: {str(e)}"}
-
-
-@eel.expose
-def get_all_emails():
-    """저장된 전체 이메일 목록 반환 (하위 호환)"""
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT 
-                id, 
-                subject, 
-                clean_subject, 
-                thread_key, 
-                from_addr as 'from', 
-                to_addr as 'to', 
-                date_str as 'date', 
-                category, 
-                substr(snippet, 1, 100) as snippet, 
-                attachments_json as attachments, 
-                message_id, 
-                in_reply_to, 
-                references_header as 'references', 
-                created_at 
-            FROM emails 
-            ORDER BY created_at DESC, date_str DESC
-        """)
-        rows = cursor.fetchall()
-        emails = []
-        for row in rows:
-            em = dict(row)
-            raw_att = em.get("attachments")
-            if isinstance(raw_att, str):
-                try:
-                    em["attachments"] = json.loads(raw_att) if raw_att else []
-                except Exception:
-                    em["attachments"] = []
-            elif raw_att is None:
-                em["attachments"] = []
-            if not em.get("clean_subject"):
-                em["clean_subject"] = _clean_subject(em.get("subject", ""))
-            if not em.get("thread_key"):
-                em["thread_key"] = em["clean_subject"].lower()
-            emails.append(em)
-        return emails
-    finally:
-        conn.close()
 
 
 @eel.expose

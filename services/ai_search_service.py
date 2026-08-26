@@ -8,6 +8,7 @@
   4. 인메모리 행렬 연산: 검색 시 검색어 1개만 추론(5~10ms) 후 RAM에서 0.1ms 만에 즉시 매칭
 """
 import os
+import sys
 import re
 import json
 import time

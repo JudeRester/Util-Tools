@@ -2,14 +2,8 @@
 데이터 생성(Data Generator) 서비스 모듈
 사용자가 직접 로직을 수정/추가할 수 있는 동적 생성기 시스템 지원
 """
-import os
-import json
 import random
 import eel
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-GENERATORS_FILE = os.path.join(BASE_DIR, "generators.json")
-EXAMPLE_FILE = os.path.join(BASE_DIR, "generators.example.json")
 
 DEFAULT_GENERATORS = [
     {
@@ -247,26 +241,4 @@ def reset_default_generators():
         "status": res["status"],
         "data": default_copy,
         "message": "기본 생성기 목록으로 복원되었습니다."
-    }
-
-
-# 하위 호환용 기존 함수
-@eel.expose
-def generate_biz_id(formatted=True, count=1):
-    weights = [1, 3, 7, 1, 3, 7, 1, 3, 5]
-    results = []
-    count = max(1, min(int(count), 100))
-    for _ in range(count):
-        digits = [random.randint(1, 9)] + [random.randint(0, 9) for _ in range(8)]
-        chk_sum = sum(w * d for w, d in zip(weights[:8], digits[:8]))
-        ninth_product = weights[8] * digits[8]
-        chk_sum += (ninth_product // 10) + (ninth_product % 10)
-        digits.append((10 - (chk_sum % 10)) % 10)
-        raw_val = "".join(map(str, digits))
-        val = f"{raw_val[:3]}-{raw_val[3:5]}-{raw_val[5:]}" if formatted else raw_val
-        results.append(val)
-    return {
-        "status": "success",
-        "data": results[0] if count == 1 else results,
-        "count": len(results)
     }

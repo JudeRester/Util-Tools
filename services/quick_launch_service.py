@@ -158,37 +158,3 @@ def execute_quick_launch_item(item):
             return {"status": "success", "message": f"'{name}' 실행 완료 ({command})"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
-
-
-@eel.expose
-def launch_system_app(app_name):
-    app_commands = {
-        "calculator": "calc.exe",
-        "notepad": "notepad.exe",
-        "taskmgr": "taskmgr.exe",
-        "cmd": "start cmd.exe",
-        "powershell": "start powershell.exe",
-        "regedit": "regedit.exe",
-    }
-    cmd = app_commands.get(app_name)
-    if not cmd:
-        return {"status": "error", "message": f"알 수 없는 애플리케이션입니다: {app_name}"}
-
-    try:
-        subprocess.Popen(cmd, shell=True)
-        return {"status": "success", "message": f"{app_name} 실행 명령을 전송했습니다."}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-
-@eel.expose
-def launch_ssh(target="user@192.168.1.100"):
-    try:
-        cmd = f'start cmd.exe /K "ssh {target}"'
-        subprocess.Popen(cmd, shell=True)
-        return {
-            "status": "success",
-            "message": f"SSH 접속 터미널을 실행했습니다 (대상: {target})"
-        }
-    except Exception as e:
-        return {"status": "error", "message": str(e)}

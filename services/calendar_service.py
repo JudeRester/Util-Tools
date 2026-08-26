@@ -13,7 +13,6 @@ import eel
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CALENDAR_CONFIG_FILE = os.path.join(base_dir, 'calendar_config.json')
 CALENDAR_CONFIG_EXAMPLE_FILE = os.path.join(base_dir, 'calendar_config.example.json')
-CALENDAR_CACHE_FILE = os.path.join(base_dir, 'calendar_cache.json')
 
 DEFAULT_CONFIG = {
     "ics_urls": [

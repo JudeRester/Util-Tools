@@ -52,31 +52,3 @@ async function callCheckPing(host) {
     }
 }
 
-async function callLaunchSSH(target) {
-    logToConsole('SSH 접속 요청...', `대상: ${target}`);
-    try {
-        if (window.eel && eel.launch_ssh) {
-            const res = await eel.launch_ssh(target)();
-            logToConsole('SSH 실행 결과', res.message || res);
-        } else {
-            logToConsole('실행 환경 안내', 'Eel 백엔드 연결 환경에서 실행 가능합니다.');
-        }
-    } catch (err) {
-        logToConsole('호출 실패', err.message || err);
-    }
-}
-
-async function callLaunchApp(appName) {
-    logToConsole(`앱 실행 요청: ${appName}`, '프로세스 실행 중...');
-    try {
-        if (window.eel && eel.launch_system_app) {
-            const res = await eel.launch_system_app(appName)();
-            logToConsole('앱 실행 결과', res.message || res);
-        } else {
-            logToConsole('실행 환경 안내', 'Eel 백엔드 연결 환경에서 실행 가능합니다.');
-        }
-    } catch (err) {
-        logToConsole('호출 실패', err.message || err);
-    }
-}
-
