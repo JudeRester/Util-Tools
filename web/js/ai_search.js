@@ -61,7 +61,7 @@ function switchAiSubTab(tab) {
     }
 }
 
-// 3. 실시간 AI 검색 입력 처리 (디바운스 120ms)
+// 3. 실시간 AI 검색 입력 처리 (디바운스 300ms & 엔터키 즉시 검색)
 function onAiSearchInputChange(val) {
     const clearBtn = document.getElementById('ai-search-clear-btn');
     if (clearBtn) {
@@ -76,7 +76,17 @@ function onAiSearchInputChange(val) {
 
     aiSearchDebounceTimer = setTimeout(() => {
         executeAiSearch(val.trim());
-    }, 120);
+    }, 300);
+}
+
+function handleAiSearchKeydown(event) {
+    if (event.key === 'Enter') {
+        clearTimeout(aiSearchDebounceTimer);
+        const input = document.getElementById('ai-search-input');
+        if (input && input.value.trim()) {
+            executeAiSearch(input.value.trim());
+        }
+    }
 }
 
 function clearAiSearchInput() {

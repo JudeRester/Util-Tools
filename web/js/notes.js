@@ -22,19 +22,31 @@ const DEFAULT_NOTES_FALLBACK = [
     }
 ];
 
-// 실시간 검색 처리
-function onNoteSearch(keyword) {
-    noteSearchKeyword = (keyword || '').trim().toLowerCase();
+// 실시간 검색 처리 (디바운스 200ms)
+let noteSearchDebounceTimer = null;
 
+function onNoteSearch(keyword) {
+    const trimmed = (keyword || '').trim().toLowerCase();
     const clearBtn = document.getElementById('notes-search-clear-btn');
     if (clearBtn) {
-        clearBtn.style.display = noteSearchKeyword ? 'block' : 'none';
+        clearBtn.style.display = trimmed ? 'block' : 'none';
     }
 
-    renderNotesUI();
+    clearTimeout(noteSearchDebounceTimer);
+    if (!trimmed) {
+        noteSearchKeyword = '';
+        renderNotesUI();
+        return;
+    }
+
+    noteSearchDebounceTimer = setTimeout(() => {
+        noteSearchKeyword = trimmed;
+        renderNotesUI();
+    }, 200);
 }
 
 function clearNoteSearch() {
+    clearTimeout(noteSearchDebounceTimer);
     const searchInput = document.getElementById('notes-search-input');
     if (searchInput) {
         searchInput.value = '';

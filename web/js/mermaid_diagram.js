@@ -844,17 +844,31 @@ async function confirmSaveDiagram() {
     }
 }
 
-// 검색 핸들러
+// 검색 핸들러 (디바운스 200ms)
+let diagramSearchDebounceTimer = null;
+
 function onDiagramSearchInput(val) {
-    diagramSearchQuery = (val || '').trim().toLowerCase();
+    const trimmed = (val || '').trim().toLowerCase();
     const clearBtn = document.getElementById('diagram-search-clear-btn');
     if (clearBtn) {
-        clearBtn.style.display = diagramSearchQuery ? 'inline-block' : 'none';
+        clearBtn.style.display = trimmed ? 'inline-block' : 'none';
     }
-    renderDiagramsManageList();
+
+    clearTimeout(diagramSearchDebounceTimer);
+    if (!trimmed) {
+        diagramSearchQuery = '';
+        renderDiagramsManageList();
+        return;
+    }
+
+    diagramSearchDebounceTimer = setTimeout(() => {
+        diagramSearchQuery = trimmed;
+        renderDiagramsManageList();
+    }, 200);
 }
 
 function clearDiagramSearch() {
+    clearTimeout(diagramSearchDebounceTimer);
     const input = document.getElementById('diagram-search-input');
     const clearBtn = document.getElementById('diagram-search-clear-btn');
     if (input) input.value = '';

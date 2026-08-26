@@ -273,17 +273,44 @@ function filterEmailsByCategory(cat) {
     renderEmailList();
 }
 
+let emailSearchDebounceTimer = null;
+
 function onEmailSearchInput(val) {
-    emailState.searchQuery = (val || '').trim();
-    emailState.displayedLimit = 50;
+    const trimmed = (val || '').trim();
     const clearBtn = document.getElementById('email-search-clear-btn');
     if (clearBtn) {
-        clearBtn.style.display = emailState.searchQuery ? 'block' : 'none';
+        clearBtn.style.display = trimmed ? 'block' : 'none';
     }
-    renderEmailList();
+
+    clearTimeout(emailSearchDebounceTimer);
+    if (!trimmed) {
+        emailState.searchQuery = '';
+        emailState.displayedLimit = 50;
+        renderEmailList();
+        return;
+    }
+
+    emailSearchDebounceTimer = setTimeout(() => {
+        emailState.searchQuery = trimmed;
+        emailState.displayedLimit = 50;
+        renderEmailList();
+    }, 250);
+}
+
+function handleEmailSearchKeydown(event) {
+    if (event.key === 'Enter') {
+        clearTimeout(emailSearchDebounceTimer);
+        const input = document.getElementById('email-search-input');
+        if (input) {
+            emailState.searchQuery = (input.value || '').trim();
+            emailState.displayedLimit = 50;
+            renderEmailList();
+        }
+    }
 }
 
 function clearEmailSearch() {
+    clearTimeout(emailSearchDebounceTimer);
     const input = document.getElementById('email-search-input');
     if (input) input.value = '';
     onEmailSearchInput('');

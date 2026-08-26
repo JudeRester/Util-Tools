@@ -427,7 +427,7 @@
                         <div class="email-toolbar-center">
                             <div class="gen-search-box email-search-box">
                                 <span class="gen-search-icon">🔍</span>
-                                <input type="text" id="email-search-input" class="gen-search-input" placeholder="이메일 검색 (제목, 보낸사람, 본문, 분류)..." oninput="onEmailSearchInput(this.value)">
+                                <input type="text" id="email-search-input" class="gen-search-input" placeholder="이메일 검색 (제목, 보낸사람, 본문, 분류)..." oninput="onEmailSearchInput(this.value)" onkeydown="handleEmailSearchKeydown(event)">
                                 <button type="button" id="email-search-clear-btn" class="gen-search-clear-btn" onclick="clearEmailSearch()" style="display: none;">&times;</button>
                             </div>
                         </div>
@@ -1420,7 +1420,7 @@
                     <!-- 대형 AI 검색창 -->
                     <div class="ai-search-box">
                         <span class="ai-search-icon">🧠</span>
-                        <input type="text" id="ai-search-input" class="ai-search-input-field" placeholder="자연어로 검색하세요 (예: 톰캣 포트, DB 타임아웃, 토큰 로그인, 배포 스크립트...)" oninput="onAiSearchInputChange(this.value)" autocomplete="off">
+                        <input type="text" id="ai-search-input" class="ai-search-input-field" placeholder="자연어로 검색하세요 (예: 톰캣 포트, DB 타임아웃, 토큰 로그인, 배포 스크립트...)" oninput="onAiSearchInputChange(this.value)" onkeydown="handleAiSearchKeydown(event)" autocomplete="off">
                         <button type="button" id="ai-search-clear-btn" class="gen-search-clear-btn" onclick="clearAiSearchInput()" style="display: none;">&times;</button>
                     </div>
 

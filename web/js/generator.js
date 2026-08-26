@@ -265,16 +265,30 @@ function setGeneratorCategoryFilter(cat) {
     renderGeneratorsUI();
 }
 
+let genSearchDebounceTimer = null;
+
 function onGeneratorSearchInput(val) {
-    genSearchQuery = (val || '').trim().toLowerCase();
+    const trimmed = (val || '').trim().toLowerCase();
     const clearBtn = document.getElementById('gen-search-clear-btn');
     if (clearBtn) {
-        clearBtn.style.display = genSearchQuery ? 'inline-block' : 'none';
+        clearBtn.style.display = trimmed ? 'inline-block' : 'none';
     }
-    renderGeneratorsUI();
+
+    clearTimeout(genSearchDebounceTimer);
+    if (!trimmed) {
+        genSearchQuery = '';
+        renderGeneratorsUI();
+        return;
+    }
+
+    genSearchDebounceTimer = setTimeout(() => {
+        genSearchQuery = trimmed;
+        renderGeneratorsUI();
+    }, 200);
 }
 
 function clearGeneratorSearch() {
+    clearTimeout(genSearchDebounceTimer);
     const input = document.getElementById('gen-search-input');
     const clearBtn = document.getElementById('gen-search-clear-btn');
     if (input) input.value = '';

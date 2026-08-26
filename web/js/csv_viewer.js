@@ -321,21 +321,34 @@ function clearCsvViewer() {
 }
 
 // ==========================================
-// 4. 검색 & 정렬 & 필터링 로직
+// 4. 검색 & 정렬 & 필터링 로직 (디바운스 200ms)
 // ==========================================
-function onCsvSearchInput(val) {
-    csvState.searchQuery = (val || '').trim().toLowerCase();
-    csvState.currentPage = 1;
+let csvSearchDebounceTimer = null;
 
+function onCsvSearchInput(val) {
+    const trimmed = (val || '').trim().toLowerCase();
     const clearBtn = document.getElementById('csv-search-clear-btn');
     if (clearBtn) {
-        clearBtn.style.display = csvState.searchQuery ? 'inline-block' : 'none';
+        clearBtn.style.display = trimmed ? 'inline-block' : 'none';
     }
 
-    applyFilterAndSort();
+    clearTimeout(csvSearchDebounceTimer);
+    if (!trimmed) {
+        csvState.searchQuery = '';
+        csvState.currentPage = 1;
+        applyFilterAndSort();
+        return;
+    }
+
+    csvSearchDebounceTimer = setTimeout(() => {
+        csvState.searchQuery = trimmed;
+        csvState.currentPage = 1;
+        applyFilterAndSort();
+    }, 200);
 }
 
 function clearCsvSearch() {
+    clearTimeout(csvSearchDebounceTimer);
     const searchInput = document.getElementById('csv-search-input');
     if (searchInput) searchInput.value = '';
     onCsvSearchInput('');
