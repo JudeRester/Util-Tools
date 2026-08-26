@@ -51,6 +51,12 @@ DATA_REGISTRY = {
         "type": "sqlite",
         "table": "emails"
     },
+    "mock_templates": {
+        "label": "모의 데이터 양식",
+        "icon": "🎲",
+        "type": "sqlite",
+        "table": "mock_templates"
+    },
     "calendar": {
         "label": "달력 & 일정 구독",
         "icon": "📅",
@@ -177,6 +183,11 @@ def export_toolkit_data(selected_keys=None):
                                 d["variables"] = json.loads(d.pop("variables_json") or "[]")
                             except Exception:
                                 d["variables"] = []
+                        if "schema_json" in d:
+                            try:
+                                d["schema"] = json.loads(d.pop("schema_json") or "[]")
+                            except Exception:
+                                d["schema"] = []
                         records.append(d)
                     export_payload["data"][key] = records
                 else:
@@ -360,6 +371,26 @@ def import_toolkit_data(import_payload, selected_keys=None, mode="replace"):
                                         message_id, in_reply_to, references_header,
                                         file_path, created_at
                                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                """, records)
+
+                            elif table == "mock_templates":
+                                records = []
+                                for item in new_data:
+                                    raw_schema = item.get("schema_json") or item.get("schema", "[]")
+                                    schema_str = json.dumps(raw_schema, ensure_ascii=False) if isinstance(raw_schema, (list, dict)) else str(raw_schema)
+                                    records.append((
+                                        str(item.get("id", "")),
+                                        item.get("title", ""),
+                                        item.get("description", ""),
+                                        item.get("icon", "⭐"),
+                                        schema_str,
+                                        item.get("created_at", ""),
+                                        item.get("updated_at") or item.get("created_at", "")
+                                    ))
+                                conn.executemany("""
+                                    INSERT OR REPLACE INTO mock_templates (
+                                        id, title, description, icon, schema_json, created_at, updated_at
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
                                 """, records)
 
                         restored_keys.append(key)

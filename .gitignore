@@ -21,6 +21,7 @@ dist/
 # OS files
 Thumbs.db
 Desktop.ini
+.DS_Store
 
 # User Personal Data & Configurations (민감한 로컬 경로, 계정 및 사내망 정보, 메모 데이터, 캘린더 URL, 다이어그램)
 shortcuts.json
@@ -38,6 +39,11 @@ emails/
 *.local.json
 *.log
 
+# Generated Exports & Backups
+*.xlsx
+*.csv
+utility-toolkit-backup-*.json
+
 # SQLite Database & Storage
 data/
 *.db
@@ -51,4 +57,3 @@ data/
 models/
 *.onnx
 embeddings_cache.json
-
