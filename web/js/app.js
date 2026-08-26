@@ -141,6 +141,7 @@ function initTabOnDemand(tabName) {
             break;
         case 'generator':
             if (typeof loadGenerators === 'function') loadGenerators();
+            if (typeof initMockDataStudio === 'function') initMockDataStudio();
             break;
         case 'jsrunner':
             if (typeof initJsPlayground === 'function') initJsPlayground();

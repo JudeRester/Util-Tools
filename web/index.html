@@ -475,36 +475,130 @@
                 </div>
             </section>
 
-            <!-- 5. 데이터 생성 (Custom Data Generator Studio) 탭 -->
+            <!-- 5. 데이터 생성 (Custom Data Generator Studio & Mock Data Studio) 탭 -->
             <section id="tab-generator" class="tab-pane">
-                <!-- 상단 타이틀 및 관리/검색 툴바 -->
-                <div class="pane-toolbar-header gen-toolbar-header">
-                    <div class="group-title-inline">
-                        <span class="title-icon">🔢</span> 데이터 생성기 (<span id="generator-total-count">0</span>개)
-                    </div>
-                    <div class="gen-toolbar-actions">
-                        <div class="gen-search-box">
-                            <span class="gen-search-icon">🔍</span>
-                            <input type="text" id="gen-search-input" class="gen-search-input" placeholder="생성기 검색 (이름, 설명, 태그)..." oninput="onGeneratorSearchInput(this.value)">
-                            <button type="button" id="gen-search-clear-btn" class="gen-search-clear-btn" onclick="clearGeneratorSearch()" style="display: none;">&times;</button>
+                <!-- 서브 탭 스위처 바 -->
+                <div class="gen-subtab-bar">
+                    <button class="gen-subtab-btn active" id="gen-subtab-single-btn" onclick="switchGenSubTab('single')">
+                        <span class="subtab-icon">⚡</span> 단일 항목 생성기
+                    </button>
+                    <button class="gen-subtab-btn" id="gen-subtab-excel-btn" onclick="switchGenSubTab('excel')">
+                        <span class="subtab-icon">📊</span> 엑셀 / 모의 데이터 대량 생성
+                        <span class="gen-new-tag">NEW</span>
+                    </button>
+                </div>
+
+                <!-- 1) 단일 항목 생성기 패널 -->
+                <div id="gen-pane-single" class="gen-sub-pane active">
+                    <!-- 상단 타이틀 및 관리/검색 툴바 -->
+                    <div class="pane-toolbar-header gen-toolbar-header">
+                        <div class="group-title-inline">
+                            <span class="title-icon">🔢</span> 단일 데이터 생성기 (<span id="generator-total-count">0</span>개)
                         </div>
-                        <button class="edit-shortcuts-btn" onclick="openGeneratorsModal()" title="데이터 생성기 관리 및 JS 스크립트 수정">
-                            ⚙️ 관리
-                        </button>
-                        <button class="edit-shortcuts-btn" onclick="openAddGeneratorModal()" title="새로운 생성기 추가">
-                            ➕ 추가
-                        </button>
+                        <div class="gen-toolbar-actions">
+                            <div class="gen-search-box">
+                                <span class="gen-search-icon">🔍</span>
+                                <input type="text" id="gen-search-input" class="gen-search-input" placeholder="생성기 검색 (이름, 설명, 태그)..." oninput="onGeneratorSearchInput(this.value)">
+                                <button type="button" id="gen-search-clear-btn" class="gen-search-clear-btn" onclick="clearGeneratorSearch()" style="display: none;">&times;</button>
+                            </div>
+                            <button class="edit-shortcuts-btn" onclick="openGeneratorsModal()" title="데이터 생성기 관리 및 JS 스크립트 수정">
+                                ⚙️ 관리
+                            </button>
+                            <button class="edit-shortcuts-btn" onclick="openAddGeneratorModal()" title="새로운 생성기 추가">
+                                ➕ 추가
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 동적 카테고리 태그 필터 바 -->
+                    <div id="gen-category-chips" class="gen-category-filter-bar">
+                        <!-- JavaScript로 동적 렌더링 -->
+                    </div>
+
+                    <!-- 데이터 생성기 카드 목록 -->
+                    <div class="button-grid" id="generators-grid">
+                        <!-- JavaScript로 실시간 동적 렌더링 -->
                     </div>
                 </div>
 
-                <!-- 동적 카테고리 태그 필터 바 -->
-                <div id="gen-category-chips" class="gen-category-filter-bar">
-                    <!-- JavaScript로 동적 렌더링 -->
-                </div>
+                <!-- 2) 엑셀 / 모의 데이터 대량 생성 스튜디오 패널 -->
+                <div id="gen-pane-excel" class="gen-sub-pane" style="display: none;">
+                    <div class="mock-studio-container">
+                        <!-- 스튜디오 상단 헤더 & 프리셋 템플릿 선택 바 -->
+                        <div class="mock-studio-header">
+                            <div class="mock-header-left">
+                                <span class="mock-header-title">📊 엑셀 모의 데이터 생성 스튜디오</span>
+                                <span class="mock-header-desc">원하는 컬럼 양식을 자유롭게 구성하고 실제 Excel(.xlsx) 또는 CSV 파일로 대량 생성합니다.</span>
+                            </div>
+                            <div class="mock-preset-selector">
+                                <span class="mock-preset-label">템플릿 프리셋:</span>
+                                <button type="button" class="mock-preset-chip active" data-preset="employee" onclick="loadMockPreset('employee')">👔 임직원 명부</button>
+                                <button type="button" class="mock-preset-chip" data-preset="customer" onclick="loadMockPreset('customer')">🛍️ 회원/고객</button>
+                                <button type="button" class="mock-preset-chip" data-preset="partner" onclick="loadMockPreset('partner')">🏢 거래처</button>
+                                <button type="button" class="mock-preset-chip" data-preset="order" onclick="loadMockPreset('order')">💳 주문/결제</button>
+                                <button type="button" class="mock-preset-chip" data-preset="empty" onclick="loadMockPreset('empty')">➕ 빈 양식</button>
+                            </div>
+                        </div>
 
-                <!-- 데이터 생성기 카드 목록 (동적 렌더링 컨테이너) -->
-                <div class="button-grid" id="generators-grid">
-                    <!-- JavaScript로 실시간 동적 렌더링 -->
+                        <!-- 컬럼 양식 빌더 영역 -->
+                        <div class="mock-builder-card">
+                            <div class="mock-card-header">
+                                <div class="mock-card-title">
+                                    <span>📋 컬럼 양식 정의</span>
+                                    <span class="mock-badge" id="mock-column-count-badge">0개 컬럼</span>
+                                </div>
+                                <button type="button" class="mock-add-col-btn" onclick="addNewMockColumn()">
+                                    <span>➕</span> 컬럼 추가
+                                </button>
+                            </div>
+                            <div class="mock-schema-columns-list" id="mock-schema-columns-list">
+                                <!-- JS 동적 렌더링 -->
+                            </div>
+                        </div>
+
+                        <!-- 생성 컨트롤 및 내보내기 액션 바 -->
+                        <div class="mock-action-bar">
+                            <div class="mock-action-left">
+                                <span class="mock-count-label">생성 건수 (행 수):</span>
+                                <div class="mock-count-group">
+                                    <button type="button" class="mock-count-chip" onclick="document.getElementById('mock-generate-count').value=10; triggerMockPreview();">10건</button>
+                                    <button type="button" class="mock-count-chip" onclick="document.getElementById('mock-generate-count').value=50; triggerMockPreview();">50건</button>
+                                    <button type="button" class="mock-count-chip active" onclick="document.getElementById('mock-generate-count').value=100; triggerMockPreview();">100건</button>
+                                    <button type="button" class="mock-count-chip" onclick="document.getElementById('mock-generate-count').value=500; triggerMockPreview();">500건</button>
+                                    <button type="button" class="mock-count-chip" onclick="document.getElementById('mock-generate-count').value=1000; triggerMockPreview();">1,000건</button>
+                                    <input type="number" id="mock-generate-count" class="mock-count-input" value="100" min="1" max="50000" title="직접 입력">
+                                    <span class="mock-count-unit">행</span>
+                                </div>
+                            </div>
+                            <div class="mock-action-right">
+                                <button type="button" class="mock-action-btn primary" onclick="triggerMockPreview()" title="현재 양식으로 새 랜덤 데이터 미리보기">
+                                    <span>🎲</span> 새로고침
+                                </button>
+                                <button type="button" class="mock-action-btn excel-btn" onclick="downloadMockExcel()" title="선택한 서식대로 실제 엑셀 파일(.xlsx)로 저장">
+                                    <span>📊</span> 엑셀(.xlsx) 저장
+                                </button>
+                                <button type="button" class="mock-action-btn csv-btn" onclick="downloadMockCsv()" title="CSV 파일로 저장">
+                                    <span>📋</span> CSV 저장
+                                </button>
+                                <button type="button" class="mock-action-btn copy-btn" onclick="copyMockJson()" title="미리보기 데이터 JSON 복사">
+                                    <span>💾</span> JSON 복사
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 실시간 데이터 미리보기 테이블 카드 -->
+                        <div class="mock-preview-card">
+                            <div class="mock-card-header">
+                                <div class="mock-card-title">
+                                    <span>👁️ 실시간 데이터 미리보기 (상위 6행)</span>
+                                </div>
+                                <span class="mock-preview-tip">💡 엑셀 저장 시 위에서 설정한 전체 건수만큼 생성되어 저장됩니다.</span>
+                            </div>
+                            <div class="mock-preview-table-container" id="mock-preview-table-container">
+                                <!-- JS 동적 렌더링 -->
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -1404,6 +1498,7 @@
     <script src="js/drag_drop.js"></script>
     <script src="js/system.js"></script>
     <script src="js/generator.js"></script>
+    <script src="js/mock_data_studio.js"></script>
     <script src="js/shortcuts.js"></script>
     <script src="js/quick_launch.js"></script>
     <script src="js/js_runner.js"></script>
