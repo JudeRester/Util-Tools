@@ -2,6 +2,7 @@ import os
 import json
 import uuid
 import time
+import re
 import email
 from email import policy
 from email.parser import BytesParser
@@ -72,6 +73,31 @@ def _save_emails_to_disk(emails_data):
         return False
 
 
+def _clean_subject(subject):
+    """이메일 제목에서 회신/전달/상태 접두사를 제거하고 정규화된 스레드 제목 반환"""
+    if not subject:
+        return "(제목 없음)"
+    
+    s = str(subject).strip()
+    prefix_pattern = re.compile(
+        r'^(?:'
+        r'(?:re|fwd?|fw|답장|전달)(?:\[\d+\]|\(\d+\))?\s*[:：]\s*'
+        r'|\[(?:re|fwd?|fw|회수|공유|답장|전달|참고|재전달)\]\s*'
+        r'|\((?:re|fwd?|fw|회수|공유|답장|전달|참고|재전달|remind|추가설명)\)\s*'
+        r'|(?:회수|공유|답장|전달|재전달)\s*[:：]\s*'
+        r')+',
+        re.IGNORECASE
+    )
+    
+    prev = None
+    while prev != s:
+        prev = s
+        s = prefix_pattern.sub('', s).strip()
+        
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s if s else "(제목 없음)"
+
+
 def _auto_classify_category(subject, body_text):
     """제목 및 본문 키워드 기반 카테고리 자동 추천"""
     text = (subject + " " + body_text).lower()
@@ -94,9 +120,13 @@ def _parse_eml_bytes(raw_bytes, source_filename=""):
     msg = BytesParser(policy=policy.default).parsebytes(raw_bytes)
     
     subject = msg.get("subject", "(제목 없음)") or "(제목 없음)"
+    clean_subject = _clean_subject(subject)
     from_addr = msg.get("from", "") or ""
     to_addr = msg.get("to", "") or ""
     date_str = msg.get("date", "") or ""
+    message_id = msg.get("message-id", "") or msg.get("Message-ID", "") or ""
+    in_reply_to = msg.get("in-reply-to", "") or msg.get("In-Reply-To", "") or ""
+    references = msg.get("references", "") or msg.get("References", "") or ""
     
     body_text = ""
     body_html = ""
@@ -142,7 +172,6 @@ def _parse_eml_bytes(raw_bytes, source_filename=""):
             
     # body_text가 없고 body_html만 있는 경우 간단히 텍스트 생성
     if not body_text and body_html:
-        import re
         body_text = re.sub(r"<[^>]+>", " ", body_html).strip()
         body_text = re.sub(r"\s+", " ", body_text)
         
@@ -151,6 +180,10 @@ def _parse_eml_bytes(raw_bytes, source_filename=""):
     
     return {
         "subject": subject,
+        "clean_subject": clean_subject,
+        "message_id": str(message_id).strip(),
+        "in_reply_to": str(in_reply_to).strip(),
+        "references": str(references).strip(),
         "from": from_addr,
         "to": to_addr,
         "date": date_str,
@@ -172,15 +205,21 @@ def get_all_emails_summary():
     emails = _load_emails_from_disk()
     summaries = []
     for em in emails:
+        clean_sub = em.get("clean_subject") or _clean_subject(em.get("subject", ""))
         summaries.append({
             "id": em.get("id"),
             "subject": em.get("subject", "(제목 없음)"),
+            "clean_subject": clean_sub,
+            "thread_key": clean_sub.lower(),
             "from": em.get("from", ""),
             "to": em.get("to", ""),
             "date": em.get("date", ""),
             "category": em.get("category", "기타"),
             "snippet": em.get("snippet", ""),
             "attachments": em.get("attachments", []),
+            "message_id": em.get("message_id", ""),
+            "in_reply_to": em.get("in_reply_to", ""),
+            "references": em.get("references", ""),
             "file_path": em.get("file_path", ""),
             "created_at": em.get("created_at", "")
         })
@@ -193,6 +232,8 @@ def get_email_detail(email_id):
     emails = _load_emails_from_disk()
     for em in emails:
         if em.get("id") == email_id:
+            if "clean_subject" not in em:
+                em["clean_subject"] = _clean_subject(em.get("subject", ""))
             return {"success": True, "email": em}
     return {"success": False, "message": "해당 이메일을 찾을 수 없습니다."}
 
@@ -259,6 +300,10 @@ def import_eml_files_dialog():
             item = {
                 "id": email_id,
                 "subject": parsed["subject"],
+                "clean_subject": parsed.get("clean_subject") or _clean_subject(parsed["subject"]),
+                "message_id": parsed.get("message_id", ""),
+                "in_reply_to": parsed.get("in_reply_to", ""),
+                "references": parsed.get("references", ""),
                 "from": parsed["from"],
                 "to": parsed["to"],
                 "date": parsed["date"],
@@ -342,6 +387,10 @@ def import_eml_folder_dialog():
             item = {
                 "id": email_id,
                 "subject": parsed["subject"],
+                "clean_subject": parsed.get("clean_subject") or _clean_subject(parsed["subject"]),
+                "message_id": parsed.get("message_id", ""),
+                "in_reply_to": parsed.get("in_reply_to", ""),
+                "references": parsed.get("references", ""),
                 "from": parsed["from"],
                 "to": parsed["to"],
                 "date": parsed["date"],
@@ -397,6 +446,10 @@ def import_eml_raw_text(filename, raw_content, custom_category=None):
         item = {
             "id": email_id,
             "subject": parsed["subject"],
+            "clean_subject": parsed.get("clean_subject") or _clean_subject(parsed["subject"]),
+            "message_id": parsed.get("message_id", ""),
+            "in_reply_to": parsed.get("in_reply_to", ""),
+            "references": parsed.get("references", ""),
             "from": parsed["from"],
             "to": parsed["to"],
             "date": parsed["date"],

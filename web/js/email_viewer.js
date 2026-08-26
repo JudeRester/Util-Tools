@@ -1,9 +1,10 @@
 /**
- * EML 이메일 아카이브 & 뷰어 (Email Archive & Viewer) 모듈
- * - 초경량 요약 메타데이터 로드 (HTML 본문 제외로 140MB -> 2.4MB 98% 감축)
+ * EML 이메일 아카이브 & 대화 스레드 뷰어 (Email Conversation Threading Viewer)
+ * - 비파괴적 대화 스레드(Conversation Threading) 묶기 & 타임라인 아코디언
+ * - Re:, Fwd:, [회수] 등 반복 회신 접두어 자동 정규화
+ * - 초경량 요약 메타데이터 IPC 전송 (98% 용량 감축)
  * - 온디맨드 상세 본문 지연 로드 (Lazy Loading & Detail Cache)
- * - 3,000+개 대용량 데이터 인피니트 스크롤(Infinite Scrolling / 50개씩 가상 렌더링)
- * - multilingual-e5-small AI 시맨틱 검색 연동
+ * - 3,000+개 대용량 데이터 인피니트 스크롤(50개씩 가상 렌더링)
  */
 
 let emailState = {
@@ -16,7 +17,8 @@ let emailState = {
     viewMode: "html",          // 'html' | 'text'
     listWidthPercent: 38,
     displayedLimit: 50,        // 인피니트 스크롤 1회 렌더링 개수
-    isLoadingMore: false
+    isThreadView: true,        // 대화별 묶어보기 모드 (기본 ON)
+    expandedThreadCardIds: new Set() // 현재 타임라인에서 펼쳐진 메일 ID 목록
 };
 
 // ==========================================
@@ -52,8 +54,9 @@ async function loadAllEmails() {
     renderEmailCategoryChips();
     renderEmailList();
 
-    if (emailState.emails.length > 0 && !emailState.selectedEmailId) {
-        selectEmail(emailState.emails[0].id);
+    const displayList = getProcessedEmailList();
+    if (displayList.length > 0 && !emailState.selectedEmailId) {
+        selectEmail(displayList[0].id);
     } else if (emailState.selectedEmailId) {
         renderEmailDetail(emailState.selectedEmailId);
     } else {
@@ -71,8 +74,110 @@ function updateCategoriesList() {
 }
 
 // ==========================================
-// 2. 카테고리 칩 & 필터링
+// 2. 대화 스레드(Thread) 정규화 & 그룹화 엔진
 // ==========================================
+function cleanSubject(subject) {
+    if (!subject) return '제목 없음';
+    let s = String(subject).trim();
+    let prev = null;
+    const prefixRegex = /^(?:(?:re|fwd?|fw|답장|전달)(?:\[\d+\]|\(\d+\))?\s*[:：\-]\s*|\[(?:re|fwd?|fw|회수|공유|답장|전달|참고|재전달)\]\s*|\((?:re|fwd?|fw|회수|공유|답장|전달|참고|재전달|remind|추가설명)\)\s*|(?:회수|공유|답장|전달|재전달)\s*[:：\-]\s*)+/i;
+    
+    while (prev !== s) {
+        prev = s;
+        s = s.replace(prefixRegex, '').trim();
+    }
+    s = s.replace(/\s+/g, ' ').trim();
+    return s || '제목 없음';
+}
+
+function groupEmailsIntoThreads(items) {
+    const groups = new Map();
+
+    for (const item of items) {
+        const cleanSub = item.clean_subject || cleanSubject(item.subject);
+        const key = (item.thread_key || cleanSub).toLowerCase();
+
+        if (!groups.has(key)) {
+            groups.set(key, []);
+        }
+        groups.get(key).push(item);
+    }
+
+    const threads = [];
+    for (const [key, emailList] of groups.entries()) {
+        // 시간순(과거 -> 최신) 정렬
+        emailList.sort((a, b) => {
+            const timeA = new Date(a.date || a.created_at || 0).getTime() || 0;
+            const timeB = new Date(b.date || b.created_at || 0).getTime() || 0;
+            return timeA - timeB;
+        });
+
+        // 가장 최근 메일을 대표 카드로 선정
+        const latestEmail = emailList[emailList.length - 1];
+        const cleanSub = latestEmail.clean_subject || cleanSubject(latestEmail.subject);
+
+        threads.push({
+            ...latestEmail,
+            clean_subject: cleanSub,
+            thread_key: key,
+            thread_count: emailList.length,
+            thread_emails: emailList,
+            thread_senders: [...new Set(emailList.map(e => extractSenderName(e.from)))]
+        });
+    }
+
+    // 최신 대화 순으로 정렬
+    threads.sort((a, b) => {
+        const timeA = new Date(a.date || a.created_at || 0).getTime() || 0;
+        const timeB = new Date(b.date || b.created_at || 0).getTime() || 0;
+        return timeB - timeA;
+    });
+
+    return threads;
+}
+
+function extractSenderName(fromStr) {
+    if (!fromStr) return '알 수 없음';
+    const match = fromStr.match(/^"?'?([^<"']+)'?"?\s*</);
+    if (match && match[1].trim()) return match[1].trim();
+    const emailMatch = fromStr.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+    if (emailMatch) return emailMatch[1];
+    return fromStr.slice(0, 16);
+}
+
+function getAvatarColorClass(name) {
+    const colors = ['avatar-indigo', 'avatar-emerald', 'avatar-amber', 'avatar-purple', 'avatar-rose', 'avatar-cyan', 'avatar-blue'];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+}
+
+// ==========================================
+// 3. 카테고리 칩 & 대화 묶기 토글
+// ==========================================
+function toggleThreadView() {
+    emailState.isThreadView = !emailState.isThreadView;
+    const btn = document.getElementById('email-thread-toggle-btn');
+    const textEl = document.getElementById('email-thread-toggle-text');
+
+    if (btn) {
+        btn.classList.toggle('active', emailState.isThreadView);
+    }
+    if (textEl) {
+        textEl.textContent = emailState.isThreadView ? '대화별 묶기' : '개별 메일 보기';
+    }
+
+    emailState.displayedLimit = 50;
+    renderEmailList();
+
+    const displayList = getProcessedEmailList();
+    if (displayList.length > 0) {
+        selectEmail(displayList[0].id);
+    }
+}
+
 function renderEmailCategoryChips() {
     const container = document.getElementById('email-category-chips');
     if (!container) return;
@@ -143,26 +248,34 @@ function clearEmailSearch() {
 }
 
 // ==========================================
-// 3. 이메일 목록 렌더링 (인피니트 스크롤 최적화)
+// 4. 이메일 목록 렌더링
 // ==========================================
-function getFilteredEmails() {
+function getProcessedEmailList() {
     let filtered = emailState.emails;
 
+    // 1) 카테고리 필터
     if (emailState.activeCategory && emailState.activeCategory !== '전체') {
         filtered = filtered.filter(e => (e.category || '기타') === emailState.activeCategory);
     }
 
+    // 2) 검색어 필터
     if (emailState.searchQuery) {
         const q = emailState.searchQuery.toLowerCase();
         filtered = filtered.filter(e => {
             return (e.subject || '').toLowerCase().includes(q) ||
                    (e.from || '').toLowerCase().includes(q) ||
                    (e.snippet || '').toLowerCase().includes(q) ||
+                   (e.clean_subject || '').toLowerCase().includes(q) ||
                    (e.category || '').toLowerCase().includes(q);
         });
     }
 
-    return filtered;
+    // 3) 대화 스레드 묶기
+    if (emailState.isThreadView) {
+        return groupEmailsIntoThreads(filtered);
+    } else {
+        return filtered;
+    }
 }
 
 function renderEmailList() {
@@ -170,13 +283,17 @@ function renderEmailList() {
     const totalCountEl = document.getElementById('email-total-count');
     if (!container) return;
 
-    const filtered = getFilteredEmails();
+    const list = getProcessedEmailList();
 
     if (totalCountEl) {
-        totalCountEl.textContent = `${filtered.length.toLocaleString()} / ${emailState.emails.length.toLocaleString()}건`;
+        if (emailState.isThreadView) {
+            totalCountEl.textContent = `${list.length.toLocaleString()}개 대화 타래 (${emailState.emails.length.toLocaleString()}건)`;
+        } else {
+            totalCountEl.textContent = `${list.length.toLocaleString()} / ${emailState.emails.length.toLocaleString()}건`;
+        }
     }
 
-    if (filtered.length === 0) {
+    if (list.length === 0) {
         container.innerHTML = `
             <div class="empty-placeholder" style="padding: 40px 10px;">
                 <div class="empty-icon">📭</div>
@@ -187,45 +304,53 @@ function renderEmailList() {
         return;
     }
 
-    const visibleItems = filtered.slice(0, emailState.displayedLimit);
+    const visibleItems = list.slice(0, emailState.displayedLimit);
     let html = '';
 
-    visibleItems.forEach(em => {
-        const isSelected = em.id === emailState.selectedEmailId ? 'selected' : '';
-        const cat = em.category || '기타';
+    visibleItems.forEach(item => {
+        const isSelected = item.id === emailState.selectedEmailId ? 'selected' : '';
+        const cat = item.category || '기타';
         const colorClass = getCategoryColorClass(cat);
-        const hasAttach = em.attachments && em.attachments.length > 0;
+        const hasAttach = item.attachments && item.attachments.length > 0;
+        const threadCount = item.thread_count || 1;
 
-        const subjectHighlighted = highlightSearchText(em.subject || '(제목 없음)', emailState.searchQuery);
-        const fromHighlighted = highlightSearchText(em.from || '', emailState.searchQuery);
-        const snippetHighlighted = highlightSearchText(em.snippet || '', emailState.searchQuery);
+        const displayTitle = emailState.isThreadView ? (item.clean_subject || cleanSubject(item.subject)) : (item.subject || '(제목 없음)');
+        const subjectHighlighted = highlightSearchText(displayTitle, emailState.searchQuery);
+        const fromHighlighted = highlightSearchText(item.from || '', emailState.searchQuery);
+        const snippetHighlighted = highlightSearchText(item.snippet || '', emailState.searchQuery);
+
+        const threadBadgeHtml = (emailState.isThreadView && threadCount > 1)
+            ? `<span class="email-thread-badge" title="${threadCount}개의 답장/전달 메일이 묶여있습니다">💬 ${threadCount}</span>`
+            : '';
 
         html += `
-            <div class="email-list-card ${isSelected}" onclick="selectEmail('${em.id}')" data-email-id="${em.id}">
+            <div class="email-list-card ${isSelected}" onclick="selectEmail('${item.id}')" data-email-id="${item.id}">
                 <div class="email-card-top">
                     <div class="email-card-category-badge ${colorClass}">
                         <span class="cat-dot"></span>
                         <span class="cat-name">${escapeHtml(cat)}</span>
                     </div>
-                    <span class="email-card-date">${formatEmailDate(em.date || em.created_at)}</span>
+                    <span class="email-card-date">${formatEmailDate(item.date || item.created_at)}</span>
                 </div>
-                <div class="email-card-subject">${subjectHighlighted}</div>
+                <div class="email-card-subject">
+                    ${subjectHighlighted}
+                    ${threadBadgeHtml}
+                </div>
                 <div class="email-card-from">👤 ${fromHighlighted}</div>
                 <div class="email-card-snippet">${snippetHighlighted}</div>
                 <div class="email-card-bottom">
-                    ${hasAttach ? `<span class="email-card-attach-badge">📎 ${em.attachments.length}개</span>` : '<span></span>'}
+                    ${hasAttach ? `<span class="email-card-attach-badge">📎 ${item.attachments.length}개</span>` : '<span></span>'}
                     <div class="email-card-actions" onclick="event.stopPropagation();">
-                        <button class="email-mini-action-btn" onclick="openEmailInOsApp('${em.id}')" title="Windows 기본 메일 앱(Outlook 등)으로 열기">📨</button>
-                        <button class="email-mini-action-btn danger" onclick="deleteEmailItem('${em.id}')" title="이메일 삭제">🗑️</button>
+                        <button class="email-mini-action-btn" onclick="openEmailInOsApp('${item.id}')" title="Windows 기본 메일 앱(Outlook 등)으로 열기">📨</button>
+                        <button class="email-mini-action-btn danger" onclick="deleteEmailItem('${item.id}')" title="이메일 삭제">🗑️</button>
                     </div>
                 </div>
             </div>
         `;
     });
 
-    // 남은 이메일이 있는 경우 하단 인디케이터
-    if (filtered.length > emailState.displayedLimit) {
-        const remaining = filtered.length - emailState.displayedLimit;
+    if (list.length > emailState.displayedLimit) {
+        const remaining = list.length - emailState.displayedLimit;
         html += `
             <div class="email-load-more-card" onclick="loadMoreEmails()">
                 <span>스크롤하여 더 보기 (남은 ${remaining.toLocaleString()}개) ▾</span>
@@ -237,8 +362,8 @@ function renderEmailList() {
 }
 
 function loadMoreEmails() {
-    const filtered = getFilteredEmails();
-    if (emailState.displayedLimit < filtered.length) {
+    const list = getProcessedEmailList();
+    if (emailState.displayedLimit < list.length) {
         emailState.displayedLimit += 50;
         renderEmailList();
     }
@@ -250,8 +375,8 @@ function initEmailScrollListener() {
 
     listPanel.addEventListener('scroll', () => {
         if (listPanel.scrollTop + listPanel.clientHeight >= listPanel.scrollHeight - 150) {
-            const filtered = getFilteredEmails();
-            if (emailState.displayedLimit < filtered.length) {
+            const list = getProcessedEmailList();
+            if (emailState.displayedLimit < list.length) {
                 emailState.displayedLimit += 50;
                 renderEmailList();
             }
@@ -262,7 +387,6 @@ function initEmailScrollListener() {
 function selectEmail(id) {
     emailState.selectedEmailId = id;
 
-    // 카드의 선택 스타일 갱신
     const cards = document.querySelectorAll('.email-list-card');
     cards.forEach(c => {
         if (c.getAttribute('data-email-id') === id) {
@@ -276,76 +400,60 @@ function selectEmail(id) {
 }
 
 // ==========================================
-// 4. 이메일 상세 본문 렌더링 (Lazy Loading & 캐싱)
+// 5. 이메일 상세 리더 & 대화 타임라인 렌더링
 // ==========================================
 async function renderEmailDetail(id) {
     const container = document.getElementById('email-detail-container');
     if (!container) return;
 
-    const summary = emailState.emails.find(e => e.id === id);
-    if (!summary) {
+    const processedList = getProcessedEmailList();
+    const item = processedList.find(e => e.id === id) || emailState.emails.find(e => e.id === id);
+
+    if (!item) {
         renderEmptyEmailDetail();
         return;
     }
 
-    // 1) 메모리 캐시에 상세 본문이 이미 있는 경우 즉시 렌더링
-    if (emailState.detailCache[id]) {
-        renderEmailDetailContent(emailState.detailCache[id]);
-        return;
+    // 대화 스레드에 속한 다중 메일인지 판별
+    const threadEmails = (emailState.isThreadView && item.thread_emails && item.thread_emails.length > 1)
+        ? item.thread_emails
+        : [item];
+
+    if (threadEmails.length > 1) {
+        // 다중 대화 타래 타임라인 렌더링
+        await renderConversationTimeline(item, threadEmails);
+    } else {
+        // 단일 메일 렌더링
+        await renderSingleEmailDetail(item);
     }
-
-    // 2) 아직 없으면 요약본으로 먼저 헤더를 띄우고 본문만 비동기 로드
-    renderEmailDetailLoadingHeader(summary);
-
-    try {
-        if (window.eel && typeof eel.get_email_detail === 'function') {
-            const res = await eel.get_email_detail(id)();
-            if (res.success && res.email) {
-                emailState.detailCache[id] = res.email;
-                if (emailState.selectedEmailId === id) {
-                    renderEmailDetailContent(res.email);
-                }
-                return;
-            }
-        }
-    } catch (e) {
-        console.error("이메일 본문 상세 로드 실패:", e);
-    }
-
-    // 로드 실패 시 summary 내용으로 폴백 렌더링
-    renderEmailDetailContent(summary);
 }
 
-function renderEmailDetailLoadingHeader(summary) {
+async function renderSingleEmailDetail(summary) {
     const container = document.getElementById('email-detail-container');
     if (!container) return;
 
-    const cat = summary.category || '기타';
-    container.innerHTML = `
-        <div class="email-detail-header">
-            <div class="email-detail-title-row">
-                <h2 class="email-detail-subject">${escapeHtml(summary.subject || '(제목 없음)')}</h2>
-            </div>
-            <div class="email-meta-grid">
-                <div class="email-meta-item">
-                    <span class="meta-label">보낸사람:</span>
-                    <span class="meta-value">${escapeHtml(summary.from || '-')}</span>
-                </div>
-                <div class="email-meta-item">
-                    <span class="meta-label">작성일시:</span>
-                    <span class="meta-value">${escapeHtml(summary.date || summary.created_at || '-')}</span>
-                </div>
-            </div>
-        </div>
-        <div class="email-detail-body">
-            <div class="email-body-text-wrapper" style="display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">
-                <span>⏳ 이메일 본문 불러오는 중...</span>
-            </div>
-        </div>
-    `;
+    // 캐시 확인
+    let email = emailState.detailCache[summary.id];
+    if (!email) {
+        renderEmailDetailLoadingHeader(summary);
+        try {
+            if (window.eel && typeof eel.get_email_detail === 'function') {
+                const res = await eel.get_email_detail(summary.id)();
+                if (res.success && res.email) {
+                    email = res.email;
+                    emailState.detailCache[summary.id] = email;
+                }
+            }
+        } catch (e) {
+            console.error("이메일 본문 상세 로드 실패:", e);
+        }
+    }
+
+    email = email || summary;
+    renderSingleEmailContent(email);
 }
 
-function renderEmailDetailContent(email) {
+function renderSingleEmailContent(email) {
     const container = document.getElementById('email-detail-container');
     if (!container) return;
 
@@ -446,6 +554,258 @@ function renderEmailDetailContent(email) {
     `;
 }
 
+// ==========================================
+// 6. 다중 대화 타래(Conversation Timeline) 렌더링
+// ==========================================
+async function renderConversationTimeline(threadObj, threadEmails) {
+    const container = document.getElementById('email-detail-container');
+    if (!container) return;
+
+    const baseTitle = threadObj.clean_subject || cleanSubject(threadObj.subject);
+    const cat = threadObj.category || '기타';
+    const participants = threadObj.thread_senders || [...new Set(threadEmails.map(e => extractSenderName(e.from)))];
+
+    // 기본적으로 가장 마지막(최신) 메일만 펼치고 나머지는 접음
+    const latestEmailId = threadEmails[threadEmails.length - 1].id;
+    if (emailState.expandedThreadCardIds.size === 0) {
+        emailState.expandedThreadCardIds.add(latestEmailId);
+    }
+
+    const catOptions = emailState.categories
+        .filter(c => c !== '전체')
+        .map(c => `<option value="${escapeHtml(c)}" ${c === cat ? 'selected' : ''}>${escapeHtml(c)}</option>`)
+        .join('');
+
+    // 헤더 렌더링
+    let timelineCardsHtml = '';
+    threadEmails.forEach((em, idx) => {
+        const isLatest = (idx === threadEmails.length - 1);
+        const isExpanded = emailState.expandedThreadCardIds.has(em.id);
+        const senderName = extractSenderName(em.from);
+        const avatarColor = getAvatarColorClass(senderName);
+        const avatarLetter = senderName.charAt(0).toUpperCase();
+
+        const cached = emailState.detailCache[em.id] || em;
+        const hasAttach = cached.attachments && cached.attachments.length > 0;
+
+        let bodyHtml = '';
+        if (isExpanded) {
+            if (emailState.viewMode === 'html' && cached.body_html) {
+                bodyHtml = `
+                    <div class="thread-body-content">
+                        <iframe class="thread-body-html-frame" sandbox="allow-same-origin" srcdoc="${escapeHtmlAttr(cached.body_html)}"></iframe>
+                    </div>
+                `;
+            } else {
+                bodyHtml = `
+                    <div class="thread-body-content">
+                        <pre class="thread-body-text">${escapeHtml(cached.body_text || cached.snippet || '(본문 없음)')}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        timelineCardsHtml += `
+            <div id="thread-card-${em.id}" class="email-thread-card ${isExpanded ? 'expanded' : 'collapsed'}">
+                <div class="email-thread-card-header" onclick="toggleThreadCardExpansion('${em.id}')">
+                    <div class="thread-header-left">
+                        <div class="email-thread-avatar ${avatarColor}">${avatarLetter}</div>
+                        <div class="thread-header-info">
+                            <div class="thread-author-row">
+                                <span class="thread-author-name">${escapeHtml(senderName)}</span>
+                                <span class="thread-author-email">&lt;${escapeHtml(em.from)}&gt;</span>
+                                ${isLatest ? '<span class="thread-latest-badge">✨ 최신 답장</span>' : `<span class="thread-seq-badge">#${idx + 1}</span>`}
+                            </div>
+                            <div class="thread-recipient-row">
+                                <span class="thread-to-label">수신:</span> <span class="thread-to-val">${escapeHtml(em.to || '-')}</span>
+                            </div>
+                            <div class="thread-snippet-preview">${escapeHtml(em.snippet || '')}</div>
+                        </div>
+                    </div>
+                    <div class="thread-header-right">
+                        <span class="thread-date">${formatEmailDate(em.date || em.created_at)}</span>
+                        <div class="thread-card-actions" onclick="event.stopPropagation();">
+                            <button class="email-mini-action-btn" onclick="openEmailInOsApp('${em.id}')" title="메일 앱으로 열기">📨</button>
+                            <button class="email-mini-action-btn" onclick="copyEmailBody('${em.id}')" title="본문 복사">📋</button>
+                            <button class="email-mini-action-btn danger" onclick="deleteEmailItem('${em.id}')" title="삭제">🗑️</button>
+                        </div>
+                        <span class="thread-toggle-chevron">▾</span>
+                    </div>
+                </div>
+
+                <div class="email-thread-card-body">
+                    ${hasAttach ? `
+                        <div class="email-attachments-bar" style="margin-bottom: 8px;">
+                            <span class="attach-title">📎 첨부 (${cached.attachments.length}개):</span>
+                            <div class="attach-items-list">
+                                ${cached.attachments.map(att => `
+                                    <span class="attach-item-chip">📄 ${escapeHtml(att.filename)} (${att.size})</span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${bodyHtml}
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = `
+        <div class="email-detail-header">
+            <div class="email-detail-title-row">
+                <h2 class="email-detail-subject">${escapeHtml(baseTitle)}</h2>
+                <div class="email-detail-category-selector">
+                    <label for="email-cat-select-${threadObj.id}">분류:</label>
+                    <select id="email-cat-select-${threadObj.id}" class="email-cat-dropdown" onchange="changeThreadCategory('${threadObj.thread_key}', this.value)">
+                        ${catOptions}
+                    </select>
+                </div>
+            </div>
+
+            <div class="email-thread-summary-banner">
+                <div class="thread-summary-left">
+                    <span class="thread-summary-pill">💬 총 ${threadEmails.length}건의 대화 타래</span>
+                    <span class="thread-participants-list">참여자: ${escapeHtml(participants.join(', '))}</span>
+                </div>
+                <button class="thread-expand-all-btn" onclick="toggleAllThreadCards()">
+                    전체 펼치기 / 접기
+                </button>
+            </div>
+
+            <div class="email-detail-toolbar">
+                <div class="email-view-mode-tabs">
+                    <button class="email-mode-btn ${emailState.viewMode === 'html' ? 'active' : ''}" onclick="setEmailViewMode('html')">
+                        <span>🌐</span> HTML 뷰
+                    </button>
+                    <button class="email-mode-btn ${emailState.viewMode === 'text' ? 'active' : ''}" onclick="setEmailViewMode('text')">
+                        <span>📄</span> 텍스트 뷰
+                    </button>
+                </div>
+
+                <div class="email-action-btn-group">
+                    <button class="mini-tool-btn" onclick="openEmailInOsApp('${latestEmailId}')" title="최신 메일을 Windows 메일 앱으로 열기">
+                        <span>📨</span> 최신 메일 열기
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="email-thread-timeline-wrapper">
+            <div class="email-thread-timeline">
+                ${timelineCardsHtml}
+            </div>
+        </div>
+    `;
+
+    // 펼쳐진 카드 중 아직 상세 본문 캐시가 없는 메일은 비동기로 지연 로드
+    for (const em of threadEmails) {
+        if (emailState.expandedThreadCardIds.has(em.id) && !emailState.detailCache[em.id]) {
+            fetchAndRenderThreadCardBody(em.id);
+        }
+    }
+}
+
+async function toggleThreadCardExpansion(emailId) {
+    if (emailState.expandedThreadCardIds.has(emailId)) {
+        emailState.expandedThreadCardIds.delete(emailId);
+    } else {
+        emailState.expandedThreadCardIds.add(emailId);
+    }
+
+    const card = document.getElementById(`thread-card-${emailId}`);
+    if (!card) return;
+
+    const isExpanded = emailState.expandedThreadCardIds.has(emailId);
+    card.classList.toggle('expanded', isExpanded);
+    card.classList.toggle('collapsed', !isExpanded);
+
+    if (isExpanded) {
+        await fetchAndRenderThreadCardBody(emailId);
+    }
+}
+
+function toggleAllThreadCards() {
+    const list = getProcessedEmailList();
+    const item = list.find(e => e.id === emailState.selectedEmailId);
+    if (!item || !item.thread_emails) return;
+
+    const allIds = item.thread_emails.map(e => e.id);
+    const areAllExpanded = allIds.every(id => emailState.expandedThreadCardIds.has(id));
+
+    if (areAllExpanded) {
+        emailState.expandedThreadCardIds.clear();
+    } else {
+        allIds.forEach(id => emailState.expandedThreadCardIds.add(id));
+    }
+
+    renderEmailDetail(emailState.selectedEmailId);
+}
+
+async function fetchAndRenderThreadCardBody(emailId) {
+    let email = emailState.detailCache[emailId];
+    if (!email) {
+        try {
+            if (window.eel && typeof eel.get_email_detail === 'function') {
+                const res = await eel.get_email_detail(emailId)();
+                if (res.success && res.email) {
+                    email = res.email;
+                    emailState.detailCache[emailId] = email;
+                }
+            }
+        } catch (e) {
+            console.error("스레드 메일 상세 로드 실패:", e);
+        }
+    }
+
+    const card = document.getElementById(`thread-card-${emailId}`);
+    if (!card) return;
+
+    const bodyContainer = card.querySelector('.email-thread-card-body');
+    if (!bodyContainer) return;
+
+    email = email || emailState.emails.find(e => e.id === emailId);
+    if (!email) return;
+
+    const hasAttach = email.attachments && email.attachments.length > 0;
+    let contentHtml = '';
+
+    if (emailState.viewMode === 'html' && email.body_html) {
+        contentHtml = `
+            <div class="thread-body-content">
+                <iframe class="thread-body-html-frame" sandbox="allow-same-origin" srcdoc="${escapeHtmlAttr(email.body_html)}"></iframe>
+            </div>
+        `;
+    } else {
+        contentHtml = `
+            <div class="thread-body-content">
+                <pre class="thread-body-text">${escapeHtml(email.body_text || email.snippet || '(본문 내용이 없습니다)')}</pre>
+            </div>
+        `;
+    }
+
+    bodyContainer.innerHTML = `
+        ${hasAttach ? `
+            <div class="email-attachments-bar" style="margin-bottom: 8px;">
+                <span class="attach-title">📎 첨부 (${email.attachments.length}개):</span>
+                <div class="attach-items-list">
+                    ${email.attachments.map(att => `
+                        <span class="attach-item-chip">📄 ${escapeHtml(att.filename)} (${att.size})</span>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+        ${contentHtml}
+    `;
+}
+
+async function changeThreadCategory(threadKey, newCategory) {
+    if (!newCategory) return;
+    const threadEmails = emailState.emails.filter(e => (e.thread_key || cleanSubject(e.subject)).toLowerCase() === threadKey);
+    for (const em of threadEmails) {
+        await changeEmailCategory(em.id, newCategory);
+    }
+}
+
 function renderEmptyEmailDetail() {
     const container = document.getElementById('email-detail-container');
     if (!container) return;
@@ -458,6 +818,34 @@ function renderEmptyEmailDetail() {
     `;
 }
 
+function renderEmailDetailLoadingHeader(summary) {
+    const container = document.getElementById('email-detail-container');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="email-detail-header">
+            <div class="email-detail-title-row">
+                <h2 class="email-detail-subject">${escapeHtml(summary.subject || '(제목 없음)')}</h2>
+            </div>
+            <div class="email-meta-grid">
+                <div class="email-meta-item">
+                    <span class="meta-label">보낸사람:</span>
+                    <span class="meta-value">${escapeHtml(summary.from || '-')}</span>
+                </div>
+                <div class="email-meta-item">
+                    <span class="meta-label">작성일시:</span>
+                    <span class="meta-value">${escapeHtml(summary.date || summary.created_at || '-')}</span>
+                </div>
+            </div>
+        </div>
+        <div class="email-detail-body">
+            <div class="email-body-text-wrapper" style="display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">
+                <span>⏳ 이메일 본문 불러오는 중...</span>
+            </div>
+        </div>
+    `;
+}
+
 function setEmailViewMode(mode) {
     emailState.viewMode = mode;
     if (emailState.selectedEmailId) {
@@ -466,7 +854,7 @@ function setEmailViewMode(mode) {
 }
 
 // ==========================================
-// 5. 카테고리 변경 & 추가
+// 7. 카테고리 변경 & 추가
 // ==========================================
 async function changeEmailCategory(emailId, newCategory) {
     if (!newCategory) return;
@@ -481,7 +869,6 @@ async function changeEmailCategory(emailId, newCategory) {
                 updateCategoriesList();
                 renderEmailCategoryChips();
                 renderEmailList();
-                renderEmailDetail(emailId);
                 logToConsole('이메일 분류 변경', `카테고리: [${newCategory}] 로 변경 완료`);
             }
         }
@@ -501,7 +888,7 @@ async function promptAddEmailCategory() {
 }
 
 // ==========================================
-// 6. 파일 가져오기 & 드래그 앤 드롭 (프로그레스 바 지원)
+// 8. 파일 가져오기 & 드래그 앤 드롭 (프로그레스 바 지원)
 // ==========================================
 if (window.eel) {
     try {
@@ -636,7 +1023,7 @@ function initEmailDropZone() {
 }
 
 // ==========================================
-// 7. 액션 (복사, 열기, 삭제, 비우기)
+// 9. 액션 (복사, 열기, 삭제, 비우기)
 // ==========================================
 async function openEmailInOsApp(emailId) {
     try {
@@ -688,7 +1075,8 @@ async function deleteEmailItem(emailId) {
                 updateCategoriesList();
                 renderEmailCategoryChips();
                 if (emailState.selectedEmailId === emailId) {
-                    emailState.selectedEmailId = emailState.emails.length > 0 ? emailState.emails[0].id : null;
+                    const list = getProcessedEmailList();
+                    emailState.selectedEmailId = list.length > 0 ? list[0].id : null;
                 }
                 renderEmailList();
                 if (emailState.selectedEmailId) {
@@ -740,7 +1128,7 @@ function openEmailFromAiSearch(emailId) {
 }
 
 // ==========================================
-// 8. 좌우 스플리터 리사이저
+// 10. 좌우 스플리터 리사이저
 // ==========================================
 function initEmailResizer() {
     const resizer = document.getElementById('email-resizer');
@@ -792,7 +1180,7 @@ function initEmailResizer() {
 }
 
 // ==========================================
-// 9. 헬퍼 유틸
+// 11. 헬퍼 유틸
 // ==========================================
 function formatEmailDate(dateStr) {
     if (!dateStr) return '';
