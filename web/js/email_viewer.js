@@ -312,11 +312,16 @@ function getProcessedEmailList() {
         });
     }
 
-    // 3) 대화 스레드 묶기
+    // 3) 대화 스레드 묶기 또는 최신순 정렬
     if (emailState.isThreadView) {
         return groupEmailsIntoThreads(filtered);
     } else {
-        return filtered;
+        // 단일 메일 목록: 최신 수신 날짜순(내림차순) 정렬
+        return [...filtered].sort((a, b) => {
+            const timeA = new Date(a.date || a.created_at || 0).getTime() || 0;
+            const timeB = new Date(b.date || b.created_at || 0).getTime() || 0;
+            return timeB - timeA;
+        });
     }
 }
 
