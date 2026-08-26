@@ -275,10 +275,10 @@ async function navigateToAiSearchResult(item) {
         trySelectNote();
         logToConsole('AI 검색 이동', `'${item.title}' 메모로 이동`);
     } else if (item.category === 'emails' && item.action_data?.email_id) {
-        // 지연 로딩된 이메일이 준비될 때까지 안전하게 열람
+        // AI 검색 이메일 즉시 열람 (스레드 탐색 및 SQLite 온디맨드 로드)
         const emailId = item.action_data.email_id;
         const tryOpenEmail = (retries = 10) => {
-            if (typeof openEmailFromAiSearch === 'function' && typeof emailState !== 'undefined' && emailState.emails.length > 0) {
+            if (typeof openEmailFromAiSearch === 'function') {
                 openEmailFromAiSearch(emailId);
             } else if (retries > 0) {
                 setTimeout(() => tryOpenEmail(retries - 1), 50);

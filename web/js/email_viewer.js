@@ -481,9 +481,32 @@ async function renderEmailDetail(id) {
     if (!container) return;
 
     const processedList = getProcessedEmailList();
-    const item = processedList.find(e => e.id === id) || emailState.emails.find(e => e.id === id);
-
+    // 1) 스레드 대표 ID 또는 스레드 내 포함된 하위 메일 탐색
+    let item = processedList.find(e => e.id === id);
     if (!item) {
+        item = processedList.find(e => e.thread_emails && e.thread_emails.some(m => m.id === id));
+    }
+    if (!item) {
+        item = emailState.emails.find(e => e.id === id);
+    }
+
+    // 2) 메모리 목록에 없는 경우(청크 미로드 등), 백엔드 SQLite DB에서 즉시 단건 직접 조회!
+    if (!item) {
+        try {
+            renderEmailDetailLoadingHeader({ id, subject: '이메일 불러오는 중...', from: '', date: '' });
+            if (window.eel && typeof eel.get_email_detail === 'function') {
+                const res = await eel.get_email_detail(id)();
+                if (res && res.success && res.email) {
+                    item = res.email;
+                    cacheEmailDetail(id, item);
+                    await renderSingleEmailDetail(item);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.error("이메일 단건 직접 조회 실패:", e);
+        }
+
         renderEmptyEmailDetail();
         return;
     }
@@ -1270,9 +1293,31 @@ function openEmailFromAiSearch(emailId) {
     if (typeof switchTab === 'function') {
         switchTab('emails');
     }
+    clearEmailSearch();
     emailState.activeCategory = '전체';
     renderEmailCategoryChips();
-    selectEmail(emailId);
+
+    // 해당 emailId가 포함된 스레드나 카드가 있는지 찾기
+    const processedList = getProcessedEmailList();
+    let targetThread = processedList.find(t => t.id === emailId || (t.thread_emails && t.thread_emails.some(m => m.id === emailId)));
+    const targetId = targetThread ? targetThread.id : emailId;
+
+    // 해당 카드가 displayedLimit 바깥에 있다면 displayedLimit 확장
+    const targetIdx = processedList.findIndex(t => t.id === targetId);
+    if (targetIdx >= emailState.displayedLimit) {
+        emailState.displayedLimit = targetIdx + 30;
+    }
+
+    renderEmailList();
+    selectEmail(targetId);
+
+    // 해당 카드로 좌측 스크롤 자동 이동
+    setTimeout(() => {
+        const card = document.querySelector(`.email-list-card[data-email-id="${targetId}"]`);
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 120);
 }
 
 // ==========================================
