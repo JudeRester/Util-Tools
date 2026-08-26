@@ -23,7 +23,13 @@ function initMermaidDiagram() {
                 startOnLoad: false,
                 theme: currentMermaidTheme,
                 securityLevel: 'loose',
-                flowchart: { curve: 'basis' }
+                flowchart: {
+                    curve: 'linear',
+                    htmlLabels: true,
+                    useMaxWidth: false
+                },
+                sequence: { useMaxWidth: false },
+                gantt: { useMaxWidth: false }
             });
         }
     } catch (e) {
@@ -136,6 +142,11 @@ async function renderMermaid(force = false) {
 
     try {
         const uniqueId = 'mermaid-svg-' + Date.now();
+
+        // 이전에 실패한 임시 DOM 정리
+        const oldTemps = document.querySelectorAll('[id^="dmermaid-svg-"]');
+        oldTemps.forEach(el => el.remove());
+
         const { svg } = await mermaid.render(uniqueId, code);
         outputEl.innerHTML = svg;
         outputEl.style.opacity = '1';
@@ -165,9 +176,15 @@ async function renderMermaid(force = false) {
             updateCanvasTransform();
         }
     } catch (err) {
-        console.warn("Mermaid 렌더링 문법 오류:", err);
+        console.warn("Mermaid 렌더링 오류:", err);
+
+        // 오류 시 생성된 임시 DOM 정리
+        const oldTemps = document.querySelectorAll('[id^="dmermaid-svg-"]');
+        oldTemps.forEach(el => el.remove());
+
         if (errorBar && errorText) {
-            errorText.textContent = (err.message || err.str || '문법 오류가 발생했습니다. 문법을 확인해 주세요.').split('\n')[0];
+            const rawMsg = err.message || err.str || (typeof err === 'string' ? err : '다이어그램 문법 오류가 발생했습니다.');
+            errorText.textContent = rawMsg.split('\n')[0];
             errorBar.style.display = 'flex';
         }
         if (outputEl.firstChild) {
@@ -197,7 +214,13 @@ async function changeMermaidTheme(theme) {
             startOnLoad: false,
             theme: theme,
             securityLevel: 'loose',
-            flowchart: { curve: 'basis' }
+            flowchart: {
+                curve: 'linear',
+                htmlLabels: true,
+                useMaxWidth: false
+            },
+            sequence: { useMaxWidth: false },
+            gantt: { useMaxWidth: false }
         });
         await renderMermaid(false);
         logToConsole('Mermaid 테마 변경', `테마: [${theme}]`);

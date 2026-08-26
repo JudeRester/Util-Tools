@@ -117,67 +117,134 @@ return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');"""
 ]
 
 
-def load_generators_from_file():
-    """generators.json 또는 generators.example.json에서 생성기 목록 로드"""
-    if os.path.exists(GENERATORS_FILE):
-        try:
-            with open(GENERATORS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list) and len(data) > 0:
-                    return data
-        except Exception as e:
-            print(f"[GeneratorService] Error reading {GENERATORS_FILE}: {e}")
-
-    if os.path.exists(EXAMPLE_FILE):
-        try:
-            with open(EXAMPLE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list) and len(data) > 0:
-                    return data
-        except Exception:
-            pass
-
-    return [g.copy() for g in DEFAULT_GENERATORS]
-
-
-def save_generators_to_file(generators_list):
-    """generators.json 파일에 생성기 목록 저장"""
-    try:
-        with open(GENERATORS_FILE, "w", encoding="utf-8") as f:
-            json.dump(generators_list, f, ensure_ascii=False, indent=2)
-        return True
-    except Exception as e:
-        print(f"[GeneratorService] Error saving {GENERATORS_FILE}: {e}")
-        return False
+from services.db_service import get_db_connection
 
 
 @eel.expose
 def get_generators():
-    """등록된 생성기 목록 반환"""
-    data = load_generators_from_file()
-    return {"status": "success", "data": data}
+    """등록된 생성기 목록 반환 (SQLite 중앙 DB 조회)"""
+    try:
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, title, language, template, description, category, icon, variables_json, created_at
+                FROM generators
+                ORDER BY id ASC
+            """)
+            rows = cursor.fetchall()
+
+            if not rows:
+                records = []
+                for gen in DEFAULT_GENERATORS:
+                    vars_json = json.dumps(gen.get("variables", []), ensure_ascii=False)
+                    records.append((
+                        str(gen["id"]), gen.get("name", "생성기"), "javascript",
+                        gen.get("code", ""), gen.get("description", ""),
+                        gen.get("category", "기타"), gen.get("icon", "🔢"),
+                        vars_json, ""
+                    ))
+                with conn:
+                    conn.executemany("""
+                        INSERT OR REPLACE INTO generators (
+                            id, title, language, template, description, category, icon, variables_json, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, records)
+                cursor.execute("""
+                    SELECT id, title, language, template, description, category, icon, variables_json, created_at
+                    FROM generators
+                    ORDER BY id ASC
+                """)
+                rows = cursor.fetchall()
+
+            data = []
+            for r in rows:
+                raw_vars = r["variables_json"] or "[]"
+                try:
+                    vars_list = json.loads(raw_vars) if isinstance(raw_vars, str) else raw_vars
+                except Exception:
+                    vars_list = []
+
+                title = r["title"] or ""
+                tmpl = r["template"] or ""
+                desc = r["description"] or ""
+                cat = r["category"] or ""
+                icon = r["icon"] or "🔢"
+
+                data.append({
+                    "id": str(r["id"]),
+                    "name": title,
+                    "title": title,
+                    "code": tmpl,
+                    "template": tmpl,
+                    "description": desc,
+                    "desc": desc,
+                    "category": cat,
+                    "icon": icon,
+                    "variables": vars_list,
+                    "created_at": r["created_at"] or ""
+                })
+            return {"status": "success", "data": data}
+        finally:
+            conn.close()
+    except Exception as e:
+        return {"status": "error", "message": str(e), "data": DEFAULT_GENERATORS}
 
 
 @eel.expose
 def save_generators(generators_list):
-    """생성기 목록 저장"""
+    """생성기 목록 저장 (SQLite 트랜잭션 동기화)"""
     if not isinstance(generators_list, list):
         return {"status": "error", "message": "유효하지 않은 생성기 목록입니다."}
-    
-    success = save_generators_to_file(generators_list)
-    if success:
-        return {"status": "success", "message": "데이터 생성기 목록이 저장되었습니다."}
-    else:
-        return {"status": "error", "message": "데이터 생성기 목록 저장 실패"}
+
+    try:
+        conn = get_db_connection()
+        try:
+            records = []
+            active_ids = []
+            for gen in generators_list:
+                gid = str(gen.get("id") or "")
+                if not gid:
+                    continue
+                active_ids.append(gid)
+                title = gen.get("name") or gen.get("title", "") or ""
+                template = gen.get("code") or gen.get("template", "") or ""
+                description = gen.get("description") or gen.get("desc", "") or ""
+                category = gen.get("category", "") or ""
+                icon = gen.get("icon", "🔢") or "🔢"
+                raw_vars = gen.get("variables") or gen.get("variables_json", [])
+                vars_str = json.dumps(raw_vars, ensure_ascii=False) if isinstance(raw_vars, (list, dict)) else str(raw_vars)
+
+                records.append((gid, title, "javascript", template, description, category, icon, vars_str, ""))
+
+            with conn:
+                if active_ids:
+                    placeholders = ",".join("?" for _ in active_ids)
+                    conn.execute(f"DELETE FROM generators WHERE id NOT IN ({placeholders})", active_ids)
+                else:
+                    conn.execute("DELETE FROM generators")
+
+                if records:
+                    conn.executemany("""
+                        INSERT OR REPLACE INTO generators (
+                            id, title, language, template, description, category, icon, variables_json, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, records)
+
+            return {"status": "success", "message": "데이터 생성기 목록이 안전하게 저장되었습니다."}
+        finally:
+            conn.close()
+    except Exception as e:
+        return {"status": "error", "message": f"저장 실패: {str(e)}"}
 
 
 @eel.expose
 def reset_default_generators():
     """기본 생성기 템플릿으로 복원"""
     default_copy = [g.copy() for g in DEFAULT_GENERATORS]
-    success = save_generators_to_file(default_copy)
+    res = save_generators(default_copy)
     return {
-        "status": "success" if success else "error",
+        "status": res["status"],
         "data": default_copy,
         "message": "기본 생성기 목록으로 복원되었습니다."
     }
