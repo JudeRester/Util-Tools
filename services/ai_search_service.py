@@ -285,127 +285,42 @@ def _load_json_file(filename):
 
 
 def _get_all_system_items(filter_category=None):
-    """전체 시스템 모듈에서 문서 목록 수집"""
+    """
+    모든 도구(이메일, 메모, 다이어그램, 숏컷, 퀵런치, 제너레이터)의 데이터를
+    중앙 SQLite DB(app.db)로부터 즉시 고속 조회
+    """
     all_items = []
+    
+    # 1. SQLite 연결 및 일괄 조회
+    from services.db_service import get_db_connection
+    conn = None
+    try:
+        conn = get_db_connection()
+    except Exception:
+        conn = None
 
-    # 1. 빠른 메모 (notes.json)
-    notes_data = _load_json_file('notes.json') or []
-    if isinstance(notes_data, list) and (not filter_category or filter_category in ('all', 'notes')):
-        for note in notes_data:
-            title = note.get('title', '')
-            content = note.get('content', '')
-            all_items.append({
-                "id": note.get('id'),
-                "category": "notes",
-                "category_label": "빠른 메모",
-                "icon": "📝",
-                "title": title,
-                "snippet": content[:140].replace('\n', ' '),
-                "full_text": f"{title}\n{content}",
-                "target_tab": "notes",
-                "action_data": {"note_id": note.get('id')}
-            })
-
-    # 2. Mermaid 다이어그램 (diagrams.json)
-    diagrams_data = _load_json_file('diagrams.json') or []
-    if isinstance(diagrams_data, list) and (not filter_category or filter_category in ('all', 'diagrams')):
-        for diag in diagrams_data:
-            title = diag.get('title', '')
-            cat = diag.get('category', '')
-            desc = diag.get('description', '')
-            code = diag.get('code', '')
-            all_items.append({
-                "id": diag.get('id'),
-                "category": "diagrams",
-                "category_label": f"다이어그램 ({cat})",
-                "icon": "📊",
-                "title": title,
-                "snippet": desc or code.split('\n')[0],
-                "full_text": f"{title}\n{cat}\n{desc}\n{code}",
-                "target_tab": "mermaid",
-                "action_data": {"diagram_id": diag.get('id'), "code": code}
-            })
-
-    # 3. 데이터 생성기 (generators.json)
-    gens_data = _load_json_file('generators.json') or []
-    if isinstance(gens_data, list) and (not filter_category or filter_category in ('all', 'generators')):
-        for gen in gens_data:
-            name = gen.get('name', '')
-            cat = gen.get('category', '')
-            desc = gen.get('description', '')
-            icon = gen.get('icon', '🔢')
-            all_items.append({
-                "id": gen.get('id'),
-                "category": "generators",
-                "category_label": f"생성기 ({cat})",
-                "icon": icon,
-                "title": name,
-                "snippet": desc,
-                "full_text": f"{name}\n{cat}\n{desc}",
-                "target_tab": "generator",
-                "action_data": {"gen_id": gen.get('id')}
-            })
-
-    # 4. 빠른 실행 (quick_launch.json)
-    ql_data = _load_json_file('quick_launch.json') or []
-    if isinstance(ql_data, list) and (not filter_category or filter_category in ('all', 'quick_launch')):
-        for item in ql_data:
-            name = item.get('name', '')
-            desc = item.get('desc', '')
-            target = item.get('target', '')
-            icon = item.get('icon', '⚡')
-            all_items.append({
-                "id": item.get('id'),
-                "category": "quick_launch",
-                "category_label": "빠른 실행",
-                "icon": icon,
-                "title": name,
-                "snippet": f"{desc} ({target})" if desc else target,
-                "full_text": f"{name}\n{desc}\n{target}",
-                "target_tab": "launch",
-                "action_data": {"item_id": item.get('id')}
-            })
-
-    # 5. 폴더 바로가기 (shortcuts.json)
-    sc_data = _load_json_file('shortcuts.json') or []
-    if isinstance(sc_data, list) and (not filter_category or filter_category in ('all', 'shortcuts')):
-        for sc in sc_data:
-            name = sc.get('name', '')
-            path = sc.get('path', '')
-            icon = sc.get('icon', '📁')
-            all_items.append({
-                "id": sc.get('id'),
-                "category": "shortcuts",
-                "category_label": "폴더 바로가기",
-                "icon": icon,
-                "title": name,
-                "snippet": path,
-                "full_text": f"{name}\n{path}",
-                "target_tab": "files",
-                "action_data": {"shortcut_id": sc.get('id')}
-            })
-
-    # 6. EML 이메일 아카이브 (SQLite app.db 고속 조회)
-    if not filter_category or filter_category in ('all', 'emails'):
-        try:
-            from services.db_service import get_db_connection
-            conn = get_db_connection()
+    # (1) 이메일 아카이브
+    if not filter_category or filter_category == 'emails':
+        email_items = []
+        if conn:
             try:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT id, subject, from_addr, to_addr, category, snippet, substr(body_text, 1, 1500) as body_clean 
+                rows = conn.execute("""
+                    SELECT id, subject, clean_subject, from_addr, to_addr, date_str, category, snippet,
+                           substr(body_text, 1, 1500) as body_clean
                     FROM emails
-                """)
-                for row in cursor.fetchall():
-                    em_id = row['id']
-                    subject = row['subject'] or '(제목 없음)'
-                    from_addr = row['from_addr'] or ''
-                    to_addr = row['to_addr'] or ''
-                    cat = row['category'] or '기타'
-                    snippet = row['snippet'] or ''
-                    body_clean = (row['body_clean'] or '').strip()
-                    all_items.append({
-                        "id": em_id,
+                    ORDER BY date_str DESC
+                """).fetchall()
+                for r in rows:
+                    subject = r['subject'] or '(제목 없음)'
+                    clean_sub = r['clean_subject'] or subject
+                    from_addr = r['from_addr'] or ''
+                    to_addr = r['to_addr'] or ''
+                    cat = r['category'] or '기타'
+                    snippet = r['snippet'] or ''
+                    body_clean = r['body_clean'] or ''
+
+                    email_items.append({
+                        "id": r['id'],
                         "category": "emails",
                         "category_label": f"이메일 ({cat})",
                         "icon": "📧",
@@ -413,35 +328,142 @@ def _get_all_system_items(filter_category=None):
                         "snippet": f"[{from_addr}] {snippet}" if from_addr else snippet,
                         "full_text": f"{subject}\n{from_addr}\n{to_addr}\n{cat}\n{body_clean}",
                         "target_tab": "emails",
-                        "action_data": {"email_id": em_id}
+                        "action_data": {"email_id": r['id']}
                     })
-            finally:
-                conn.close()
-        except Exception as e:
-            _safe_log(f"[AI Engine] 이메일 SQLite 인덱싱 오류: {e}, JSON 폴백 시도")
-            em_data = _load_json_file('emails.json')
-            if em_data is None:
-                em_data = _load_json_file('emails.example.json') or []
-            if isinstance(em_data, list):
-                for em in em_data:
-                    subject = em.get('subject', '(제목 없음)')
-                    from_addr = em.get('from', '')
-                    to_addr = em.get('to', '')
-                    cat = em.get('category', '일반')
-                    snippet = em.get('snippet', '')
-                    body_text = em.get('body_text', '') or ''
-                    body_clean = body_text[:1500].strip()
+            except Exception as e:
+                _safe_log(f"[AI Search] SQLite emails 조회 실패: {e}")
+
+        all_items.extend(email_items)
+
+    # (2) 메모 (Notes)
+    if not filter_category or filter_category == 'notes':
+        if conn:
+            try:
+                rows = conn.execute("SELECT id, title, content, category FROM notes ORDER BY is_pinned DESC, updated_at DESC").fetchall()
+                for r in rows:
+                    title = r['title'] or '(제목 없는 메모)'
+                    content = r['content'] or ''
+                    cat = r['category'] or '일반'
                     all_items.append({
-                        "id": em.get('id'),
-                        "category": "emails",
-                        "category_label": f"이메일 ({cat})",
-                        "icon": "📧",
-                        "title": subject,
-                        "snippet": f"[{from_addr}] {snippet}" if from_addr else snippet,
-                        "full_text": f"{subject}\n{from_addr}\n{to_addr}\n{cat}\n{body_clean}",
-                        "target_tab": "emails",
-                        "action_data": {"email_id": em.get('id')}
+                        "id": str(r['id']),
+                        "category": "notes",
+                        "category_label": f"메모 ({cat})" if cat else "메모",
+                        "icon": "📝",
+                        "title": title,
+                        "snippet": content[:120].replace("\n", " ").strip(),
+                        "full_text": f"{title}\n{cat}\n{content[:1500]}",
+                        "target_tab": "scratchpad",
+                        "action_data": {"note_id": str(r['id'])}
                     })
+            except Exception as e:
+                _safe_log(f"[AI Search] SQLite notes 조회 실패: {e}")
+
+    # (3) 다이어그램 (Diagrams)
+    if not filter_category or filter_category == 'diagrams':
+        if conn:
+            try:
+                rows = conn.execute("SELECT id, title, code, category, description, type FROM diagrams ORDER BY updated_at DESC").fetchall()
+                for r in rows:
+                    title = r['title'] or '(제목 없음)'
+                    code = r['code'] or ''
+                    cat = r['category'] or '다이어그램'
+                    desc = r['description'] or ''
+                    all_items.append({
+                        "id": str(r['id']),
+                        "category": "diagrams",
+                        "category_label": f"다이어그램 ({cat})" if cat else "다이어그램",
+                        "icon": "📊",
+                        "title": title,
+                        "snippet": desc if desc else code[:100].replace("\n", " ").strip(),
+                        "full_text": f"{title}\n{cat}\n{desc}\n{code[:1500]}",
+                        "target_tab": "diagram-viewer",
+                        "action_data": {"diagram_id": str(r['id'])}
+                    })
+            except Exception as e:
+                _safe_log(f"[AI Search] SQLite diagrams 조회 실패: {e}")
+
+    # (4) 퀵 런치 (Quick Launch)
+    if not filter_category or filter_category == 'quick_launch':
+        if conn:
+            try:
+                rows = conn.execute("SELECT id, title, path, icon, category, description FROM quick_launch ORDER BY order_index ASC").fetchall()
+                for r in rows:
+                    title = r['title'] or '앱'
+                    path = r['path'] or ''
+                    cat = r['category'] or 'cmd'
+                    desc = r['description'] or ''
+                    icon = r['icon'] or '⚡'
+                    all_items.append({
+                        "id": str(r['id']),
+                        "category": "quick_launch",
+                        "category_label": f"빠른실행 ({cat})",
+                        "icon": icon,
+                        "title": title,
+                        "snippet": f"{desc} ({path})" if desc else path,
+                        "full_text": f"{title}\n{cat}\n{desc}\n{path}",
+                        "target_tab": "quick-launch",
+                        "action_data": {"ql_id": str(r['id']), "command": path, "type": cat}
+                    })
+            except Exception as e:
+                _safe_log(f"[AI Search] SQLite quick_launch 조회 실패: {e}")
+
+    # (5) 단축키 / 바로가기 (Shortcuts)
+    if not filter_category or filter_category == 'shortcuts':
+        if conn:
+            try:
+                rows = conn.execute("SELECT id, title, key_combo, url_or_path, category, description, icon FROM shortcuts ORDER BY id ASC").fetchall()
+                for r in rows:
+                    title = r['title'] or '바로가기'
+                    path = r['url_or_path'] or ''
+                    cat = r['category'] or 'folder'
+                    desc = r['description'] or ''
+                    icon = r['icon'] or '📁'
+                    key = r['key_combo'] or ''
+                    all_items.append({
+                        "id": str(r['id']),
+                        "category": "shortcuts",
+                        "category_label": f"바로가기 ({cat})",
+                        "icon": icon,
+                        "title": title,
+                        "snippet": f"{key} - {path}" if key else path,
+                        "full_text": f"{title}\n{cat}\n{desc}\n{key}\n{path}",
+                        "target_tab": "shortcuts",
+                        "action_data": {"sc_id": str(r['id']), "path": path}
+                    })
+            except Exception as e:
+                _safe_log(f"[AI Search] SQLite shortcuts 조회 실패: {e}")
+
+    # (6) 코드/데이터 제너레이터 (Generators)
+    if not filter_category or filter_category == 'generators':
+        if conn:
+            try:
+                rows = conn.execute("SELECT id, title, language, template, description, category, icon FROM generators ORDER BY id ASC").fetchall()
+                for r in rows:
+                    title = r['title'] or '제너레이터'
+                    lang = r['language'] or 'code'
+                    cat = r['category'] or '생성기'
+                    desc = r['description'] or ''
+                    icon = r['icon'] or '🔢'
+                    tmpl = r['template'] or ''
+                    all_items.append({
+                        "id": str(r['id']),
+                        "category": "generators",
+                        "category_label": f"생성기 ({lang})",
+                        "icon": icon,
+                        "title": title,
+                        "snippet": desc if desc else tmpl[:100].replace("\n", " ").strip(),
+                        "full_text": f"{title}\n{lang}\n{cat}\n{desc}\n{tmpl[:1500]}",
+                        "target_tab": "generators",
+                        "action_data": {"gen_id": str(r['id'])}
+                    })
+            except Exception as e:
+                _safe_log(f"[AI Search] SQLite generators 조회 실패: {e}")
+
+    if conn:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
     return all_items
 

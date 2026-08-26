@@ -1,70 +1,140 @@
 """
-빠른 실행(Quick Launch) 항목 관리 및 외부 애플리케이션/세션 실행 서비스 모듈
+빠른 실행(Quick Launch) 항목 관리 및 SQLite 영속화 / 외부 애플리케이션 실행 서비스 모듈
 """
 import os
 import subprocess
-import json
 import webbrowser
+import datetime
 import eel
-
-base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-QUICK_LAUNCH_FILE = os.path.join(base_dir, 'quick_launch.json')
-QUICK_LAUNCH_EXAMPLE_FILE = os.path.join(base_dir, 'quick_launch.example.json')
+from services.db_service import get_db_connection
 
 DEFAULT_QUICK_LAUNCH = [
-    {"id": "1", "name": "계산기", "desc": "Windows 기본 계산기", "icon": "🔢", "type": "cmd", "command": "calc.exe"},
-    {"id": "2", "name": "메모장", "desc": "간단한 텍스트 편집기", "icon": "📝", "type": "cmd", "command": "notepad.exe"},
-    {"id": "3", "name": "작업 관리자", "desc": "프로세스 및 성능 모니터링", "icon": "📊", "type": "cmd", "command": "taskmgr.exe"},
-    {"id": "4", "name": "명령 프롬프트", "desc": "CMD 콘솔 창 열기", "icon": "💻", "type": "cmd", "command": "cmd.exe"},
-    {"id": "5", "name": "PowerShell", "desc": "파워쉘 콘솔 창 열기", "icon": "🟦", "type": "cmd", "command": "powershell.exe"},
-    {"id": "6", "name": "레지스트리 편집기", "desc": "Windows Registry Editor", "icon": "⚙️", "type": "cmd", "command": "regedit.exe"},
-    {"id": "7", "name": "SSH 서버 예시", "desc": "원격 SSH 접속 예시", "icon": "🔒", "type": "ssh", "command": "user@192.168.1.100"}
+    {"id": "1", "name": "계산기", "title": "계산기", "desc": "Windows 기본 계산기", "description": "Windows 기본 계산기", "icon": "🔢", "type": "cmd", "category": "cmd", "command": "calc.exe", "path": "calc.exe", "order_index": 0},
+    {"id": "2", "name": "메모장", "title": "메모장", "desc": "간단한 텍스트 편집기", "description": "간단한 텍스트 편집기", "icon": "📝", "type": "cmd", "category": "cmd", "command": "notepad.exe", "path": "notepad.exe", "order_index": 1},
+    {"id": "3", "name": "작업 관리자", "title": "작업 관리자", "desc": "프로세스 및 성능 모니터링", "description": "프로세스 및 성능 모니터링", "icon": "📊", "type": "cmd", "category": "cmd", "command": "taskmgr.exe", "path": "taskmgr.exe", "order_index": 2},
+    {"id": "4", "name": "명령 프롬프트", "title": "명령 프롬프트", "desc": "CMD 콘솔 창 열기", "description": "CMD 콘솔 창 열기", "icon": "💻", "type": "cmd", "category": "cmd", "command": "cmd.exe", "path": "cmd.exe", "order_index": 3},
+    {"id": "5", "name": "PowerShell", "title": "PowerShell", "desc": "파워쉘 콘솔 창 열기", "description": "파워쉘 콘솔 창 열기", "icon": "🟦", "type": "cmd", "category": "cmd", "command": "powershell.exe", "path": "powershell.exe", "order_index": 4},
+    {"id": "6", "name": "레지스트리 편집기", "title": "레지스트리 편집기", "desc": "Windows Registry Editor", "description": "Windows Registry Editor", "icon": "⚙️", "type": "cmd", "category": "cmd", "command": "regedit.exe", "path": "regedit.exe", "order_index": 5},
+    {"id": "7", "name": "SSH 서버 예시", "title": "SSH 서버 예시", "desc": "원격 SSH 접속 예시", "description": "원격 SSH 접속 예시", "icon": "🔒", "type": "ssh", "category": "ssh", "command": "user@192.168.1.100", "path": "user@192.168.1.100", "order_index": 6}
 ]
 
 
 @eel.expose
 def get_quick_launch_items():
-    """저장된 빠른 실행 항목 목록 불러오기 (없으면 example.json 또는 기본값으로 생성)"""
+    """저장된 빠른 실행 항목 목록 불러오기 (SQLite 조회, 없으면 기본값 삽입 후 반환)"""
     try:
-        if not os.path.exists(QUICK_LAUNCH_FILE):
-            # 템플릿 파일이 있으면 템플릿 로드
-            initial_data = DEFAULT_QUICK_LAUNCH
-            if os.path.exists(QUICK_LAUNCH_EXAMPLE_FILE):
-                try:
-                    with open(QUICK_LAUNCH_EXAMPLE_FILE, 'r', encoding='utf-8') as ef:
-                        initial_data = json.load(ef)
-                except Exception:
-                    initial_data = DEFAULT_QUICK_LAUNCH
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, title, path, icon, category, description, order_index, created_at
+                FROM quick_launch
+                ORDER BY order_index ASC, id ASC
+            """)
+            rows = cursor.fetchall()
 
-            with open(QUICK_LAUNCH_FILE, 'w', encoding='utf-8') as f:
-                json.dump(initial_data, f, ensure_ascii=False, indent=2)
-            return {"status": "success", "data": initial_data}
-        
-        with open(QUICK_LAUNCH_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+            if not rows:
+                records = []
+                for idx, item in enumerate(DEFAULT_QUICK_LAUNCH):
+                    records.append((
+                        item["id"], item["title"], item["path"],
+                        item.get("icon", "⚡"), item.get("category", "cmd"),
+                        item.get("description", ""), item.get("order_index", idx),
+                        datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    ))
+                with conn:
+                    conn.executemany("""
+                        INSERT OR REPLACE INTO quick_launch (
+                            id, title, path, icon, category, description, order_index, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, records)
+                cursor.execute("""
+                    SELECT id, title, path, icon, category, description, order_index, created_at
+                    FROM quick_launch
+                    ORDER BY order_index ASC, id ASC
+                """)
+                rows = cursor.fetchall()
+
+            data = []
+            for r in rows:
+                title = r["title"] or ""
+                path = r["path"] or ""
+                desc = r["description"] or ""
+                cat = r["category"] or "cmd"
+                data.append({
+                    "id": str(r["id"]),
+                    "name": title,
+                    "title": title,
+                    "desc": desc,
+                    "description": desc,
+                    "icon": r["icon"] or "⚡",
+                    "type": cat,
+                    "category": cat,
+                    "command": path,
+                    "path": path,
+                    "order_index": r["order_index"],
+                    "created_at": r["created_at"] or ""
+                })
             return {"status": "success", "data": data}
+        finally:
+            conn.close()
     except Exception as e:
         return {"status": "error", "message": str(e), "data": DEFAULT_QUICK_LAUNCH}
 
 
 @eel.expose
 def save_quick_launch_items(items):
-    """빠른 실행 항목 목록 저장하기"""
+    """빠른 실행 항목 목록 저장하기 (SQLite 트랜잭션 동기화)"""
     try:
-        with open(QUICK_LAUNCH_FILE, 'w', encoding='utf-8') as f:
-            json.dump(items, f, ensure_ascii=False, indent=2)
-        return {"status": "success", "message": "빠른 실행 목록이 저장되었습니다."}
+        if not isinstance(items, list):
+            return {"status": "error", "message": "유효한 빠른 실행 목록 형식이 아닙니다."}
+
+        conn = get_db_connection()
+        try:
+            records = []
+            active_ids = []
+            for idx, item in enumerate(items):
+                qid = str(item.get("id") or "")
+                if not qid:
+                    continue
+                active_ids.append(qid)
+                title = item.get("name") or item.get("title", "") or ""
+                path = item.get("command") or item.get("path", "") or ""
+                icon = item.get("icon", "⚡") or "⚡"
+                category = item.get("type") or item.get("category", "cmd") or "cmd"
+                description = item.get("desc") or item.get("description", "") or ""
+                order_index = int(item.get("order_index", idx))
+                created_at = item.get("created_at") or datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                records.append((qid, title, path, icon, category, description, order_index, created_at))
+
+            with conn:
+                if active_ids:
+                    placeholders = ",".join("?" for _ in active_ids)
+                    conn.execute(f"DELETE FROM quick_launch WHERE id NOT IN ({placeholders})", active_ids)
+                else:
+                    conn.execute("DELETE FROM quick_launch")
+
+                if records:
+                    conn.executemany("""
+                        INSERT OR REPLACE INTO quick_launch (
+                            id, title, path, icon, category, description, order_index, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, records)
+
+            return {"status": "success", "message": "빠른 실행 목록이 저장되었습니다."}
+        finally:
+            conn.close()
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 
 @eel.expose
 def execute_quick_launch_item(item):
-    """빠른 실행 항목 실행 (cmd / ssh / url / powershell)"""
     try:
-        item_type = item.get("type", "cmd")
-        command = item.get("command", "").strip()
-        name = item.get("name", "앱")
+        item_type = item.get("type") or item.get("category", "cmd")
+        command = (item.get("command") or item.get("path", "")).strip()
+        name = item.get("name") or item.get("title", "앱")
         
         if not command:
             return {"status": "error", "message": "실행할 명령어/경로가 비어있습니다."}
@@ -92,7 +162,6 @@ def execute_quick_launch_item(item):
 
 @eel.expose
 def launch_system_app(app_name):
-    """지정한 Windows 기본 애플리케이션 실행"""
     app_commands = {
         "calculator": "calc.exe",
         "notepad": "notepad.exe",
@@ -114,7 +183,6 @@ def launch_system_app(app_name):
 
 @eel.expose
 def launch_ssh(target="user@192.168.1.100"):
-    """새로운 CMD 콘솔 창을 열고 SSH 원격 접속 실행"""
     try:
         cmd = f'start cmd.exe /K "ssh {target}"'
         subprocess.Popen(cmd, shell=True)
@@ -124,4 +192,3 @@ def launch_ssh(target="user@192.168.1.100"):
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
-
