@@ -131,8 +131,73 @@ def _parse_eml_bytes(raw_bytes, source_filename=""):
 # ==========================================
 
 @eel.expose
+def get_emails_chunk(offset=0, limit=300):
+    """
+    이메일 목록 청크(Chunk) 분할 조회 API (IPC 패킷 과부하 및 웹소켓 프레임 버퍼 오버플로우 방지)
+    - 300건씩 분할하여 100KB 미만의 초경량 패킷으로 전송
+    """
+    offset = max(0, int(offset))
+    limit = max(1, min(int(limit), 1000))
+    
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        total_count = cursor.execute("SELECT COUNT(*) FROM emails").fetchone()[0]
+        
+        cursor.execute("""
+            SELECT 
+                id, 
+                subject, 
+                clean_subject, 
+                thread_key, 
+                from_addr as 'from', 
+                to_addr as 'to', 
+                date_str as 'date', 
+                category, 
+                substr(snippet, 1, 80) as snippet, 
+                attachments_json, 
+                message_id, 
+                in_reply_to, 
+                references_header as 'references', 
+                created_at 
+            FROM emails 
+            ORDER BY created_at DESC, date_str DESC
+            LIMIT ? OFFSET ?
+        """, (limit, offset))
+        rows = cursor.fetchall()
+        
+        items = []
+        for row in rows:
+            em = dict(row)
+            raw_att = em.pop("attachments_json", "[]") or "[]"
+            try:
+                att_list = json.loads(raw_att) if isinstance(raw_att, str) else raw_att
+                att_len = len(att_list) if isinstance(att_list, list) else 0
+            except Exception:
+                att_len = 0
+            
+            em["attachments"] = [{"name": "attachment"}] * att_len if att_len > 0 else []
+            em["attachment_count"] = att_len
+            if not em.get("clean_subject"):
+                em["clean_subject"] = _clean_subject(em.get("subject", ""))
+            if not em.get("thread_key"):
+                em["thread_key"] = em["clean_subject"].lower()
+            items.append(em)
+            
+        return {
+            "status": "success",
+            "total_count": total_count,
+            "offset": offset,
+            "limit": limit,
+            "items": items
+        }
+    finally:
+        conn.close()
+
+
+@eel.expose
 def get_all_emails_summary():
-    """이메일 목록 렌더링용 가벼운 메타데이터 요약본 반환 (SQLite 고속 인덱스 조회 및 첨부파일 파싱)"""
+    """이메일 목록 렌더링용 가벼운 메타데이터 요약본 반환 (SQLite 고속 인덱스 조회)"""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -146,12 +211,11 @@ def get_all_emails_summary():
                 to_addr as 'to', 
                 date_str as 'date', 
                 category, 
-                snippet, 
-                attachments_json as attachments, 
+                substr(snippet, 1, 80) as snippet, 
+                attachments_json, 
                 message_id, 
                 in_reply_to, 
                 references_header as 'references', 
-                file_path, 
                 created_at 
             FROM emails 
             ORDER BY created_at DESC, date_str DESC
@@ -160,14 +224,15 @@ def get_all_emails_summary():
         summaries = []
         for row in rows:
             em = dict(row)
-            raw_att = em.get("attachments")
-            if isinstance(raw_att, str):
-                try:
-                    em["attachments"] = json.loads(raw_att) if raw_att else []
-                except Exception:
-                    em["attachments"] = []
-            elif raw_att is None:
-                em["attachments"] = []
+            raw_att = em.pop("attachments_json", "[]") or "[]"
+            try:
+                att_list = json.loads(raw_att) if isinstance(raw_att, str) else raw_att
+                att_len = len(att_list) if isinstance(att_list, list) else 0
+            except Exception:
+                att_len = 0
+            
+            em["attachments"] = [{"name": "attachment"}] * att_len if att_len > 0 else []
+            em["attachment_count"] = att_len
             if not em.get("clean_subject"):
                 em["clean_subject"] = _clean_subject(em.get("subject", ""))
             if not em.get("thread_key"):

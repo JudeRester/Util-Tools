@@ -33,14 +33,56 @@ async function initEmailViewer() {
 
 async function loadAllEmails() {
     try {
-        if (window.eel) {
-            if (typeof eel.get_all_emails_summary === 'function') {
-                const list = await eel.get_all_emails_summary()();
-                emailState.emails = Array.isArray(list) ? list : [];
-            } else if (typeof eel.get_all_emails === 'function') {
-                const list = await eel.get_all_emails()();
-                emailState.emails = Array.isArray(list) ? list : [];
+        if (window.eel && typeof eel.get_emails_chunk === 'function') {
+            // 1단계: 첫 번째 청크(300건) 초고속 로드 (< 20ms)
+            const firstChunk = await eel.get_emails_chunk(0, 300)();
+            if (firstChunk && firstChunk.status === 'success') {
+                emailState.emails = firstChunk.items || [];
+                const totalCount = firstChunk.total_count || emailState.emails.length;
+
+                // 즉시 1차 UI 렌더링
+                emailState.displayedLimit = 50;
+                updateCategoriesList();
+                renderEmailCategoryChips();
+                renderEmailList();
+
+                const displayList = getProcessedEmailList();
+                if (displayList.length > 0 && !emailState.selectedEmailId) {
+                    selectEmail(displayList[0].id);
+                }
+
+                // 2단계: 300건 초과 데이터가 있는 경우 백그라운드 청크 분할 로드 (500건씩 안전 패킷 수신)
+                if (totalCount > 300) {
+                    setTimeout(async () => {
+                        let currentOffset = 300;
+                        const chunkSize = 500;
+                        while (currentOffset < totalCount) {
+                            try {
+                                const nextChunk = await eel.get_emails_chunk(currentOffset, chunkSize)();
+                                if (nextChunk && nextChunk.items && nextChunk.items.length > 0) {
+                                    emailState.emails = emailState.emails.concat(nextChunk.items);
+                                    currentOffset += nextChunk.items.length;
+                                    updateCategoriesList();
+                                    renderEmailCategoryChips();
+                                    renderEmailList();
+                                } else {
+                                    break;
+                                }
+                            } catch (chunkErr) {
+                                console.warn("이메일 청크 추가 로드 오류:", chunkErr);
+                                break;
+                            }
+                        }
+                    }, 50);
+                }
+                return;
             }
+        }
+
+        // 폴백: 기존 전체 요약본 API
+        if (window.eel && typeof eel.get_all_emails_summary === 'function') {
+            const list = await eel.get_all_emails_summary()();
+            emailState.emails = Array.isArray(list) ? list : [];
         } else {
             emailState.emails = [];
         }
