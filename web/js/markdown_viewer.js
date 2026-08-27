@@ -756,7 +756,7 @@ async function copyMarkdownSource() {
     }
     await navigator.clipboard.writeText(mdState.content);
     logToConsole('Markdown 원본 복사 완료', `${mdState.content.length.toLocaleString()}자`);
-    await showAppAlert('Markdown 소스 코드가 클립보드에 복사되었습니다! 📋', '복사 완료', '✅');
+    showToast('복사 완료', 'Markdown 소스 코드가 클립보드에 복사되었습니다! 📋', '✅');
 }
 
 async function copyMarkdownRenderedHtml() {
@@ -789,7 +789,7 @@ ${preview.innerHTML}
 
     await navigator.clipboard.writeText(htmlContent);
     logToConsole('HTML 복사 완료', '렌더링된 HTML 문서 코드가 클립보드에 복사되었습니다.');
-    await showAppAlert('렌더링된 전체 HTML 코드가 클립보드에 복사되었습니다! 🌐', '복사 완료', '✅');
+    showToast('복사 완료', '렌더링된 전체 HTML 코드가 클립보드에 복사되었습니다! 🌐', '✅');
 }
 
 async function saveMarkdownToFile() {
@@ -807,7 +807,7 @@ async function saveMarkdownToFile() {
             mdState.filePath = res.path;
             updateMarkdownFileBadge();
             logToConsole('Markdown 파일 저장 완료', res.path);
-            await showAppAlert(`Markdown 파일이 안전하게 저장되었습니다! 💾\n(${res.path})`, '저장 완료', '✅');
+            showToast('저장 완료', `Markdown 파일이 안전하게 저장되었습니다! 💾\n(${res.path})`, '✅');
         }
     } else {
         const blob = new Blob([mdState.content], { type: 'text/markdown;charset=utf-8;' });

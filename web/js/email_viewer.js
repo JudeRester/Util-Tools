@@ -1041,7 +1041,7 @@ async function importEmlFiles() {
             if (res.success) {
                 await loadAllEmails();
                 logToConsole('EML 가져오기 완료', res.message);
-                await showAppAlert(res.message, '가져오기 성공', '✅');
+                showToast('가져오기 성공', res.message, '✅');
             } else if (res.message && !res.message.includes('취소')) {
                 await showAppAlert(res.message, '가져오기 오류', '⚠️');
             }
@@ -1060,7 +1060,7 @@ async function importEmlFolder() {
             if (res.success) {
                 await loadAllEmails();
                 logToConsole('EML 폴더 일괄 등록 완료', res.message);
-                await showAppAlert(res.message, '일괄 등록 성공', '🎉');
+                showToast('일괄 등록 성공', res.message, '🎉');
             } else if (res.message && !res.message.includes('취소')) {
                 await showAppAlert(res.message, '일괄 등록 오류', '⚠️');
             }
@@ -1124,7 +1124,7 @@ function initEmailDropZone() {
         if (successCount > 0) {
             await loadAllEmails();
             logToConsole('EML 드래그 드롭 등록', `총 ${successCount}개 이메일 등록 완료`);
-            await showAppAlert(`총 ${successCount}개의 .eml 이메일을 성공적으로 등록했습니다! 📧`, '등록 완료', '✅');
+            showToast('등록 완료', `총 ${successCount}개의 .eml 이메일을 성공적으로 등록했습니다! 📧`, '✅');
         }
     });
 }
@@ -1169,7 +1169,7 @@ async function saveEmailAttachment(emailId, index, filename) {
             const res = await eel.save_email_attachment_dialog(emailId, index, filename)();
             if (res.status === 'success') {
                 logToConsole('첨부파일 저장 완료', res.message);
-                await showAppAlert(`'${filename}' 파일이 성공적으로 저장되었습니다! 💾`, '저장 완료', '✅');
+                showToast('저장 완료', `'${filename}' 파일이 성공적으로 저장되었습니다! 💾`, '✅');
             } else if (res.status === 'error') {
                 await showAppAlert(`첨부파일 저장 실패: ${res.message}`, '저장 실패', '⚠️');
             }
@@ -1186,7 +1186,7 @@ async function saveAllEmailAttachments(emailId) {
             const res = await eel.save_all_email_attachments_dialog(emailId)();
             if (res.status === 'success') {
                 logToConsole('첨부파일 일괄 저장 완료', res.message);
-                await showAppAlert(`총 ${res.count}개의 첨부파일이 저장되었습니다! 📦\n경로: ${res.folder}`, '일괄 저장 완료', '✅');
+                showToast('일괄 저장 완료', `총 ${res.count}개의 첨부파일이 저장되었습니다! 📦\n경로: ${res.folder}`, '✅');
             } else if (res.status === 'error') {
                 await showAppAlert(`일괄 저장 실패: ${res.message}`, '저장 실패', '⚠️');
             }
@@ -1226,7 +1226,7 @@ async function copyEmailBody(emailId) {
     const textToCopy = `제목: ${email.subject}\n보낸사람: ${email.from}\n받는사람: ${email.to}\n작성일시: ${email.date}\n\n${email.body_text || email.snippet || ''}`;
     await navigator.clipboard.writeText(textToCopy);
     logToConsole('이메일 본문 복사 완료', `${email.subject}`);
-    await showAppAlert('이메일 내용이 클립보드에 복사되었습니다! 📋', '복사 완료', '✅');
+    showToast('복사 완료', '이메일 내용이 클립보드에 복사되었습니다! 📋', '✅');
 }
 
 async function deleteEmailItem(emailId) {

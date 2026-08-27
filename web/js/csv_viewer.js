@@ -594,7 +594,7 @@ async function copyCsvAsMarkdown() {
 
     await navigator.clipboard.writeText(md);
     logToConsole('Markdown 변환 복사 완료', `총 ${rowsToExport.length}행의 Markdown 테이블이 복사되었습니다.`);
-    await showAppAlert(`총 ${rowsToExport.length.toLocaleString()}행의 Markdown 테이블 코드가 클립보드에 복사되었습니다! 📋`, '복사 완료', '✅');
+    showToast('복사 완료', `총 ${rowsToExport.length.toLocaleString()}행의 Markdown 테이블 코드가 복사되었습니다! 📋`, '✅');
 }
 
 async function copyCsvAsJson() {
@@ -627,7 +627,7 @@ async function copyCsvAsJson() {
     const jsonStr = JSON.stringify(jsonArray, null, 2);
     await navigator.clipboard.writeText(jsonStr);
     logToConsole('JSON 변환 복사 완료', `총 ${rowsToExport.length}개 객체 배열이 복사되었습니다.`);
-    await showAppAlert(`총 ${rowsToExport.length.toLocaleString()}개 레코드의 JSON 배열이 클립보드에 복사되었습니다! 📋`, '복사 완료', '✅');
+    showToast('복사 완료', `총 ${rowsToExport.length.toLocaleString()}개 레코드의 JSON 배열이 복사되었습니다! 📋`, '✅');
 }
 
 async function copyCsvAsSqlInsert() {
@@ -656,7 +656,7 @@ async function copyCsvAsSqlInsert() {
 
     await navigator.clipboard.writeText(sql);
     logToConsole('SQL Insert 생성 완료', `${tableName} 테이블용 INSERT 쿼리가 클립보드에 복사되었습니다.`);
-    await showAppAlert(`${tableName} 테이블용 SQL INSERT 문(${rowsToExport.length.toLocaleString()}건)이 복사되었습니다! 💾`, '복사 완료', '✅');
+    showToast('복사 완료', `${tableName} 테이블용 SQL INSERT 문(${rowsToExport.length.toLocaleString()}건)이 복사되었습니다! 💾`, '✅');
 }
 
 async function downloadFilteredCsv() {
@@ -688,7 +688,7 @@ async function downloadFilteredCsv() {
         const res = await eel.save_csv_to_file(csvContent, exportName)();
         if (res && res.status === 'success') {
             logToConsole('CSV 파일 저장 완료', res.path);
-            await showAppAlert(`CSV 파일이 안전하게 저장되었습니다! 💾\n(${res.path})`, '저장 완료', '✅');
+            showToast('저장 완료', `CSV 파일이 안전하게 저장되었습니다! 💾\n(${res.path})`, '✅');
         }
     } else {
         // 브라우저 다운로드 fallback

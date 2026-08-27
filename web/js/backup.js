@@ -168,7 +168,7 @@ async function executeExportDownload() {
         URL.revokeObjectURL(url);
 
         logToConsole('데이터 백업 완료', `[${filename}] ${keys.length}개 모듈 내보내기 완료`);
-        await showAppAlert(`백업 파일(${filename})이 성공적으로 다운로드되었습니다! 💾`, '백업 완료', '✅');
+        showToast('백업 완료', `백업 파일(${filename})이 다운로드되었습니다! 💾`, '✅');
     } catch (err) {
         console.error("내보내기 오류:", err);
         await showAppAlert(`내보내기 중 오류가 발생했습니다: ${err.message}`, '오류', '⚠️');
@@ -203,7 +203,7 @@ async function copyExportJsonToClipboard() {
         const jsonStr = JSON.stringify(exportData, null, 2);
         await navigator.clipboard.writeText(jsonStr);
         logToConsole('백업 JSON 복사 완료', `${keys.length}개 모듈 JSON이 클립보드에 복사되었습니다.`);
-        await showAppAlert('백업 JSON 텍스트가 클립보드에 복사되었습니다! 📋', '복사 완료', '✅');
+        showToast('복사 완료', '백업 JSON 텍스트가 클립보드에 복사되었습니다! 📋', '✅');
     } catch (e) {
         await showAppAlert('클립보드 복사 실패', '오류', '⚠️');
     }
@@ -387,7 +387,7 @@ async function executeImportRestore() {
 
             closeBackupModal();
             logToConsole('데이터 복원 완료', `총 ${restoredCount}개의 데이터 모듈이 안전하게 복원되었습니다.`);
-            await showAppAlert(`총 ${restoredCount}개의 데이터 모듈이 성공적으로 복원되었습니다! 🎉\n모든 화면이 새 데이터로 즉시 갱신되었습니다.`, '복원 완료', '✅');
+            showToast('데이터 복원 완료', `총 ${restoredCount}개의 데이터 모듈이 성공적으로 복원되었습니다! 🎉`, '✅');
         }
     } catch (err) {
         console.error("복원 실패:", err);

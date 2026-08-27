@@ -23,14 +23,13 @@ function logToConsole(title, content) {
     }
 }
 
-function showToast(title, content) {
+function showToast(title, content, icon = '🔔', duration = 3800) {
     const container = document.getElementById('toast-container');
     if (!container) return;
 
     let bodyText = '';
-    if (typeof content === 'object') {
+    if (typeof content === 'object' && content !== null) {
         try {
-            // 깔끔한 1줄 요약
             bodyText = JSON.stringify(content);
         } catch (e) {
             bodyText = String(content);
@@ -45,12 +44,14 @@ function showToast(title, content) {
     
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+    const formattedBody = escapeHtml(bodyText).replace(/\n/g, '<br>');
+
     toast.innerHTML = `
         <div class="toast-header">
-            <span class="toast-title">🔔 ${escapeHtml(title)}</span>
+            <span class="toast-title">${icon} ${escapeHtml(title)}</span>
             <span class="toast-time">${timeStr}</span>
         </div>
-        <div class="toast-body">${escapeHtml(bodyText)}</div>
+        <div class="toast-body">${formattedBody}</div>
         <div class="toast-tip">클릭하여 로그창 열기 ↗</div>
     `;
 
@@ -64,7 +65,7 @@ function showToast(title, content) {
 
     // 자동 소멸 타이머 관리 (마우스 오버 시 일시 정지, 벗어나면 재개)
     let autoRemoveTimer = null;
-    const DURATION = 3800;
+    const DURATION = duration || 3800;
 
     function startTimer() {
         if (autoRemoveTimer) clearTimeout(autoRemoveTimer);
