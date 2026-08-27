@@ -230,8 +230,24 @@ body {
     color: #e0e7ff;
 }
 
-/* 좁은 화면/창 크기 축소 시 (880px 이하) 햄버거 메뉴 + 드롭다운으로 자동 전환 */
-@media (max-width: 880px) {
+/* 중간 화면 (1081px ~ 1280px): 브랜드 텍스트 숨김 및 탭 버튼 패딩 컴팩트화 */
+@media (min-width: 1081px) and (max-width: 1280px) {
+    .nav-brand .brand-title {
+        display: none;
+    }
+    .tab-btn {
+        padding: 6px 6px;
+        font-size: 0.82rem;
+        gap: 4px;
+    }
+    .header-ai-btn {
+        padding: 6px 8px;
+        font-size: 0.82rem;
+    }
+}
+
+/* 좁은 화면/기본 창 크기(1080px 이하, 예: 928px/960px) 햄버거 메뉴 + 드롭다운으로 자동 전환 */
+@media (max-width: 1080px) {
     .nav-brand {
         display: none;
     }
@@ -286,6 +302,7 @@ body {
         padding: 8px;
         z-index: 1000;
         animation: fadeIn 0.15s ease;
+        gap: 4px;
     }
 
     .tab-btn-wrapper.open {
@@ -293,6 +310,14 @@ body {
     }
 
     .tab-btn {
+        justify-content: flex-start;
+        padding: 10px 14px;
+        width: 100%;
+        font-size: 0.9rem;
+        border-radius: 6px;
+    }
+
+    .header-ai-btn {
         justify-content: flex-start;
         padding: 10px 14px;
         width: 100%;
