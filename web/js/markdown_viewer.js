@@ -324,18 +324,18 @@ function renderMarkdown() {
 function parseMarkdownToHtml(md) {
     let text = md.replace(/\r\n/g, '\n');
 
-    // 1) Code Blocks (```lang ... ```) 임시 토큰 치환
+    // 1) Code Blocks (```lang ... ```) 임시 토큰 치환 (마크다운 특수기호 없는 안전한 토큰 사용)
     const codeBlocks = [];
     text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-        const id = `__CODE_BLOCK_${codeBlocks.length}__`;
+        const id = `@@@MDCODEBLOCK${codeBlocks.length}@@@`;
         codeBlocks.push({ lang: lang.trim().toLowerCase(), code });
-        return id;
+        return `\n\n${id}\n\n`;
     });
 
-    // 2) Inline Code (`code`) 임시 토큰 치환
+    // 2) Inline Code (`code`) 임시 토큰 치환 (언더스코어/별표 없는 안전한 토큰 사용)
     const inlineCodes = [];
     text = text.replace(/`([^`\n]+)`/g, (match, code) => {
-        const id = `__INLINE_CODE_${inlineCodes.length}__`;
+        const id = `@@@MDINLINECODE${inlineCodes.length}@@@`;
         inlineCodes.push(code);
         return id;
     });
@@ -355,30 +355,36 @@ function parseMarkdownToHtml(md) {
             caution: '🚫'
         };
         const icon = icons[alertClass] || '📌';
-        return `<div class="md-alert md-alert-${alertClass}"><div class="md-alert-header"><span class="md-alert-icon">${icon}</span> <span class="md-alert-title">${type}</span></div><div class="md-alert-body">${parseInlineMarkdown(cleanContent)}</div></div>\n\n`;
+        return `\n\n<div class="md-alert md-alert-${alertClass}"><div class="md-alert-header"><span class="md-alert-icon">${icon}</span> <span class="md-alert-title">${type}</span></div><div class="md-alert-body">${parseInlineMarkdown(cleanContent)}</div></div>\n\n`;
     });
 
     // 5) 일반 Blockquotes (> text)
     text = text.replace(/((?:^&gt;.*(?:\n|$))+)/gm, (match) => {
         const clean = match.replace(/^&gt;\s?/gm, '').trim();
-        return `<blockquote>${parseInlineMarkdown(clean)}</blockquote>\n\n`;
+        return `\n\n<blockquote>${parseInlineMarkdown(clean)}</blockquote>\n\n`;
     });
 
     // 6) Headers (# ~ ######)
     text = text.replace(/^(#{1,6})\s+(.+)$/gm, (match, hashes, title) => {
         const level = hashes.length;
-        const slug = title.toLowerCase().replace(/[^\w가-힣0-9]+/g, '-').replace(/^-+|-+$/g, '');
-        return `<h${level} id="${slug}">${parseInlineMarkdown(title)}</h${level}>`;
+        const rawTitle = title.replace(/@@@MDINLINECODE(\d+)@@@/g, (m, i) => inlineCodes[parseInt(i, 10)] || '');
+        const slug = rawTitle.toLowerCase().replace(/[^\w가-힣0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        return `\n\n<h${level} id="${slug}">${parseInlineMarkdown(title)}</h${level}>\n\n`;
     });
 
     // 7) GFM Tables (| col | col |)
-    text = text.replace(/^(\|.+?\|\n\|[\s\S]*?)(?=\n\s*[^\|]|\n*$)/gm, (match) => {
+    text = text.replace(/((?:^\|.+?\|(?:\n|$))+)/gm, (match) => {
         const lines = match.trim().split('\n').filter(l => l.trim().startsWith('|'));
         if (lines.length < 2) return match;
 
         const headerLine = lines[0];
         const alignLine = lines[1];
         const dataLines = lines.slice(2);
+
+        // 구분선(| --- | :---: |) 유효성 검사
+        if (!/^\|(?:\s*:?-+:?\s*\|)+$/.test(alignLine.trim())) {
+            return match;
+        }
 
         const parseCells = (row) => row.split('|').slice(1, -1).map(c => c.trim());
         const headers = parseCells(headerLine);
@@ -388,7 +394,7 @@ function parseMarkdownToHtml(md) {
             return 'left';
         });
 
-        let html = '<div class="md-table-wrapper"><table class="md-table"><thead><tr>';
+        let html = '\n\n<div class="md-table-wrapper"><table class="md-table"><thead><tr>';
         headers.forEach((h, i) => {
             const align = aligns[i] ? ` style="text-align: ${aligns[i]}"` : '';
             html += `<th${align}>${parseInlineMarkdown(h)}</th>`;
@@ -404,12 +410,12 @@ function parseMarkdownToHtml(md) {
             });
             html += '</tr>';
         });
-        html += '</tbody></table></div>';
+        html += '</tbody></table></div>\n\n';
         return html;
     });
 
     // 8) Horizontal Rules (---, ***)
-    text = text.replace(/^(?:---|\*\*\*|___)\s*$/gm, '<hr class="md-hr">');
+    text = text.replace(/^(?:---|\*\*\*|___)\s*$/gm, '\n\n<hr class="md-hr">\n\n');
 
     // 9) Task Lists & Unordered/Ordered Lists
     let taskIdx = 0;
@@ -420,14 +426,14 @@ function parseMarkdownToHtml(md) {
         return `${space}<li class="md-task-item"><label class="md-task-label"><input type="checkbox" class="md-task-checkbox" data-task-index="${curIdx}" ${checkedAttr}> <span>${parseInlineMarkdown(label)}</span></label></li>`;
     });
 
-    // Standard list items
-    text = text.replace(/^(\s*)[-*+]\s+(.+)$/gm, '$1<li class="md-list-item">$2</li>');
-    text = text.replace(/^(\s*)\d+\.\s+(.+)$/gm, '$1<li class="md-ordered-item">$2</li>');
+    // Standard list items (인라인 마크다운 적용)
+    text = text.replace(/^(\s*)[-*+]\s+(.+)$/gm, (m, space, item) => `${space}<li class="md-list-item">${parseInlineMarkdown(item)}</li>`);
+    text = text.replace(/^(\s*)\d+\.\s+(.+)$/gm, (m, space, item) => `${space}<li class="md-ordered-item">${parseInlineMarkdown(item)}</li>`);
 
     // Wrap consecutive list items in <ul> or <ol>
-    text = text.replace(/((?:<li class="md-task-item">.*<\/li>\s*)+)/g, '<ul class="md-task-list">$1</ul>');
-    text = text.replace(/((?:<li class="md-list-item">.*<\/li>\s*)+)/g, '<ul class="md-list">$1</ul>');
-    text = text.replace(/((?:<li class="md-ordered-item">.*<\/li>\s*)+)/g, '<ol class="md-ordered-list">$1</ol>');
+    text = text.replace(/((?:<li class="md-task-item">.*<\/li>\s*)+)/g, '\n\n<ul class="md-task-list">$1</ul>\n\n');
+    text = text.replace(/((?:<li class="md-list-item">.*<\/li>\s*)+)/g, '\n\n<ul class="md-list">$1</ul>\n\n');
+    text = text.replace(/((?:<li class="md-ordered-item">.*<\/li>\s*)+)/g, '\n\n<ol class="md-ordered-list">$1</ol>\n\n');
 
     // 10) Paragraphs
     const blocks = text.split(/\n{2,}/);
@@ -436,14 +442,15 @@ function parseMarkdownToHtml(md) {
         if (!trimmed) return '';
         if (trimmed.startsWith('<h') || trimmed.startsWith('<blockquote') || trimmed.startsWith('<div') ||
             trimmed.startsWith('<ul') || trimmed.startsWith('<ol') || trimmed.startsWith('<table') ||
-            trimmed.startsWith('<hr') || trimmed.startsWith('__CODE_BLOCK_')) {
+            trimmed.startsWith('<hr') || trimmed.startsWith('@@@MDCODEBLOCK') ||
+            trimmed.endsWith('</ul>') || trimmed.endsWith('</ol>') || trimmed.endsWith('</div>')) {
             return trimmed;
         }
         return `<p>${parseInlineMarkdown(trimmed).replace(/\n/g, '<br>')}</p>`;
     }).join('\n\n');
 
     // 11) Code Blocks 복원
-    text = text.replace(/__CODE_BLOCK_(\d+)__/g, (match, idx) => {
+    text = text.replace(/@@@MDCODEBLOCK(\d+)@@@/g, (match, idx) => {
         const item = codeBlocks[parseInt(idx, 10)];
         if (!item) return '';
 
@@ -466,7 +473,7 @@ function parseMarkdownToHtml(md) {
     });
 
     // 12) Inline Code 복원
-    text = text.replace(/__INLINE_CODE_(\d+)__/g, (match, idx) => {
+    text = text.replace(/@@@MDINLINECODE(\d+)@@@/g, (match, idx) => {
         const code = inlineCodes[parseInt(idx, 10)];
         return `<code class="md-inline-code">${escapeHtml(code || '')}</code>`;
     });
