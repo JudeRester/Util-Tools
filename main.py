@@ -5,15 +5,10 @@ import os
 import sys
 import eel
 
-# 경로 설정
-base_dir = os.path.dirname(os.path.abspath(__file__))
-if base_dir not in sys.path:
-    sys.path.insert(0, base_dir)
-
-web_dir = os.path.join(base_dir, 'web')
+from core.paths import WEB_DIR, APP_DIR, BUNDLE_DIR
 
 # 1. Eel 초기화
-eel.init(web_dir)
+eel.init(WEB_DIR)
 
 # 2. 백엔드 서비스 모듈 등록 (@eel.expose 함수들 바인딩)
 import services.db_service

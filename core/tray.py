@@ -6,14 +6,15 @@ import threading
 from PIL import Image, ImageDraw
 import pystray
 import eel
+from core.paths import ICON_PATH, BUNDLE_DIR
 
 
 class TrayManager:
-    def __init__(self, base_dir, start_options, on_exit=None):
-        self.base_dir = base_dir
-        self.start_options = start_options
+    def __init__(self, base_dir=None, start_options=None, on_exit=None):
+        self.base_dir = base_dir or BUNDLE_DIR
+        self.start_options = start_options or {}
         self.on_exit = on_exit
-        self.ico_file = os.path.join(base_dir, 'utiltools.ico')
+        self.ico_file = ICON_PATH
         self.tray_icon = None
 
     def get_tray_image(self):

@@ -7,9 +7,10 @@ import os
 import json
 import datetime
 import eel
+from core.paths import APP_DIR, BUNDLE_DIR
 from services.db_service import get_db_connection
 
-base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+base_dir = APP_DIR
 
 # ==========================================
 # 데이터 모듈 확장성 레지스트리 (Data Module Registry)

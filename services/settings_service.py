@@ -1,10 +1,7 @@
 import os
 import json
 import eel
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SETTINGS_FILE = os.path.join(BASE_DIR, "app_settings.json")
-EXAMPLE_FILE = os.path.join(BASE_DIR, "app_settings.example.json")
+from core.paths import APP_SETTINGS_PATH as SETTINGS_FILE, APP_SETTINGS_EXAMPLE_PATH as EXAMPLE_FILE
 
 DEFAULT_SETTINGS = {
     "active_tab_id": "system",

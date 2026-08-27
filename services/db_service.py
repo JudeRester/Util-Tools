@@ -12,29 +12,26 @@ import re
 import time
 import datetime
 import threading
+from core.paths import APP_DIR, BUNDLE_DIR, DATA_DIR, DB_PATH
 
-base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(base_dir, "data")
-DB_PATH = os.path.join(DATA_DIR, "app.db")
+# 각 모듈별 JSON 파일 경로 (마이그레이션 및 폴백용: *.example.json은 번들에서 참조)
+EMAILS_JSON_PATH = os.path.join(APP_DIR, "emails.json")
+EMAILS_EXAMPLE_PATH = os.path.join(BUNDLE_DIR, "emails.example.json")
 
-# 각 모듈별 JSON 파일 경로 (마이그레이션 및 폴백용)
-EMAILS_JSON_PATH = os.path.join(base_dir, "emails.json")
-EMAILS_EXAMPLE_PATH = os.path.join(base_dir, "emails.example.json")
+NOTES_JSON_PATH = os.path.join(APP_DIR, "notes.json")
+NOTES_EXAMPLE_PATH = os.path.join(BUNDLE_DIR, "notes.example.json")
 
-NOTES_JSON_PATH = os.path.join(base_dir, "notes.json")
-NOTES_EXAMPLE_PATH = os.path.join(base_dir, "notes.example.json")
+DIAGRAMS_JSON_PATH = os.path.join(APP_DIR, "diagrams.json")
+DIAGRAMS_EXAMPLE_PATH = os.path.join(BUNDLE_DIR, "diagrams.example.json")
 
-DIAGRAMS_JSON_PATH = os.path.join(base_dir, "diagrams.json")
-DIAGRAMS_EXAMPLE_PATH = os.path.join(base_dir, "diagrams.example.json")
+QUICK_LAUNCH_JSON_PATH = os.path.join(APP_DIR, "quick_launch.json")
+QUICK_LAUNCH_EXAMPLE_PATH = os.path.join(BUNDLE_DIR, "quick_launch.example.json")
 
-QUICK_LAUNCH_JSON_PATH = os.path.join(base_dir, "quick_launch.json")
-QUICK_LAUNCH_EXAMPLE_PATH = os.path.join(base_dir, "quick_launch.example.json")
+SHORTCUTS_JSON_PATH = os.path.join(APP_DIR, "shortcuts.json")
+SHORTCUTS_EXAMPLE_PATH = os.path.join(BUNDLE_DIR, "shortcuts.example.json")
 
-SHORTCUTS_JSON_PATH = os.path.join(base_dir, "shortcuts.json")
-SHORTCUTS_EXAMPLE_PATH = os.path.join(base_dir, "shortcuts.example.json")
-
-GENERATORS_JSON_PATH = os.path.join(base_dir, "generators.json")
-GENERATORS_EXAMPLE_PATH = os.path.join(base_dir, "generators.example.json")
+GENERATORS_JSON_PATH = os.path.join(APP_DIR, "generators.json")
+GENERATORS_EXAMPLE_PATH = os.path.join(BUNDLE_DIR, "generators.example.json")
 
 _init_lock = threading.Lock()
 _is_initialized = False

@@ -8,11 +8,8 @@ from email.parser import BytesParser
 import tkinter as tk
 from tkinter import filedialog
 import eel
-
+from core.paths import APP_DIR, DATA_DIR, EMAILS_DIR
 from services.db_service import get_db_connection, clean_subject as db_clean_subject
-
-base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EMAILS_DIR = os.path.join(base_dir, "emails")
 
 # 기본 프리셋 카테고리 목록
 DEFAULT_CATEGORIES = ["업무/프로젝트", "회의록", "견적/계약", "인사/총무", "시스템/알림", "기타"]
@@ -309,7 +306,7 @@ def _get_eml_file_path(email_id):
             fp = row['file_path']
             if os.path.exists(fp):
                 return fp
-            rel_path = os.path.join(base_dir, fp)
+            rel_path = os.path.join(APP_DIR, fp)
             if os.path.exists(rel_path):
                 return rel_path
             emails_fp = os.path.join(EMAILS_DIR, os.path.basename(fp))
@@ -445,7 +442,7 @@ def open_email_attachment(email_id, attachment_index=0, filename=None):
             target_att = attachments[idx]
             
         # 임시 폴더에 파일 쓰기
-        temp_dir = os.path.join(base_dir, "data", "temp_attachments", str(email_id))
+        temp_dir = os.path.join(DATA_DIR, "temp_attachments", str(email_id))
         os.makedirs(temp_dir, exist_ok=True)
         
         dest_path = os.path.join(temp_dir, target_att["filename"])

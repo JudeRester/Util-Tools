@@ -16,12 +16,12 @@ import hashlib
 import threading
 import numpy as np
 import eel
+from core.paths import BUNDLE_DIR, APP_DIR, MODELS_DIR
 
-base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODEL_DIR = os.path.join(base_dir, "models", "multilingual-e5-small")
+MODEL_DIR = MODELS_DIR
 TOKENIZER_PATH = os.path.join(MODEL_DIR, "tokenizer.json")
 ONNX_MODEL_PATH = os.path.join(MODEL_DIR, "onnx", "model_quantized.onnx")
-CACHE_FILE_PATH = os.path.join(base_dir, "embeddings_cache.json")
+CACHE_FILE_PATH = os.path.join(APP_DIR, "embeddings_cache.json")
 
 # 전역 ONNX 세션 & 토크나이저
 _onnx_session = None
@@ -311,13 +311,14 @@ def _sync_document_embeddings(all_items):
 
 
 def _load_json_file(filename):
-    path = os.path.join(base_dir, filename)
-    if os.path.exists(path):
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            return None
+    for root in (APP_DIR, BUNDLE_DIR):
+        path = os.path.join(root, filename)
+        if os.path.exists(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception:
+                pass
     return None
 
 
