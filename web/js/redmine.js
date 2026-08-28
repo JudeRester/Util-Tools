@@ -987,12 +987,8 @@ async function submitSaveWikiPage(projKey, title) {
 function copyWikiToMarkdownStudio(text) {
     if (typeof switchTab === 'function') {
         switchTab('markdown');
-        const mdTextarea = document.getElementById('markdown-source-input');
-        if (mdTextarea) {
-            mdTextarea.value = text;
-            if (typeof renderMarkdownLive === 'function') {
-                renderMarkdownLive();
-            }
+        if (typeof applyLoadedMarkdown === 'function') {
+            applyLoadedMarkdown(text, 'Redmine_Wiki.md');
             showToast('Markdown 스튜디오 이동', '위키 본문이 마크다운 에디터로 로드되었습니다. 📝', '✅');
         }
     }

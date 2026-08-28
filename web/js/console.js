@@ -2,6 +2,18 @@
  * 콘솔 로그 출력 및 하단 스플리터(높이 조절기) 모듈
  */
 
+if (typeof window.escapeHtml !== 'function') {
+    window.escapeHtml = function(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    };
+}
+
 function logToConsole(title, content) {
     const consoleEl = document.getElementById('console-output');
     if (!consoleEl) return;

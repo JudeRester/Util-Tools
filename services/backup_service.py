@@ -400,6 +400,27 @@ def import_toolkit_data(import_payload, selected_keys=None, mode="replace"):
                                     ) VALUES (?, ?, ?, ?, ?, ?, ?)
                                 """, records)
 
+                            elif table == "redmine_config":
+                                records = []
+                                for item in new_data:
+                                    records.append((
+                                        str(item.get("id", "default")),
+                                        item.get("server_url", ""),
+                                        item.get("api_key", ""),
+                                        item.get("user_id"),
+                                        item.get("user_name", ""),
+                                        item.get("user_login", ""),
+                                        item.get("auto_sync", 1),
+                                        item.get("sync_interval_min", 5),
+                                        item.get("updated_at", "")
+                                    ))
+                                conn.executemany("""
+                                    INSERT OR REPLACE INTO redmine_config (
+                                        id, server_url, api_key, user_id, user_name, user_login,
+                                        auto_sync, sync_interval_min, updated_at
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                """, records)
+
                         restored_keys.append(key)
                     else:
                         # JSON 파일 복원

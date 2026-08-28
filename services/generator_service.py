@@ -3,6 +3,7 @@
 사용자가 직접 로직을 수정/추가할 수 있는 동적 생성기 시스템 지원
 """
 import random
+import json
 import eel
 
 DEFAULT_GENERATORS = [
