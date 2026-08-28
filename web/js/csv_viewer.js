@@ -18,7 +18,8 @@ let csvState = {
     sortCol: null,
     sortDir: 'asc',
     currentPage: 1,
-    pageSize: 100
+    pageSize: 100,
+    colWidths: {}
 };
 
 // ==========================================
@@ -249,6 +250,7 @@ function applyLoadedCsvData(data) {
     csvState.sortCol = null;
     csvState.sortDir = 'asc';
     csvState.currentPage = 1;
+    csvState.colWidths = {};
 
     // 검색창 초기화
     const searchInput = document.getElementById('csv-search-input');
@@ -471,12 +473,14 @@ function renderCsvTable() {
             sortIcon = csvState.sortDir === 'asc' ? '▲' : '▼';
             sortClass = 'sorted';
         }
+        const widthStyle = csvState.colWidths && csvState.colWidths[idx] ? `style="width: ${csvState.colWidths[idx]}px; min-width: ${csvState.colWidths[idx]}px; max-width: ${csvState.colWidths[idx]}px;"` : '';
         theadHtml += `
-            <th class="${sortClass}" onclick="sortCsvByColumn(${idx})" title="'${escapeHtml(header)}' 기준 정렬">
+            <th class="${sortClass}" data-col-idx="${idx}" ${widthStyle} onclick="onCsvHeaderClick(event, ${idx})" title="'${escapeHtml(header)}' 기준 정렬 (우측 경계선 드래그 시 너비 조절, 더블클릭 시 초기화)">
                 <div class="th-content">
                     <span class="th-title">${escapeHtml(header)}</span>
                     <span class="th-sort-icon">${sortIcon}</span>
                 </div>
+                <div class="col-resize-handle" onmousedown="startColResize(event, ${idx})" ondblclick="resetColWidth(event, ${idx})" title="드래그하여 너비 조절 (더블클릭 시 기본 맞춤)"></div>
             </th>
         `;
     });
@@ -498,7 +502,7 @@ function renderCsvTable() {
             const rowNum = startIdx + rIdx + 1;
             tbodyHtml += `<tr><td class="csv-td-index">${rowNum}</td>`;
             
-            row.forEach((cell) => {
+            row.forEach((cell, cIdx) => {
                 const rawVal = cell !== undefined && cell !== null ? String(cell) : '';
                 let displayVal = escapeHtml(rawVal);
 
@@ -511,8 +515,9 @@ function renderCsvTable() {
                 // 숫자형태 우측 정렬 클래스 판단
                 const isNumeric = rawVal.trim() !== '' && !isNaN(Number(rawVal.replace(/,/g, '')));
                 const alignClass = isNumeric ? 'class="cell-number"' : '';
+                const widthStyle = csvState.colWidths && csvState.colWidths[cIdx] ? `style="width: ${csvState.colWidths[cIdx]}px; max-width: ${csvState.colWidths[cIdx]}px;"` : '';
 
-                tbodyHtml += `<td ${alignClass} title="${escapeHtml(rawVal)}">${displayVal}</td>`;
+                tbodyHtml += `<td ${alignClass} ${widthStyle} title="${escapeHtml(rawVal)}">${displayVal}</td>`;
             });
             tbodyHtml += '</tr>';
         });
@@ -533,6 +538,110 @@ function renderCsvTable() {
     }
     if (prevBtn) prevBtn.disabled = csvState.currentPage <= 1;
     if (nextBtn) nextBtn.disabled = csvState.currentPage >= totalPages;
+}
+
+// ==========================================
+// 6-1. 컬럼 너비 드래그 조절 (Column Resizing)
+// ==========================================
+let _csvResizingState = null;
+
+function onCsvHeaderClick(event, colIdx) {
+    // 리사이즈 드래그 직후 발생한 클릭 이벤트인 경우 정렬 방지
+    if (_csvResizingState && _csvResizingState.justResized) {
+        _csvResizingState.justResized = false;
+        return;
+    }
+    // 리사이즈 핸들을 직접 클릭했을 때도 정렬 방지
+    if (event.target.classList.contains('col-resize-handle')) {
+        return;
+    }
+    sortCsvByColumn(colIdx);
+}
+
+function startColResize(event, colIdx) {
+    event.stopPropagation();
+    event.preventDefault();
+
+    const handle = event.target;
+    const th = handle.closest('th');
+    if (!th) return;
+
+    const startX = event.clientX;
+    const startWidth = th.offsetWidth;
+    const tableWrapper = document.getElementById('csv-table-wrapper');
+    const tableEl = document.getElementById('csv-main-table');
+
+    if (tableEl) tableEl.classList.add('is-resizing');
+    if (tableWrapper) tableWrapper.classList.add('is-resizing');
+    handle.classList.add('active');
+
+    _csvResizingState = {
+        colIdx,
+        startX,
+        startWidth,
+        th,
+        handle,
+        moved: false,
+        justResized: false
+    };
+
+    function onMouseMove(e) {
+        if (!_csvResizingState) return;
+        const deltaX = e.clientX - _csvResizingState.startX;
+        if (Math.abs(deltaX) > 2) {
+            _csvResizingState.moved = true;
+        }
+        const newWidth = Math.max(50, _csvResizingState.startWidth + deltaX);
+        _csvResizingState.th.style.width = newWidth + 'px';
+        _csvResizingState.th.style.minWidth = newWidth + 'px';
+        _csvResizingState.th.style.maxWidth = newWidth + 'px';
+
+        // 해당 컬럼의 모든 td도 즉각 너비 동기화
+        const targetColIdx = _csvResizingState.colIdx;
+        const table = document.getElementById('csv-main-table');
+        if (table) {
+            const cellIndex = targetColIdx + 1; // #0 번호 열 건너뜀
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(r => {
+                const cell = r.children[cellIndex];
+                if (cell) {
+                    cell.style.width = newWidth + 'px';
+                    cell.style.maxWidth = newWidth + 'px';
+                }
+            });
+        }
+
+        if (!csvState.colWidths) csvState.colWidths = {};
+        csvState.colWidths[targetColIdx] = newWidth;
+    }
+
+    function onMouseUp(e) {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+
+        if (tableEl) tableEl.classList.remove('is-resizing');
+        if (tableWrapper) tableWrapper.classList.remove('is-resizing');
+        if (handle) handle.classList.remove('active');
+
+        if (_csvResizingState && _csvResizingState.moved) {
+            _csvResizingState.justResized = true;
+            setTimeout(() => {
+                if (_csvResizingState) _csvResizingState.justResized = false;
+            }, 200);
+        }
+    }
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+}
+
+function resetColWidth(event, colIdx) {
+    event.stopPropagation();
+    event.preventDefault();
+    if (csvState.colWidths && csvState.colWidths[colIdx] !== undefined) {
+        delete csvState.colWidths[colIdx];
+    }
+    renderCsvTable();
 }
 
 function updateCsvStats() {

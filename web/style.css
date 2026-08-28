@@ -4009,7 +4009,8 @@ input[type="checkbox"] {
 }
 
 .csv-main-table th {
-    padding: 8px 12px;
+    position: relative;
+    padding: 8px 16px 8px 12px;
     font-weight: 600;
     color: #cbd5e1;
     border-bottom: 2px solid var(--border-color);
@@ -4017,6 +4018,7 @@ input[type="checkbox"] {
     cursor: pointer;
     user-select: none;
     transition: background 0.15s;
+    box-sizing: border-box;
 }
 
 .csv-main-table th:hover {
@@ -4030,11 +4032,46 @@ input[type="checkbox"] {
     border-bottom-color: var(--accent-hover);
 }
 
+/* 컬럼 너비 조절 핸들 (Col Resize Handle) */
+.col-resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 7px;
+    bottom: 0;
+    cursor: col-resize;
+    user-select: none;
+    z-index: 25;
+    background: transparent;
+    transition: background 0.15s;
+}
+
+.col-resize-handle:hover,
+.col-resize-handle.active {
+    background: #6366f1;
+    box-shadow: 0 0 6px rgba(99, 102, 241, 0.7);
+}
+
+/* 리사이징 중 테이블 전체 텍스트 선택 방지 및 커서 유지 */
+.csv-main-table.is-resizing,
+.csv-table-wrapper.is-resizing {
+    user-select: none !important;
+    cursor: col-resize !important;
+}
+
+.csv-main-table.is-resizing th,
+.csv-main-table.is-resizing td {
+    user-select: none !important;
+    cursor: col-resize !important;
+}
+
 .th-content {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .th-sort-icon {
