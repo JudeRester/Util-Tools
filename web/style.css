@@ -804,66 +804,269 @@ body {
     gap: 8px;
 }
 
-.form-input {
-    background: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
-    padding: 7px 10px;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    outline: none;
-    flex: 1;
-}
+/* ==========================================================================
+   글로벌 공통 UI 컨트롤 시스템 (Unified Buttons, Selects, Inputs & Pickers)
+   ========================================================================== */
 
-.form-input:focus {
-    border-color: var(--accent-color);
-}
-
-.form-btn {
-    padding: 7px 12px;
+/* 1. 통일된 드롭다운 셀렉트 박스 (Unified Select Boxes) */
+select,
+.form-select,
+.redmine-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-color: #0f172a;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 13px 13px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 6px;
+    color: #f1f5f9;
     font-size: 0.82rem;
-    font-weight: 600;
-    border: none;
+    font-family: inherit;
+    font-weight: 500;
+    padding: 4px 26px 4px 8px;
+    height: 30px;
+    line-height: 1.4;
     cursor: pointer;
     transition: var(--transition);
+    outline: none;
+    box-sizing: border-box;
+}
+
+select:hover,
+.form-select:hover,
+.redmine-select:hover {
+    border-color: rgba(255, 255, 255, 0.28);
+    background-color: #1e293b;
+}
+
+select:focus,
+.form-select:focus,
+.redmine-select:focus {
+    border-color: #6366f1;
+    background-color: #0f172a;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
+
+select option,
+.form-select option,
+.redmine-select option {
+    background-color: #0f172a;
+    color: #f1f5f9;
+    padding: 6px 10px;
+}
+
+/* 2. 통일된 버튼 계층 시스템 (Unified Modern Button Hierarchy) */
+button,
+.btn,
+.form-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 5px 12px;
+    height: 30px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    user-select: none;
     white-space: nowrap;
+    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    box-sizing: border-box;
+    text-decoration: none;
 }
 
-.browse-btn {
-    background: #333c4d;
+/* 기본/보조 버튼 (Secondary / Ghost / Glassy) */
+.btn-secondary,
+.close-btn,
+.browse-btn,
+.cancel-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.14);
+    color: #cbd5e1;
+}
+
+.btn-secondary:hover,
+.close-btn:hover,
+.browse-btn:hover,
+.cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.28);
     color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
-.browse-btn:hover {
-    background: #444f65;
+.btn-secondary:active,
+.close-btn:active,
+.browse-btn:active,
+.cancel-btn:active {
+    transform: translateY(0);
+    background: rgba(255, 255, 255, 0.03);
 }
 
-.add-btn {
-    background: var(--accent-color);
+/* 주 강조 버튼 (Primary / Indigo Gradient) */
+.btn-primary,
+.add-btn,
+.btn-save {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    border-color: rgba(99, 102, 241, 0.4);
     color: #ffffff;
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.25);
 }
 
-.add-btn:hover {
-    background: var(--accent-hover);
+.btn-primary:hover,
+.add-btn:hover,
+.btn-save:hover {
+    background: linear-gradient(135deg, #7175f3 0%, #5b54e8 100%);
+    border-color: rgba(129, 140, 248, 0.6);
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
 }
 
+.btn-primary:active,
+.add-btn:active,
+.btn-save:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* 성공 버튼 (Success / Emerald) */
+.btn-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.25);
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+}
+
+/* 위험/삭제 버튼 (Danger / Rose) */
+.btn-danger,
 .danger-btn {
-    background: #e11d48;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    border-color: rgba(239, 68, 68, 0.4);
     color: #ffffff;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.25);
 }
 
+.btn-danger:hover,
 .danger-btn:hover {
-    background: #be123c;
+    background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
 }
 
-.close-btn {
-    background: #374151;
-    color: #ffffff;
+/* 버튼 크기 옵션 (Button Sizes) */
+.btn-xs {
+    height: 22px;
+    padding: 1px 6px;
+    font-size: 0.72rem;
+    border-radius: 4px;
 }
 
-.close-btn:hover {
-    background: #4b5563;
+.btn-sm {
+    height: 28px;
+    padding: 3px 10px;
+    font-size: 0.78rem;
+    border-radius: 5px;
+}
+
+.btn-md {
+    height: 32px;
+    padding: 5px 12px;
+    font-size: 0.82rem;
+    border-radius: 6px;
+}
+
+.btn-lg {
+    height: 38px;
+    padding: 8px 16px;
+    font-size: 0.90rem;
+    border-radius: 8px;
+}
+
+/* 3. 통일된 날짜 선택기 & 텍스트 인풋 (Unified Date & Text Inputs) */
+input[type="date"],
+.quick-date-input {
+    color-scheme: dark;
+    background-color: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #f1f5f9;
+    padding: 4px 8px;
+    font-size: 0.82rem;
+    font-family: inherit;
+    height: 30px;
+    outline: none;
+    box-sizing: border-box;
+    transition: var(--transition);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+.quick-date-input::-webkit-calendar-picker-indicator {
+    filter: invert(0.85);
+    cursor: pointer;
+    padding: 2px;
+}
+
+input[type="date"]:hover,
+.quick-date-input:hover {
+    border-color: rgba(255, 255, 255, 0.28);
+    background-color: #1e293b;
+}
+
+input[type="date"]:focus,
+.quick-date-input:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+    background-color: #0f172a;
+}
+
+/* 4. 통일된 텍스트 필드 및 텍스트 영역 (Unified Text Inputs & Textareas) */
+.form-input,
+.form-textarea {
+    background-color: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #f1f5f9;
+    padding: 6px 10px;
+    font-size: 0.84rem;
+    font-family: inherit;
+    outline: none;
+    box-sizing: border-box;
+    transition: var(--transition);
+}
+
+.form-input:hover,
+.form-textarea:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.form-input:focus,
+.form-textarea:focus {
+    border-color: #6366f1;
+    background-color: #0f172a;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
+
+/* 5. 통일된 체크박스 (Unified Checkboxes) */
+input[type="checkbox"] {
+    accent-color: #6366f1;
+    cursor: pointer;
+    width: 15px;
+    height: 15px;
 }
 
 /* Manage List */
@@ -6340,36 +6543,36 @@ body {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    padding: 8px 12px;
-}
-
 .redmine-select {
-    padding: 5px 8px;
-    font-size: 0.82rem;
-    background: #0f172a;
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
-    border-radius: 6px;
-    max-width: 170px;
+    max-width: 180px;
 }
 
 .redmine-search-box {
     display: flex;
     align-items: center;
     background: #0f172a;
-    border: 1px solid var(--border-color);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 6px;
-    padding: 2px 8px;
+    padding: 3px 8px;
     gap: 6px;
+    height: 30px;
+    box-sizing: border-box;
+    transition: var(--transition);
+}
+
+.redmine-search-box:focus-within {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
 }
 
 .redmine-search-box input {
     background: transparent;
     border: none;
     outline: none;
-    color: var(--text-primary);
+    color: #f1f5f9;
     font-size: 0.82rem;
     width: 180px;
+    padding: 0;
 }
 
 .redmine-checkbox-lbl {
