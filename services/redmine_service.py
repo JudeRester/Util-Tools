@@ -649,10 +649,44 @@ def get_redmine_issue_detail(issue_id: int, refresh_from_server: bool = True):
 
 
 @eel.expose
-def update_redmine_issue(issue_id: int, status_id: int = None, done_ratio: int = None, 
-                         notes: str = None, priority_id: int = None, assigned_to_id: int = None):
+def get_redmine_project_members(project_id: int, *args, **kwargs):
     """
-    일감 상태, 진척도(%), 코멘트(Notes) 원클릭 업데이트 (PUT /issues/{id}.json)
+    프로젝트 멤버/그룹 목록 조회 (GET /projects/{project_id}/memberships.json)
+    """
+    conn = get_db_connection()
+    try:
+        cfg = conn.execute("SELECT server_url, api_key FROM redmine_config WHERE id = 'default'").fetchone()
+        if not cfg or not cfg['server_url'] or not cfg['api_key']:
+            return {"status": "error", "message": "Redmine 연결 설정이 필요합니다."}
+
+        res = _request_redmine_api(cfg['server_url'], cfg['api_key'], f"projects/{project_id}/memberships.json?limit=100")
+        if res.get("status") == "success":
+            memberships = res.get("data", {}).get("memberships", [])
+            members = []
+            seen_ids = set()
+            for m in memberships:
+                u = m.get("user") or m.get("group")
+                if u and u.get("id") not in seen_ids:
+                    seen_ids.add(u.get("id"))
+                    members.append({
+                        "id": u.get("id"),
+                        "name": u.get("name")
+                    })
+            return {"status": "success", "members": members}
+        return res
+    except Exception as e:
+        return {"status": "error", "message": f"멤버 조회 실패: {str(e)}"}
+    finally:
+        conn.close()
+
+
+@eel.expose
+def update_redmine_issue(issue_id: int, status_id=None, done_ratio=None, 
+                         notes: str = None, priority_id=None, assigned_to_id=None,
+                         tracker_id=None, due_date: str = None, start_date: str = None,
+                         estimated_hours=None, subject: str = None, *args, **kwargs):
+    """
+    일감 속성(상태, 진척도, 담당자, 우선순위, 유형, 마감일, 시작일, 코멘트 등) 실시간 업데이트 (PUT /issues/{id}.json)
     """
     conn = get_db_connection()
     try:
@@ -661,16 +695,31 @@ def update_redmine_issue(issue_id: int, status_id: int = None, done_ratio: int =
             return {"status": "error", "message": "Redmine 연결 설정이 필요합니다."}
 
         payload = {"issue": {}}
-        if status_id is not None:
+        if status_id is not None and str(status_id) != "":
             payload["issue"]["status_id"] = int(status_id)
-        if done_ratio is not None:
+        if done_ratio is not None and str(done_ratio) != "":
             payload["issue"]["done_ratio"] = int(done_ratio)
         if notes is not None and str(notes).strip():
             payload["issue"]["notes"] = str(notes).strip()
-        if priority_id is not None:
+        if priority_id is not None and str(priority_id) != "":
             payload["issue"]["priority_id"] = int(priority_id)
+        if tracker_id is not None and str(tracker_id) != "":
+            payload["issue"]["tracker_id"] = int(tracker_id)
+        if due_date is not None:
+            payload["issue"]["due_date"] = str(due_date).strip() if str(due_date).strip() else ""
+        if start_date is not None:
+            payload["issue"]["start_date"] = str(start_date).strip() if str(start_date).strip() else ""
+        if estimated_hours is not None and str(estimated_hours) != "":
+            payload["issue"]["estimated_hours"] = float(estimated_hours)
+        if subject is not None and str(subject).strip():
+            payload["issue"]["subject"] = str(subject).strip()
+
+        # 담당자 변경 처리: 빈 문자열("") 또는 "0"인 경우 미할당(담당자 해제)
         if assigned_to_id is not None:
-            payload["issue"]["assigned_to_id"] = int(assigned_to_id)
+            if str(assigned_to_id).strip() in ("", "0", "null", "none", "unassigned"):
+                payload["issue"]["assigned_to_id"] = ""
+            else:
+                payload["issue"]["assigned_to_id"] = int(assigned_to_id)
 
         if not payload["issue"]:
             return {"status": "error", "message": "변경할 항목이 없습니다."}
@@ -679,9 +728,13 @@ def update_redmine_issue(issue_id: int, status_id: int = None, done_ratio: int =
         res = _request_redmine_api(cfg['server_url'], cfg['api_key'], endpoint, method='PUT', data=payload)
 
         if res.get("status") == "success":
-            # 업데이트 후 상세 내역 재동기화
-            get_redmine_issue_detail(issue_id, refresh_from_server=True)
-            return {"status": "success", "message": f"일감 #{issue_id}이 성공적으로 갱신되었습니다."}
+            # 업데이트 후 상세 내역 재동기화 및 최신 일감 반환
+            detail_res = get_redmine_issue_detail(issue_id, refresh_from_server=True)
+            return {
+                "status": "success", 
+                "message": f"일감 #{issue_id}이 성공적으로 갱신되었습니다.",
+                "issue": detail_res.get("issue")
+            }
         return res
     except Exception as e:
         return {"status": "error", "message": f"일감 수정 오류: {str(e)}"}

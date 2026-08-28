@@ -6645,12 +6645,18 @@ body {
 /* 빠른 액션 바 */
 .issue-quick-action-bar {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    gap: 8px;
     background: rgba(99, 102, 241, 0.06);
     border: 1px solid rgba(99, 102, 241, 0.2);
     border-radius: 8px;
-    padding: 8px 14px;
+    padding: 10px 14px;
+}
+
+.quick-action-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     flex-wrap: wrap;
 }
 
@@ -6662,8 +6668,23 @@ body {
     color: var(--text-secondary);
 }
 
+.issue-quick-action-bar .action-group label {
+    white-space: nowrap;
+    font-weight: 600;
+}
+
 .issue-quick-action-bar .action-group.right {
     margin-left: auto;
+}
+
+.quick-date-input {
+    padding: 3px 8px;
+    font-size: 0.82rem;
+    height: 30px;
+    background: #0f172a;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: #e2e8f0;
 }
 
 /* 상세 섹션들 */

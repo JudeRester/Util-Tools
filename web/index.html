@@ -1799,11 +1799,17 @@
                     <input type="text" id="redmine-create-subject" class="form-input" placeholder="일감 제목을 명확하게 입력하세요..." autocomplete="off">
                 </div>
 
-                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 10px;">
                     <div class="form-group">
                         <label class="form-label">우선순위</label>
                         <select id="redmine-create-priority" class="form-select">
                             <!-- 동적 렌더링 -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">담당자</label>
+                        <select id="redmine-create-assignee" class="form-select">
+                            <option value="">미할당</option>
                         </select>
                     </div>
                     <div class="form-group">

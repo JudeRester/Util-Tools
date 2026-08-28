@@ -8,6 +8,7 @@ const redmineState = {
     projects: [],
     metadata: { statuses: [], trackers: [], priorities: [] },
     assignees: [],
+    projectMembers: {},
     activeSubTab: 'issues', // 'issues' | 'wiki' | 'config'
     selectedProjectId: null,
     filterMyOnly: false,
@@ -304,6 +305,13 @@ function renderProjectDropdowns() {
             '<option value="">프로젝트 선택...</option>',
             ...redmineState.projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`)
         ].join('');
+
+        modalProjSelect.onchange = () => {
+            const pId = modalProjSelect.value ? parseInt(modalProjSelect.value, 10) : null;
+            if (pId) {
+                loadProjectMembersForIssue(pId, '', 'redmine-create-assignee');
+            }
+        };
     }
 }
 
@@ -585,22 +593,71 @@ function renderIssueDetail(iss) {
     const statusName = (iss.status && iss.status.name) || iss.status_name || '신규';
     const priorityName = (iss.priority && iss.priority.name) || iss.priority_name || '보통';
     const authorName = (iss.author && iss.author.name) || iss.author_name || '';
-    const assigneeName = (iss.assigned_to && iss.assigned_to.name) || iss.assigned_to_name || '미배정';
+    const assigneeName = (iss.assigned_to && iss.assigned_to.name) || iss.assigned_to_name || '미할당';
     const projectName = (iss.project && iss.project.name) || iss.project_name || '';
+    const projectId = (iss.project && iss.project.id) || iss.project_id || null;
     const doneRatio = iss.done_ratio || 0;
     const webUrl = iss.web_url || '';
 
-    // 상태 변경 옵션
+    const currentStatusId = (iss.status && iss.status.id) || iss.status_id;
+    const currentPriorityId = (iss.priority && iss.priority.id) || iss.priority_id;
+    const currentTrackerId = (iss.tracker && iss.tracker.id) || iss.tracker_id;
+    const currentAssigneeId = (iss.assigned_to && iss.assigned_to.id) || iss.assigned_to_id || '';
+
+    // 1. 상태 옵션
     const statusOptions = (redmineState.metadata.statuses || []).map(s => {
-        const sel = (s.name === statusName || s.id === (iss.status && iss.status.id)) ? 'selected' : '';
+        const sel = (s.id === currentStatusId || s.name === statusName) ? 'selected' : '';
         return `<option value="${s.id}" ${sel}>${escapeHtml(s.name)}</option>`;
     }).join('');
 
-    // 진척도 옵션
+    // 2. 진척도 옵션
     const progressOptions = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(pct => {
         const sel = (pct === doneRatio) ? 'selected' : '';
         return `<option value="${pct}" ${sel}>${pct}%</option>`;
     }).join('');
+
+    // 3. 우선순위 옵션
+    const priorityOptions = (redmineState.metadata.priorities || []).map(p => {
+        const sel = (p.id === currentPriorityId || p.name === priorityName) ? 'selected' : '';
+        return `<option value="${p.id}" ${sel}>${escapeHtml(p.name)}</option>`;
+    }).join('');
+
+    // 4. 유형 옵션
+    const trackerOptions = (redmineState.metadata.trackers || []).map(t => {
+        const sel = (t.id === currentTrackerId || t.name === trackerName) ? 'selected' : '';
+        return `<option value="${t.id}" ${sel}>${escapeHtml(t.name)}</option>`;
+    }).join('');
+
+    // 5. 담당자 옵션 (캐시된 프로젝트 멤버 또는 기본 목록)
+    const members = (projectId && redmineState.projectMembers[projectId]) || [];
+    const myId = (redmineState.config && redmineState.config.user_id) || null;
+    const myName = (redmineState.config && redmineState.config.user_name) || '나';
+
+    let assigneeOptionsArr = [
+        `<option value="" ${!currentAssigneeId ? 'selected' : ''}>❓ 미할당 (담당자 없음)</option>`
+    ];
+
+    if (myId) {
+        const isMe = (String(currentAssigneeId) === String(myId));
+        assigneeOptionsArr.push(`<option value="${myId}" ${isMe ? 'selected' : ''}>👤 나 (${escapeHtml(myName)})</option>`);
+    }
+
+    if (members.length > 0) {
+        members.forEach(m => {
+            if (myId && String(m.id) === String(myId)) return;
+            const sel = (String(m.id) === String(currentAssigneeId)) ? 'selected' : '';
+            assigneeOptionsArr.push(`<option value="${m.id}" ${sel}>👤 ${escapeHtml(m.name)}</option>`);
+        });
+    } else if (currentAssigneeId && assigneeName && (!myId || String(currentAssigneeId) !== String(myId))) {
+        assigneeOptionsArr.push(`<option value="${currentAssigneeId}" selected>👤 ${escapeHtml(assigneeName)}</option>`);
+    }
+
+    const assigneeOptions = assigneeOptionsArr.join('');
+
+    // 비동기 프로젝트 멤버 로드 (캐시에 없을 경우)
+    if (projectId && !redmineState.projectMembers[projectId]) {
+        setTimeout(() => loadProjectMembersForIssue(projectId, currentAssigneeId, 'quick-issue-assignee-select'), 10);
+    }
 
     // 첨부파일 목록
     let attachmentsHtml = '';
@@ -659,7 +716,7 @@ function renderIssueDetail(iss) {
         `;
     }
 
-    // 본문 설명 (Description) - HTML/마크다운 지능형 서식 렌더링
+    // 본문 설명 (Description)
     const descHtml = iss.description 
         ? `<div class="detail-description-body">${formatRedmineContent(iss.description)}</div>`
         : `<div class="detail-description-body empty">설명이 등록되지 않았습니다.</div>`;
@@ -675,32 +732,59 @@ function renderIssueDetail(iss) {
             <h2 class="detail-subject">${escapeHtml(iss.subject)}</h2>
             <div class="detail-info-grid">
                 <div class="info-cell"><span class="info-lbl">상태:</span> <span class="info-val highlight">${escapeHtml(statusName)}</span></div>
-                <div class="info-cell"><span class="info-lbl">우선순위:</span> <span class="info-val">${escapeHtml(priorityName)}</span></div>
+                <div class="info-cell"><span class="info-lbl">진척도:</span> <span class="info-val">${doneRatio}%</span></div>
                 <div class="info-cell"><span class="info-lbl">담당자:</span> <span class="info-val">👤 ${escapeHtml(assigneeName)}</span></div>
+                <div class="info-cell"><span class="info-lbl">우선순위:</span> <span class="info-val">${escapeHtml(priorityName)}</span></div>
+                <div class="info-cell"><span class="info-lbl">유형:</span> <span class="info-val">${escapeHtml(trackerName)}</span></div>
+                <div class="info-cell"><span class="info-lbl">마감일:</span> <span class="info-val">${iss.due_date || '-'}</span></div>
                 <div class="info-cell"><span class="info-lbl">작성자:</span> <span class="info-val">${escapeHtml(authorName)}</span></div>
                 <div class="info-cell"><span class="info-lbl">시작일:</span> <span class="info-val">${iss.start_date || '-'}</span></div>
-                <div class="info-cell"><span class="info-lbl">마감일:</span> <span class="info-val">${iss.due_date || '-'}</span></div>
-                <div class="info-cell"><span class="info-lbl">진척도:</span> <span class="info-val">${doneRatio}%</span></div>
-                <div class="info-cell"><span class="info-lbl">추정시간:</span> <span class="info-val">${iss.estimated_hours ? iss.estimated_hours + 'h' : '-'}</span></div>
             </div>
         </div>
 
-        <!-- 빠른 상태/진척도 변경 바 -->
+        <!-- 일감 속성 실시간 빠른 변경 바 -->
         <div class="issue-quick-action-bar">
-            <div class="action-group">
-                <label>상태 변경:</label>
-                <select id="quick-issue-status-select" class="form-select" onchange="onQuickStatusChange(${iss.id})">
-                    ${statusOptions}
-                </select>
+            <div class="quick-action-row">
+                <div class="action-group">
+                    <label>상태:</label>
+                    <select id="quick-issue-status-select" class="form-select" onchange="onQuickPropertyChange(${iss.id}, 'status_id', this.value)">
+                        ${statusOptions}
+                    </select>
+                </div>
+                <div class="action-group">
+                    <label>진척도:</label>
+                    <select id="quick-issue-progress-select" class="form-select" onchange="onQuickPropertyChange(${iss.id}, 'done_ratio', this.value)">
+                        ${progressOptions}
+                    </select>
+                </div>
+                <div class="action-group">
+                    <label>우선순위:</label>
+                    <select id="quick-issue-priority-select" class="form-select" onchange="onQuickPropertyChange(${iss.id}, 'priority_id', this.value)">
+                        ${priorityOptions}
+                    </select>
+                </div>
+                <div class="action-group">
+                    <label>유형:</label>
+                    <select id="quick-issue-tracker-select" class="form-select" onchange="onQuickPropertyChange(${iss.id}, 'tracker_id', this.value)">
+                        ${trackerOptions}
+                    </select>
+                </div>
             </div>
-            <div class="action-group">
-                <label>진척도:</label>
-                <select id="quick-issue-progress-select" class="form-select" onchange="onQuickProgressChange(${iss.id})">
-                    ${progressOptions}
-                </select>
-            </div>
-            <div class="action-group right">
-                <button class="btn btn-sm btn-primary" onclick="openCommentModal(${iss.id})">💬 코멘트 등록</button>
+            <div class="quick-action-row">
+                <div class="action-group" style="flex: 1.2;">
+                    <label>담당자:</label>
+                    <select id="quick-issue-assignee-select" class="form-select" onchange="onQuickPropertyChange(${iss.id}, 'assigned_to_id', this.value)">
+                        ${assigneeOptions}
+                    </select>
+                </div>
+                <div class="action-group">
+                    <label>마감일:</label>
+                    <input type="date" id="quick-issue-due-date" class="form-input quick-date-input" value="${iss.due_date || ''}" onchange="onQuickPropertyChange(${iss.id}, 'due_date', this.value)">
+                    ${iss.due_date ? `<button type="button" class="btn btn-xs btn-secondary" onclick="onQuickPropertyChange(${iss.id}, 'due_date', '')" title="마감일 삭제">✕</button>` : ''}
+                </div>
+                <div class="action-group right">
+                    <button class="btn btn-sm btn-primary" onclick="openCommentModal(${iss.id})">💬 코멘트 등록</button>
+                </div>
             </div>
         </div>
 
@@ -715,6 +799,99 @@ function renderIssueDetail(iss) {
     `;
 }
 
+async function loadProjectMembersForIssue(projectId, currentAssigneeId, selectElId) {
+    if (!projectId) return;
+    if (!redmineState.projectMembers[projectId]) {
+        try {
+            if (window.eel && typeof eel.get_redmine_project_members === 'function') {
+                const res = await eel.get_redmine_project_members(projectId)();
+                if (res && res.status === 'success' && res.members) {
+                    redmineState.projectMembers[projectId] = res.members;
+                }
+            }
+        } catch (e) {
+            console.warn("프로젝트 멤버 조회 예외:", e);
+        }
+    }
+
+    const select = document.getElementById(selectElId);
+    if (!select) return;
+
+    const members = redmineState.projectMembers[projectId] || [];
+    let baseOptions = [
+        `<option value="" ${!currentAssigneeId ? 'selected' : ''}>❓ 미할당 (담당자 없음)</option>`
+    ];
+
+    let myId = (redmineState.config && redmineState.config.user_id) || null;
+    let myName = (redmineState.config && redmineState.config.user_name) || '나';
+
+    if (myId) {
+        const isMe = (String(currentAssigneeId) === String(myId));
+        baseOptions.push(`<option value="${myId}" ${isMe ? 'selected' : ''}>👤 나 (${escapeHtml(myName)})</option>`);
+    }
+
+    members.forEach(m => {
+        if (myId && String(m.id) === String(myId)) return;
+        const sel = (String(m.id) === String(currentAssigneeId)) ? 'selected' : '';
+        baseOptions.push(`<option value="${m.id}" ${sel}>👤 ${escapeHtml(m.name)}</option>`);
+    });
+
+    select.innerHTML = baseOptions.join('');
+}
+
+async function onQuickPropertyChange(issueId, fieldName, value) {
+    if (!issueId) return;
+
+    try {
+        if (window.eel && typeof eel.update_redmine_issue === 'function') {
+            const updateParams = {
+                status_id: null,
+                done_ratio: null,
+                notes: null,
+                priority_id: null,
+                assigned_to_id: null,
+                tracker_id: null,
+                due_date: null
+            };
+            updateParams[fieldName] = value;
+
+            const res = await eel.update_redmine_issue(
+                issueId,
+                updateParams.status_id,
+                updateParams.done_ratio,
+                updateParams.notes,
+                updateParams.priority_id,
+                updateParams.assigned_to_id,
+                updateParams.tracker_id,
+                updateParams.due_date
+            )();
+
+            if (res && res.status === 'success') {
+                const fieldLabels = {
+                    status_id: '상태',
+                    done_ratio: '진척도',
+                    priority_id: '우선순위',
+                    tracker_id: '유형',
+                    assigned_to_id: '담당자',
+                    due_date: '마감일'
+                };
+                const label = fieldLabels[fieldName] || '일감 속성';
+                showToast('일감 속성 변경 완료', `#${issueId} ${label}이(가) 성공적으로 변경되었습니다. 💾`, '✅');
+
+                // 좌측 목록 및 상단 통계 새로고침
+                await loadRedmineIssues();
+                // 상세 뷰 새로고침
+                await selectRedmineIssue(issueId);
+            } else {
+                const errMsg = res ? (res.message || '수정 실패') : '백엔드 응답이 없습니다.';
+                showToast('일감 변경 실패', errMsg, '⚠️');
+            }
+        }
+    } catch (e) {
+        showToast('수정 오류', formatErrorMessage(e), '⚠️');
+    }
+}
+
 function renderEmptyIssueDetail() {
     const container = document.getElementById('redmine-issue-detail-pane');
     if (!container) return;
@@ -725,48 +902,6 @@ function renderEmptyIssueDetail() {
             <p>좌측 목록에서 일감을 선택하면 상세 내용과 변경 이력, 첨부파일을 확인할 수 있습니다.</p>
         </div>
     `;
-}
-
-async function onQuickStatusChange(issueId) {
-    const select = document.getElementById('quick-issue-status-select');
-    if (!select) return;
-    const newStatusId = select.value;
-
-    try {
-        if (window.eel && typeof eel.update_redmine_issue === 'function') {
-            const res = await eel.update_redmine_issue(issueId, newStatusId)();
-            if (res.status === 'success') {
-                showToast('상태 변경 완료', `일감 #${issueId} 상태가 갱신되었습니다.`, '✅');
-                await loadRedmineIssues();
-                await selectRedmineIssue(issueId);
-            } else {
-                showToast('상태 변경 실패', res.message, '⚠️');
-            }
-        }
-    } catch (e) {
-        showToast('오류', e.message || String(e), '⚠️');
-    }
-}
-
-async function onQuickProgressChange(issueId) {
-    const select = document.getElementById('quick-issue-progress-select');
-    if (!select) return;
-    const newRatio = select.value;
-
-    try {
-        if (window.eel && typeof eel.update_redmine_issue === 'function') {
-            const res = await eel.update_redmine_issue(issueId, null, newRatio)();
-            if (res.status === 'success') {
-                showToast('진척도 갱신 완료', `일감 #${issueId} 진척도가 ${newRatio}%로 설정되었습니다.`, '✅');
-                await loadRedmineIssues();
-                await selectRedmineIssue(issueId);
-            } else {
-                showToast('진척도 변경 실패', res.message, '⚠️');
-            }
-        }
-    } catch (e) {
-        showToast('오류', e.message || String(e), '⚠️');
-    }
 }
 
 function openCommentModal(issueId) {
@@ -822,6 +957,17 @@ function openCreateIssueModal() {
         return;
     }
     const modal = document.getElementById('redmine-create-issue-modal');
+    const projSelect = document.getElementById('redmine-create-project');
+    
+    // 현재 선택된 프로젝트 자동 지정
+    if (projSelect && redmineState.selectedProjectId) {
+        projSelect.value = redmineState.selectedProjectId;
+        loadProjectMembersForIssue(redmineState.selectedProjectId, '', 'redmine-create-assignee');
+    } else if (projSelect && redmineState.projects.length > 0) {
+        projSelect.value = redmineState.projects[0].id;
+        loadProjectMembersForIssue(redmineState.projects[0].id, '', 'redmine-create-assignee');
+    }
+
     if (modal) modal.classList.add('show');
 }
 
@@ -834,6 +980,7 @@ async function submitCreateIssue() {
     const projSelect = document.getElementById('redmine-create-project');
     const trackerSelect = document.getElementById('redmine-create-tracker');
     const prioritySelect = document.getElementById('redmine-create-priority');
+    const assigneeSelect = document.getElementById('redmine-create-assignee');
     const subjectInput = document.getElementById('redmine-create-subject');
     const descInput = document.getElementById('redmine-create-desc');
     const dueInput = document.getElementById('redmine-create-due');
@@ -841,6 +988,7 @@ async function submitCreateIssue() {
     const projectId = projSelect ? projSelect.value : null;
     const trackerId = trackerSelect ? trackerSelect.value : null;
     const priorityId = prioritySelect ? prioritySelect.value : null;
+    const assigneeId = assigneeSelect ? assigneeSelect.value : null;
     const subject = subjectInput ? subjectInput.value.trim() : '';
     const description = descInput ? descInput.value.trim() : '';
     const dueDate = dueInput ? dueInput.value : null;
@@ -863,7 +1011,7 @@ async function submitCreateIssue() {
                 trackerId ? parseInt(trackerId, 10) : null,
                 null,
                 priorityId ? parseInt(priorityId, 10) : null,
-                null,
+                assigneeId ? parseInt(assigneeId, 10) : null,
                 dueDate,
                 0
             )();
@@ -884,7 +1032,7 @@ async function submitCreateIssue() {
             }
         }
     } catch (e) {
-        showToast('오류', e.message || String(e), '⚠️');
+        showToast('오류', formatErrorMessage(e), '⚠️');
     }
 }
 
