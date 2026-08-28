@@ -4107,6 +4107,27 @@ input[type="checkbox"] {
     max-width: 320px;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+/* 줄바꿈 모드 활성화 시 */
+.csv-main-table.cell-wrap td {
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    vertical-align: top;
+    line-height: 1.45;
+}
+
+.csv-wrap-btn {
+    transition: var(--transition);
+}
+
+.csv-wrap-btn.active {
+    background: rgba(99, 102, 241, 0.25) !important;
+    color: #c7d2fe !important;
+    border-color: rgba(99, 102, 241, 0.6) !important;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.3);
 }
 
 .csv-main-table tbody tr:hover {

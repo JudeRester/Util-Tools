@@ -19,7 +19,8 @@ let csvState = {
     sortDir: 'asc',
     currentPage: 1,
     pageSize: 100,
-    colWidths: {}
+    colWidths: {},
+    wordWrap: false
 };
 
 // ==========================================
@@ -526,6 +527,7 @@ function renderCsvTable() {
 
     if (tableEl) {
         tableEl.innerHTML = theadHtml + tbodyHtml;
+        tableEl.classList.toggle('cell-wrap', !!csvState.wordWrap);
     }
 
     // 3) 페이지네이션 버튼 갱신
@@ -642,6 +644,27 @@ function resetColWidth(event, colIdx) {
         delete csvState.colWidths[colIdx];
     }
     renderCsvTable();
+}
+
+// ==========================================
+// 6-2. 셀 내용 줄바꿈 (Word Wrap) 토글
+// ==========================================
+function toggleCsvWordWrap() {
+    csvState.wordWrap = !csvState.wordWrap;
+    const btn = document.getElementById('csv-wrap-toggle-btn');
+    const tableEl = document.getElementById('csv-main-table');
+
+    if (btn) {
+        btn.classList.toggle('active', csvState.wordWrap);
+        const textSpan = document.getElementById('csv-wrap-text');
+        if (textSpan) {
+            textSpan.textContent = csvState.wordWrap ? '한 줄 보기' : '줄바꿈';
+        }
+    }
+
+    if (tableEl) {
+        tableEl.classList.toggle('cell-wrap', csvState.wordWrap);
+    }
 }
 
 function updateCsvStats() {
