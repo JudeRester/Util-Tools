@@ -164,6 +164,9 @@ function initTabOnDemand(tabName) {
         case 'emails':
             if (typeof initEmailViewer === 'function') initEmailViewer();
             break;
+        case 'redmine':
+            if (typeof initRedmineTab === 'function') initRedmineTab();
+            break;
     }
 }
 

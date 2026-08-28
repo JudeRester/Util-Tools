@@ -69,6 +69,12 @@ DATA_REGISTRY = {
         "icon": "⚙️",
         "type": "json",
         "filename": "app_settings.json"
+    },
+    "redmine_config": {
+        "label": "Redmine 연동 설정",
+        "icon": "🦊",
+        "type": "sqlite",
+        "table": "redmine_config"
     }
 }
 

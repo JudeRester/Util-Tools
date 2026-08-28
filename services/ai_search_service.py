@@ -498,6 +498,56 @@ def _get_all_system_items(filter_category=None):
             except Exception as e:
                 _safe_log(f"[AI Search] SQLite generators 조회 실패: {e}")
 
+    # (7) Redmine 일감 (Redmine Issues)
+    if is_all or filter_category == 'redmine':
+        if conn:
+            try:
+                rows = conn.execute("SELECT id, subject, description, tracker_name, status_name, priority_name, project_name, assigned_to_name FROM redmine_issues ORDER BY updated_on DESC LIMIT 500").fetchall()
+                for r in rows:
+                    iss_id = r['id']
+                    sub = r['subject'] or '(제목 없음)'
+                    desc = r['description'] or ''
+                    proj = r['project_name'] or ''
+                    tracker = r['tracker_name'] or '일감'
+                    status = r['status_name'] or ''
+                    all_items.append({
+                        "id": f"issue_{iss_id}",
+                        "category": "redmine",
+                        "category_label": f"Redmine ({proj})",
+                        "icon": "🦊",
+                        "title": f"#{iss_id} [{tracker}] {sub}",
+                        "snippet": f"[{status}] {desc[:120].replace(chr(10), ' ').strip()}" if desc else f"[{status}] {proj}",
+                        "full_text": f"Redmine 일감 #{iss_id} {tracker} {status} {proj}\n{sub}\n{desc}",
+                        "target_tab": "redmine",
+                        "action_data": {"redmine_type": "issue", "issue_id": iss_id}
+                    })
+            except Exception as e:
+                _safe_log(f"[AI Search] SQLite redmine_issues 조회 실패: {e}")
+
+    # (8) Redmine 위키 (Redmine Wikis)
+    if is_all or filter_category == 'redmine':
+        if conn:
+            try:
+                rows = conn.execute("SELECT id, project_id, title, text, author_name FROM redmine_wikis ORDER BY updated_on DESC").fetchall()
+                for r in rows:
+                    w_id = r['id']
+                    title = r['title'] or '(위키)'
+                    proj = r['project_id'] or ''
+                    text = r['text'] or ''
+                    all_items.append({
+                        "id": f"wiki_{w_id}",
+                        "category": "redmine",
+                        "category_label": f"위키 ({proj})",
+                        "icon": "📖",
+                        "title": f"[Wiki] {title} ({proj})",
+                        "snippet": text[:120].replace(chr(10), ' ').strip(),
+                        "full_text": f"Redmine 위키 {proj} {title}\n{text[:600]}",
+                        "target_tab": "redmine",
+                        "action_data": {"redmine_type": "wiki", "project_id": proj, "title": title}
+                    })
+            except Exception as e:
+                _safe_log(f"[AI Search] SQLite redmine_wikis 조회 실패: {e}")
+
     if conn:
         try:
             conn.close()

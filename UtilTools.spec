@@ -56,6 +56,7 @@ hidden_imports = [
     'services.markdown_service',
     'services.email_service',
     'services.mock_data_service',
+    'services.redmine_service',
 ] + onnx_hidden + tok_hidden
 
 a = Analysis(

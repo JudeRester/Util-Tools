@@ -8,7 +8,7 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 ## 🌟 주요 기능 (Key Features)
 
 | 카테고리 | 주요 제공 기능 |
-| :--- | :--- |
+| **🦊 Redmine 연동** | • **내 일감(Issues) 실시간 대시보드 & 프로젝트 위키(Wiki) 뷰어/에디터**<br>• 상태/진척도(%) 원클릭 변경, 코멘트(Notes) 등록, 새 일감 생성<br>• 프로젝트 위키 실시간 목차 조회, 마크다운 렌더링 & 직접 편집/저장<br>• SQLite 0.01초 오프라인 캐싱, **백그라운드 일감 업데이트 트레이 알림** 및 AI 시맨틱 검색 통합 |
 | **📧 이메일 아카이브** | • **3,100+건 .eml / .msg 대용량 이메일 로컬 보관소 & 실시간 타임라인 뷰어**<br>• **비파괴적 대화별 스레드 묶기 (Thread View)**: Re:/Fwd: 정규화 및 시간순 아코디언 타임라인<br>• **초경량 청크 페이징 & 온디맨드 지연 로딩**: 메모리 점유율 90% 절감 (40MB 수준 유지)<br>• **AI 시맨틱 검색(`Ctrl+K`) 연동**, 6대 카테고리 자동 분류, 첨부파일 추출/일괄 저장 및 Outlook 원본 연동 |
 | **🧠 AI 시맨틱 검색** | • **로컬 딥러닝 신경망(`intfloat/multilingual-e5-small` ONNX)** 기반 의미론적 문맥 검색<br>• 키워드가 정확히 일치하지 않아도 의미와 문맥으로 전체 데이터(이메일, 메모, 다이어그램 등)를 0.05초 만에 탐색<br>• 문장 간 유사도 정밀 비교 및 스마트 증분 벡터 캐싱 지원 |
 | **🎲 모의 데이터 스튜디오** | • **3-Pass 복합 가상 데이터 생성기 & 엑셀(.xlsx) / CSV 내보내기 엔진**<br>• 순번(Sequence), 한국인 이름/이메일 지능형 영문 로마자 변환, 선택(Choice) 및 키-값(Key-Value) 연계 매핑<br>• 커스텀 컬럼 양식 생성, 수정, 삭제 및 SQLite 영구 동기화 |
@@ -140,6 +140,7 @@ D:\python
 │   ├── db_service.py           # 중앙 SQLite WAL 모드 커넥션 풀 & 스키마 관리자
 │   ├── ai_search_service.py    # ONNX AI 시맨틱 검색 & 벡터 캐시 엔진
 │   ├── email_service.py        # EML 파서, 스레드 정규화, 카테고리 분류 & 첨부파일 추출
+│   ├── redmine_service.py      # Redmine REST API 연동 (일감, 위키, 메타데이터, SQLite 캐시)
 │   ├── mock_data_service.py    # 3-Pass 모의 데이터 생성, 로마자 변환 & 엑셀/CSV 빌더
 │   ├── csv_service.py          # CSV/TSV 파서, 인코딩/구분자 자동 감지 및 저장
 │   ├── markdown_service.py     # Markdown 파일 열기/저장 및 인코딩 감지 백엔드
@@ -162,6 +163,7 @@ D:\python
         ├── console.js          # 하단 로그창, 스플리터 조절기 & 고도화된 토스트(Toast) 알림
         ├── drag_drop.js        # 공통 마우스 드래그 앤 드롭 핸들러
         ├── email_viewer.js     # EML 아카이브, 대화 스레드 타임라인 & 온디맨드 뷰어
+        ├── redmine.js          # Redmine 일감 대시보드, 타임라인, 상태변경 & 위키 에디터
         ├── ai_search.js        # AI 문맥 검색 & 문장 의미 비교 모달 UI (Ctrl+K)
         ├── mock_data_studio.js # 3-Pass 모의 데이터 스튜디오 & 서식 엑셀/CSV 생성 UI
         ├── csv_viewer.js       # CSV/TSV 데이터 뷰어, 정렬, 검색, 변환/내보내기

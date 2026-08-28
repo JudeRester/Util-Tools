@@ -579,6 +579,95 @@ def init_db():
                 """)
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_embeddings_hash ON ai_embeddings(hash);")
 
+                # 9. redmine_config 테이블 (Redmine 연결 설정)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS redmine_config (
+                        id TEXT PRIMARY KEY,
+                        server_url TEXT,
+                        api_key TEXT,
+                        user_id INTEGER,
+                        user_name TEXT,
+                        user_login TEXT,
+                        auto_sync INTEGER DEFAULT 1,
+                        sync_interval_min INTEGER DEFAULT 5,
+                        updated_at TEXT
+                    );
+                """)
+
+                # 10. redmine_issues 테이블 (일감 로컬 캐시)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS redmine_issues (
+                        id INTEGER PRIMARY KEY,
+                        project_id INTEGER,
+                        project_name TEXT,
+                        tracker_id INTEGER,
+                        tracker_name TEXT,
+                        status_id INTEGER,
+                        status_name TEXT,
+                        priority_id INTEGER,
+                        priority_name TEXT,
+                        author_id INTEGER,
+                        author_name TEXT,
+                        assigned_to_id INTEGER,
+                        assigned_to_name TEXT,
+                        subject TEXT,
+                        description TEXT,
+                        start_date TEXT,
+                        due_date TEXT,
+                        done_ratio INTEGER DEFAULT 0,
+                        estimated_hours REAL,
+                        updated_on TEXT,
+                        created_on TEXT,
+                        is_my_issue INTEGER DEFAULT 0,
+                        raw_json TEXT
+                    );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_issues_project ON redmine_issues(project_id);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_issues_status ON redmine_issues(status_id);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_issues_assigned ON redmine_issues(assigned_to_id);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_issues_my ON redmine_issues(is_my_issue);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_issues_due ON redmine_issues(due_date);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_issues_updated ON redmine_issues(updated_on);")
+
+                # 11. redmine_wikis 테이블 (프로젝트 위키 문서 로컬 캐시)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS redmine_wikis (
+                        id TEXT PRIMARY KEY,
+                        project_id TEXT,
+                        project_name TEXT,
+                        title TEXT,
+                        version INTEGER DEFAULT 1,
+                        author_name TEXT,
+                        comments TEXT,
+                        text TEXT,
+                        updated_on TEXT,
+                        created_on TEXT,
+                        raw_json TEXT
+                    );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_wikis_project ON redmine_wikis(project_id);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_wikis_title ON redmine_wikis(title);")
+
+                # 12. redmine_projects 테이블 (프로젝트 목록 캐시)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS redmine_projects (
+                        id INTEGER PRIMARY KEY,
+                        name TEXT,
+                        identifier TEXT,
+                        description TEXT,
+                        status INTEGER DEFAULT 1
+                    );
+                """)
+
+                # 13. redmine_meta 테이블 (상태, 트래커, 우선순위 메타데이터 캐시)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS redmine_meta (
+                        key TEXT PRIMARY KEY,
+                        data_json TEXT,
+                        updated_at TEXT
+                    );
+                """)
+
             # 1회 자동 마이그레이션 실행
             _migrate_emails_from_json_if_needed(conn)
             _migrate_notes_from_json_if_needed(conn)

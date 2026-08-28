@@ -52,6 +52,9 @@
                 <button class="tab-btn" data-tab="calendar">
                     <span class="tab-icon">📅</span> <span class="tab-label">달력 & 일정</span>
                 </button>
+                <button class="tab-btn" data-tab="redmine">
+                    <span class="tab-icon">🦊</span> <span class="tab-label">Redmine</span>
+                </button>
                 <!-- CSV 뷰어 & 다이어그램 통합 드롭다운 -->
                 <div class="tab-dropdown-group" id="viewer-diagram-dropdown">
                     <button type="button" class="tab-btn tab-dropdown-trigger" id="viewer-diagram-tab-btn" onclick="toggleViewerDiagramDropdown(event)" title="CSV 뷰어 & 다이어그램">
@@ -470,6 +473,195 @@
                             <div id="email-detail-container" class="email-detail-container">
                                 <!-- JavaScript로 동적 렌더링 -->
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Redmine (일감 & 프로젝트 위키) 탭 -->
+            <section id="tab-redmine" class="tab-pane">
+                <!-- 상단 서브 탭 & 연동 상태 툴바 -->
+                <div class="redmine-header-bar">
+                    <div class="redmine-subtab-group">
+                        <button class="redmine-subtab-btn active" data-subtab="issues" onclick="switchRedmineSubTab('issues')">
+                            <span>📋</span> 내 일감 (Issues)
+                        </button>
+                        <button class="redmine-subtab-btn" data-subtab="wiki" onclick="switchRedmineSubTab('wiki')">
+                            <span>📖</span> 프로젝트 위키 (Wiki)
+                        </button>
+                        <button class="redmine-subtab-btn" data-subtab="config" onclick="switchRedmineSubTab('config')">
+                            <span>⚙️</span> 연동 설정
+                        </button>
+                    </div>
+                    <div class="redmine-header-right">
+                        <div id="redmine-connection-badge" class="redmine-conn-badge disconnected" onclick="switchRedmineSubTab('config')" title="Redmine 서버 연결 상태">
+                            <span class="badge-dot gray"></span> 미연결
+                        </div>
+                        <button class="btn btn-sm btn-primary" onclick="openCreateIssueModal()" title="새 일감 등록">
+                            <span>➕</span> 새 일감
+                        </button>
+                        <button id="redmine-sync-btn" class="btn btn-sm btn-secondary" onclick="syncRedmineNow()" title="서버와 전체 데이터 동기화">
+                            <span>🔄</span> 동기화
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 1) 일감 (Issues) 패널 -->
+                <div id="redmine-pane-issues" class="redmine-sub-pane active">
+                    <!-- 요약 통계 배지 바 -->
+                    <div class="redmine-stats-summary-bar">
+                        <div class="stat-card" onclick="document.getElementById('redmine-status-filter').value=''; onRedmineFilterChange();">
+                            <span class="stat-num" id="redmine-stat-total">0</span>
+                            <span class="stat-lbl">전체 일감</span>
+                        </div>
+                        <div class="stat-card progress-card" onclick="document.getElementById('redmine-status-filter').value='2'; onRedmineFilterChange();">
+                            <span class="stat-num" id="redmine-stat-progress">0</span>
+                            <span class="stat-lbl">진행 중</span>
+                        </div>
+                        <div class="stat-card new-card" onclick="document.getElementById('redmine-status-filter').value='1'; onRedmineFilterChange();">
+                            <span class="stat-num" id="redmine-stat-new">0</span>
+                            <span class="stat-lbl">신규</span>
+                        </div>
+                        <div class="stat-card resolved-card">
+                            <span class="stat-num" id="redmine-stat-resolved">0</span>
+                            <span class="stat-lbl">해결 / 피드백</span>
+                        </div>
+                        <div class="stat-card due-card">
+                            <span class="stat-num" id="redmine-stat-due">0</span>
+                            <span class="stat-lbl">오늘 마감</span>
+                        </div>
+                    </div>
+
+                    <!-- 일감 검색 & 다중 필터 툴바 -->
+                    <div class="redmine-filters-bar">
+                        <div class="filter-item">
+                            <select id="redmine-project-filter" class="form-select redmine-select" onchange="onRedmineFilterChange()">
+                                <option value="">전체 프로젝트</option>
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <select id="redmine-tracker-filter" class="form-select redmine-select" onchange="onRedmineFilterChange()">
+                                <option value="">전체 유형 (Tracker)</option>
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <select id="redmine-status-filter" class="form-select redmine-select" onchange="onRedmineFilterChange()">
+                                <option value="">전체 상태</option>
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <select id="redmine-priority-filter" class="form-select redmine-select" onchange="onRedmineFilterChange()">
+                                <option value="">전체 우선순위</option>
+                            </select>
+                        </div>
+                        <div class="filter-item search-item">
+                            <div class="redmine-search-box">
+                                <span class="search-icon">🔍</span>
+                                <input type="text" id="redmine-search-input" class="form-input" placeholder="일감 검색 (번호, 제목, 내용)..." oninput="onRedmineFilterChange()">
+                            </div>
+                        </div>
+                        <div class="filter-item checkbox-item">
+                            <label class="redmine-checkbox-lbl">
+                                <input type="checkbox" id="redmine-filter-my-checkbox" checked onchange="onRedmineFilterChange()">
+                                <span>내게 할당된 일감만</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 스플릿 뷰 (좌: 일감 목록, 우: 상세 뷰어) -->
+                    <div class="redmine-split-layout">
+                        <div class="redmine-issues-sidebar">
+                            <div id="redmine-issues-list" class="redmine-issues-list">
+                                <!-- 동적 렌더링 -->
+                            </div>
+                        </div>
+                        <div class="redmine-issue-main-view">
+                            <div id="redmine-issue-detail-pane" class="redmine-issue-detail-pane">
+                                <!-- 동적 렌더링 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2) 프로젝트 위키 (Wiki) 패널 -->
+                <div id="redmine-pane-wiki" class="redmine-sub-pane" style="display: none;">
+                    <div class="redmine-wiki-top-toolbar">
+                        <div class="wiki-proj-selector-box">
+                            <label>프로젝트:</label>
+                            <select id="redmine-wiki-project-filter" class="form-select redmine-select" onchange="loadProjectWikis(this.value)">
+                                <option value="">프로젝트 선택...</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-sm btn-secondary" onclick="loadRedmineWikiView()" title="위키 목차 새로고침">
+                            <span>🔄</span> 목차 갱신
+                        </button>
+                    </div>
+                    <div class="redmine-split-layout">
+                        <div class="redmine-wiki-sidebar">
+                            <div class="sidebar-header">
+                                <span>📑 위키 문서 목차</span>
+                            </div>
+                            <div id="redmine-wiki-tree" class="redmine-wiki-tree">
+                                <!-- 동적 렌더링 -->
+                            </div>
+                        </div>
+                        <div class="redmine-wiki-main-view">
+                            <div id="redmine-wiki-content-pane" class="redmine-wiki-content-pane">
+                                <!-- 동적 렌더링 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3) 연동 설정 (Config) 패널 -->
+                <div id="redmine-pane-config" class="redmine-sub-pane redmine-config-pane" style="display: none;">
+                    <div class="redmine-config-card">
+                        <div class="config-card-header">
+                            <div class="card-icon">🦊</div>
+                            <div>
+                                <h3>Redmine REST API 연동 설정</h3>
+                                <p>Redmine 서버 주소와 개인 API 접근 키를 등록하여 실시간으로 동기화합니다.</p>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Redmine 서버 주소 (URL) <span style="color: #ef4444;">*</span></label>
+                            <input type="text" id="redmine-cfg-url" class="form-input" placeholder="https://redmine.회사도메인.com" autocomplete="off">
+                            <div class="form-hint">끝의 슬래시(/)는 자동으로 정리됩니다.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">API 접근 키 (API Access Key) <span style="color: #ef4444;">*</span></label>
+                            <input type="password" id="redmine-cfg-key" class="form-input" placeholder="Redmine 웹 [내 계정] 우측의 40자리 API 접근 키" autocomplete="off">
+                            <div class="form-hint">Redmine 웹 ➔ 상단 우측 [내 계정] ➔ 우측 메뉴 [API 접근 키]에서 확인/생성할 수 있습니다.</div>
+                        </div>
+
+                        <div class="form-row" style="display: flex; gap: 16px; align-items: center; margin-top: 14px;">
+                            <label class="redmine-checkbox-lbl">
+                                <input type="checkbox" id="redmine-cfg-sync" checked>
+                                <span>백그라운드 자동 동기화 & 트레이 알림 활성화</span>
+                            </label>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label style="font-size: 0.85rem; color: var(--text-secondary);">주기:</label>
+                                <select id="redmine-cfg-interval" class="form-select" style="width: 100px;">
+                                    <option value="1">1분</option>
+                                    <option value="3">3분</option>
+                                    <option value="5" selected>5분</option>
+                                    <option value="10">10분</option>
+                                    <option value="30">30분</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="redmine-test-result" class="redmine-test-msg" style="margin-top: 14px;"></div>
+
+                        <div class="config-card-actions" style="margin-top: 20px; display: flex; gap: 10px;">
+                            <button type="button" class="btn btn-secondary" onclick="testRedmineConnectionAction()">
+                                <span>🔌</span> 연결 테스트
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="saveRedmineConfigAction()">
+                                <span>💾</span> 설정 저장 및 동기화
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1542,6 +1734,84 @@
         </div>
     </div>
 
+    <!-- Redmine 새 일감 등록 모달 -->
+    <div id="redmine-create-issue-modal" class="modal-overlay">
+        <div class="modal-card modal-card-redmine-create" style="max-width: 640px; width: 94%;">
+            <div class="modal-header">
+                <h3>➕ Redmine 새 일감 등록</h3>
+                <button class="modal-close-btn" onclick="closeCreateIssueModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">프로젝트 <span style="color: #ef4444;">*</span></label>
+                        <select id="redmine-create-project" class="form-select">
+                            <option value="">프로젝트 선택...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">일감 유형 (Tracker)</label>
+                        <select id="redmine-create-tracker" class="form-select">
+                            <!-- 동적 렌더링 -->
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 10px;">
+                    <label class="form-label">일감 제목 <span style="color: #ef4444;">*</span></label>
+                    <input type="text" id="redmine-create-subject" class="form-input" placeholder="일감 제목을 명확하게 입력하세요..." autocomplete="off">
+                </div>
+
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+                    <div class="form-group">
+                        <label class="form-label">우선순위</label>
+                        <select id="redmine-create-priority" class="form-select">
+                            <!-- 동적 렌더링 -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">마감일 (Due Date)</label>
+                        <input type="date" id="redmine-create-due" class="form-input">
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 10px;">
+                    <label class="form-label">일감 설명 (Description)</label>
+                    <textarea id="redmine-create-desc" class="form-textarea" rows="6" placeholder="작업 상세 내용, 요구사항, 재현 절차 등을 입력하세요..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="form-btn close-btn" onclick="closeCreateIssueModal()">취소</button>
+                <button type="button" class="form-btn add-btn" onclick="submitCreateIssue()">
+                    <span>➕</span> 일감 등록하기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Redmine 코멘트/댓글 등록 모달 -->
+    <div id="redmine-comment-modal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 520px; width: 92%;">
+            <div class="modal-header">
+                <h3>💬 일감 코멘트 등록</h3>
+                <button class="modal-close-btn" onclick="closeCommentModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="redmine-comment-issue-id">
+                <div class="form-group">
+                    <label class="form-label">진행 코멘트 내용 <span style="color: #ef4444;">*</span></label>
+                    <textarea id="redmine-comment-text" class="form-textarea" rows="5" placeholder="진행 상황, 변경 사항, 피드백 코멘트를 입력하세요..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="form-btn close-btn" onclick="closeCommentModal()">취소</button>
+                <button type="button" class="form-btn add-btn" onclick="submitIssueComment()">
+                    <span>💬</span> 등록
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- 공통 인레이어 팝업 다이얼로그 (Alert / Confirm) -->
     <div id="app-dialog-modal" class="modal-overlay dialog-modal-overlay">
         <div class="modal-card dialog-card">
@@ -1577,6 +1847,7 @@
     <script src="js/csv_viewer.js"></script>
     <script src="js/markdown_viewer.js"></script>
     <script src="js/email_viewer.js"></script>
+    <script src="js/redmine.js"></script>
     <script src="js/backup.js"></script>
     <script src="js/ai_search.js"></script>
     <script src="js/app.js"></script>
