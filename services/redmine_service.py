@@ -155,8 +155,9 @@ def test_redmine_connection(server_url: str, api_key: str):
 
 
 @eel.expose
-def save_redmine_config(server_url: str, api_key: str, auto_sync: bool = True, sync_interval_min: int = 5):
-    """Redmine 설정 저장 및 초기 동기화"""
+def save_redmine_config(server_url: str, api_key: str, auto_sync: bool = True, sync_interval_min: int = 5,
+                        sync_scope: str = "all_open", sync_limit: int = 300, sync_project_id: int = 0):
+    """Redmine 설정 저장 및 동기화 범위 반영"""
     server_url = _normalize_url(server_url)
     api_key = str(api_key).strip()
 
@@ -172,8 +173,9 @@ def save_redmine_config(server_url: str, api_key: str, auto_sync: bool = True, s
     try:
         conn.execute("""
             INSERT OR REPLACE INTO redmine_config 
-            (id, server_url, api_key, user_id, user_name, user_login, auto_sync, sync_interval_min, updated_at)
-            VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, server_url, api_key, user_id, user_name, user_login, auto_sync, sync_interval_min,
+             sync_scope, sync_limit, sync_project_id, updated_at)
+            VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             server_url,
             api_key,
@@ -182,16 +184,19 @@ def save_redmine_config(server_url: str, api_key: str, auto_sync: bool = True, s
             user.get("login"),
             1 if auto_sync else 0,
             sync_interval_min,
+            sync_scope,
+            int(sync_limit) if sync_limit else 300,
+            int(sync_project_id) if sync_project_id else 0,
             now_str
         ))
         conn.commit()
 
-        # 백그라운드 전체 메타데이터 및 내 일감 동기화 트리거
+        # 백그라운드 전체 메타데이터 및 설정된 범위의 일감 동기화 트리거
         sync_res = sync_redmine_all(force=True)
 
         return {
             "status": "success",
-            "message": "Redmine 설정이 저장되었으며 동기화가 완료되었습니다.",
+            "message": "Redmine 연동 설정 및 동기화 범위가 성공적으로 저장되었습니다.",
             "user": user,
             "sync": sync_res
         }
@@ -316,45 +321,84 @@ def get_redmine_projects():
 # ==========================================
 
 @eel.expose
-def sync_redmine_issues(project_id: int = None, limit: int = 100):
+def sync_redmine_issues(project_id: int = None, limit: int = None, scope: str = None):
     """
-    서버로부터 일감 목록 동기화 (내게 할당된 일감 + 프로젝트 전체 일감)
+    서버로부터 일감 목록 동기화
+    - scope: 'all_open' (내 참여 프로젝트 전체 열린 일감 + 미할당 일감 포함)
+             'my_only' (내게 할당된 일감만)
+             'all_with_closed' (최근 닫힌 일감 포함 전체)
     """
     conn = get_db_connection()
     try:
-        cfg = conn.execute("SELECT server_url, api_key, user_id FROM redmine_config WHERE id = 'default'").fetchone()
+        cfg = conn.execute("SELECT server_url, api_key, user_id, sync_scope, sync_limit, sync_project_id FROM redmine_config WHERE id = 'default'").fetchone()
         if not cfg or not cfg['server_url'] or not cfg['api_key']:
             return {"status": "error", "message": "Redmine 설정이 필요합니다."}
 
-        server_url, api_key, my_user_id = cfg['server_url'], cfg['api_key'], cfg['user_id']
+        server_url = cfg['server_url']
+        api_key = cfg['api_key']
+        my_user_id = cfg['user_id']
+        
+        cfg_dict = dict(cfg)
+        sync_scope = scope or cfg_dict.get('sync_scope') or 'all_open'
+        max_limit = limit or cfg_dict.get('sync_limit') or 300
+        target_project_id = project_id if project_id is not None else (cfg_dict.get('sync_project_id') or 0)
 
-        # 1. 내게 할당된 일감 (열린 일감)
+        all_fetched_map = {}
+
+        # 1. 내게 할당된 열린 일감은 어떤 스코프에서도 항상 우선 확보
         my_endpoint = "issues.json?assigned_to_id=me&status_id=open&limit=100&sort=updated_on:desc"
         res_my = _request_redmine_api(server_url, api_key, my_endpoint)
-        my_issues = res_my.get("data", {}).get("issues", []) if res_my.get("status") == "success" else []
+        if res_my.get("status") == "success":
+            for iss in res_my.get("data", {}).get("issues", []):
+                all_fetched_map[iss['id']] = iss
 
-        # 2. 추가 프로젝트별 일감 (선택된 경우)
-        all_fetched = list(my_issues)
-        if project_id:
-            proj_endpoint = f"issues.json?project_id={project_id}&status_id=open&limit={limit}&sort=updated_on:desc"
+        # 2. 동기화 범위(Scope)에 따른 확장 일감 수집 (미할당 및 팀 일감 포함)
+        status_param = "open" if sync_scope != "all_with_closed" else "*"
+        
+        if sync_scope in ["all_open", "all_with_closed"]:
+            offset = 0
+            page_size = min(100, max_limit)
+            while offset < max_limit:
+                base_query = f"issues.json?status_id={status_param}&limit={page_size}&offset={offset}&sort=updated_on:desc"
+                if target_project_id and int(target_project_id) > 0:
+                    base_query += f"&project_id={target_project_id}"
+
+                res_scope = _request_redmine_api(server_url, api_key, base_query)
+                if res_scope.get("status") != "success":
+                    break
+
+                page_issues = res_scope.get("data", {}).get("issues", [])
+                if not page_issues:
+                    break
+
+                for iss in page_issues:
+                    all_fetched_map[iss['id']] = iss
+
+                offset += len(page_issues)
+                if len(page_issues) < page_size:
+                    break
+
+        elif sync_scope == "my_only" and target_project_id and int(target_project_id) > 0:
+            proj_endpoint = f"issues.json?project_id={target_project_id}&status_id=open&limit=100&sort=updated_on:desc"
             res_proj = _request_redmine_api(server_url, api_key, proj_endpoint)
             if res_proj.get("status") == "success":
-                proj_issues = res_proj.get("data", {}).get("issues", [])
-                existing_ids = {iss['id'] for iss in all_fetched}
-                for iss in proj_issues:
-                    if iss['id'] not in existing_ids:
-                        all_fetched.append(iss)
+                for iss in res_proj.get("data", {}).get("issues", []):
+                    all_fetched_map[iss['id']] = iss
+
+        all_fetched = list(all_fetched_map.values())
 
         # SQLite에 일괄 갱신
         for iss in all_fetched:
-            p = iss.get('project', {})
-            t = iss.get('tracker', {})
-            s = iss.get('status', {})
-            pr = iss.get('priority', {})
-            a = iss.get('author', {})
-            asg = iss.get('assigned_to', {})
+            p = iss.get('project') or {}
+            t = iss.get('tracker') or {}
+            s = iss.get('status') or {}
+            pr = iss.get('priority') or {}
+            a = iss.get('author') or {}
+            asg = iss.get('assigned_to') or {}
 
-            is_my = 1 if (asg.get('id') == my_user_id or my_user_id is None) else 0
+            asg_id = asg.get('id')
+            asg_name = asg.get('name', '') if asg_id else '미할당'
+            is_my = 1 if (asg_id == my_user_id and my_user_id is not None) else 0
 
             conn.execute("""
                 INSERT OR REPLACE INTO redmine_issues 
@@ -370,7 +414,7 @@ def sync_redmine_issues(project_id: int = None, limit: int = 100):
                 s.get('id'), s.get('name', ''),
                 pr.get('id'), pr.get('name', ''),
                 a.get('id'), a.get('name', ''),
-                asg.get('id'), asg.get('name', ''),
+                asg_id, asg_name,
                 iss.get('subject', '(제목 없음)'),
                 iss.get('description', ''),
                 iss.get('start_date', ''),
@@ -384,7 +428,16 @@ def sync_redmine_issues(project_id: int = None, limit: int = 100):
             ))
         conn.commit()
 
-        return {"status": "success", "count": len(all_fetched), "my_count": len(my_issues)}
+        my_count = sum(1 for iss in all_fetched if (iss.get('assigned_to') or {}).get('id') == my_user_id)
+        unassigned_count = sum(1 for iss in all_fetched if not (iss.get('assigned_to') or {}).get('id'))
+
+        return {
+            "status": "success",
+            "count": len(all_fetched),
+            "my_count": my_count,
+            "unassigned_count": unassigned_count,
+            "scope": sync_scope
+        }
     except Exception as e:
         return {"status": "error", "message": f"일감 동기화 실패: {str(e)}"}
     finally:
@@ -392,18 +445,27 @@ def sync_redmine_issues(project_id: int = None, limit: int = 100):
 
 
 @eel.expose
-def get_redmine_issues(filter_my: bool = True, project_id: int = None, status_id: int = None, 
-                       tracker_id: int = None, priority_id: int = None, search_query: str = None):
+def get_redmine_issues(filter_my: bool = False, project_id: int = None, status_id: int = None, 
+                       tracker_id: int = None, priority_id: int = None, search_query: str = None,
+                       assignee: str = None):
     """
     SQLite 로컬 캐시에서 일감 목록 고속 조회 (0.01초)
+    - filter_my: True인 경우 내 일감만 필터링
+    - assignee: 'me' (내 일감), 'unassigned' (미할당 일감), 또는 특정 담당자 이름
     """
     conn = get_db_connection()
     try:
         clauses = []
         params = []
 
-        if filter_my:
+        if filter_my or assignee == 'me':
             clauses.append("is_my_issue = 1")
+        elif assignee == 'unassigned':
+            clauses.append("(assigned_to_id IS NULL OR assigned_to_name = '미할당' OR assigned_to_name = '')")
+        elif assignee:
+            clauses.append("assigned_to_name = ?")
+            params.append(assignee)
+
         if project_id:
             clauses.append("project_id = ?")
             params.append(project_id)
@@ -418,8 +480,8 @@ def get_redmine_issues(filter_my: bool = True, project_id: int = None, status_id
             params.append(priority_id)
         if search_query:
             q = f"%{search_query.strip()}%"
-            clauses.append("(subject LIKE ? OR description LIKE ? OR id LIKE ?)")
-            params.extend([q, q, q])
+            clauses.append("(subject LIKE ? OR description LIKE ? OR id LIKE ? OR assigned_to_name LIKE ?)")
+            params.extend([q, q, q, q])
 
         where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         sql = f"SELECT * FROM redmine_issues {where_sql} ORDER BY updated_on DESC, id DESC"
@@ -427,13 +489,19 @@ def get_redmine_issues(filter_my: bool = True, project_id: int = None, status_id
         rows = conn.execute(sql, params).fetchall()
         issues = [dict(r) for r in rows]
 
+        # 전체 고유 담당자 목록 추출 (프론트엔드 드롭다운용)
+        all_assignees_rows = conn.execute("SELECT DISTINCT assigned_to_name FROM redmine_issues WHERE assigned_to_name IS NOT NULL AND assigned_to_name != '' AND assigned_to_name != '미할당' ORDER BY assigned_to_name").fetchall()
+        assignees_list = [r['assigned_to_name'] for r in all_assignees_rows]
+
         # 요약 통계 계산
         stats = {
             "total": len(issues),
             "in_progress": 0,
             "new": 0,
             "resolved": 0,
-            "due_today": 0
+            "due_today": 0,
+            "my_total": 0,
+            "unassigned_total": 0
         }
         today_str = datetime.now().strftime("%Y-%m-%d")
         for iss in issues:
@@ -448,14 +516,20 @@ def get_redmine_issues(filter_my: bool = True, project_id: int = None, status_id
             if iss.get('due_date') == today_str:
                 stats['due_today'] += 1
 
+            if iss.get('is_my_issue') == 1:
+                stats['my_total'] += 1
+            if not iss.get('assigned_to_id') or iss.get('assigned_to_name') == '미할당':
+                stats['unassigned_total'] += 1
+
         return {
             "status": "success",
             "count": len(issues),
             "stats": stats,
+            "assignees": assignees_list,
             "issues": issues
         }
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": f"일감 조회 실패: {str(e)}"}
     finally:
         conn.close()
 

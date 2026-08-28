@@ -412,13 +412,16 @@ def import_toolkit_data(import_payload, selected_keys=None, mode="replace"):
                                         item.get("user_login", ""),
                                         item.get("auto_sync", 1),
                                         item.get("sync_interval_min", 5),
+                                        item.get("sync_scope", "all_open"),
+                                        item.get("sync_limit", 300),
+                                        item.get("sync_project_id", 0),
                                         item.get("updated_at", "")
                                     ))
                                 conn.executemany("""
                                     INSERT OR REPLACE INTO redmine_config (
                                         id, server_url, api_key, user_id, user_name, user_login,
-                                        auto_sync, sync_interval_min, updated_at
-                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                        auto_sync, sync_interval_min, sync_scope, sync_limit, sync_project_id, updated_at
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 """, records)
 
                         restored_keys.append(key)

@@ -6510,8 +6510,22 @@ body {
 .issue-card-meta {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     font-size: 0.75rem;
     color: var(--text-secondary);
+}
+
+.issue-assignee.unassigned {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.12);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.issue-assignee.my {
+    color: #818cf8;
+    font-weight: 600;
 }
 
 .issue-card-progress-bar {

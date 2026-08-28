@@ -590,9 +590,25 @@ def init_db():
                         user_login TEXT,
                         auto_sync INTEGER DEFAULT 1,
                         sync_interval_min INTEGER DEFAULT 5,
+                        sync_scope TEXT DEFAULT 'all_open',
+                        sync_limit INTEGER DEFAULT 300,
+                        sync_project_id INTEGER DEFAULT 0,
                         updated_at TEXT
                     );
                 """)
+                # 기존 DB 테이블 컬럼 마이그레이션 방어 로직
+                try:
+                    conn.execute("ALTER TABLE redmine_config ADD COLUMN sync_scope TEXT DEFAULT 'all_open';")
+                except Exception:
+                    pass
+                try:
+                    conn.execute("ALTER TABLE redmine_config ADD COLUMN sync_limit INTEGER DEFAULT 300;")
+                except Exception:
+                    pass
+                try:
+                    conn.execute("ALTER TABLE redmine_config ADD COLUMN sync_project_id INTEGER DEFAULT 0;")
+                except Exception:
+                    pass
 
                 # 10. redmine_issues 테이블 (일감 로컬 캐시)
                 conn.execute("""

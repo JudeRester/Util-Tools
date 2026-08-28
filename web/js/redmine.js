@@ -7,9 +7,11 @@ const redmineState = {
     config: null,
     projects: [],
     metadata: { statuses: [], trackers: [], priorities: [] },
+    assignees: [],
     activeSubTab: 'issues', // 'issues' | 'wiki' | 'config'
     selectedProjectId: null,
-    filterMyOnly: true,
+    filterMyOnly: false,
+    filterAssignee: '',
     filterStatusId: null,
     filterTrackerId: null,
     filterPriorityId: null,
@@ -114,12 +116,16 @@ function populateRedmineConfigForm() {
     const keyInput = document.getElementById('redmine-cfg-key');
     const syncCheckbox = document.getElementById('redmine-cfg-sync');
     const intervalSelect = document.getElementById('redmine-cfg-interval');
+    const scopeSelect = document.getElementById('redmine-cfg-scope');
+    const limitSelect = document.getElementById('redmine-cfg-limit');
 
     if (redmineState.config) {
         if (urlInput) urlInput.value = redmineState.config.server_url || '';
         if (keyInput) keyInput.value = redmineState.config.api_key || '';
         if (syncCheckbox) syncCheckbox.checked = (redmineState.config.auto_sync !== 0);
         if (intervalSelect) intervalSelect.value = redmineState.config.sync_interval_min || 5;
+        if (scopeSelect) scopeSelect.value = redmineState.config.sync_scope || 'all_open';
+        if (limitSelect) limitSelect.value = redmineState.config.sync_limit || 300;
     }
 }
 
@@ -183,11 +189,15 @@ async function saveRedmineConfigAction() {
     const keyInput = document.getElementById('redmine-cfg-key');
     const syncCheckbox = document.getElementById('redmine-cfg-sync');
     const intervalSelect = document.getElementById('redmine-cfg-interval');
+    const scopeSelect = document.getElementById('redmine-cfg-scope');
+    const limitSelect = document.getElementById('redmine-cfg-limit');
 
     let url = urlInput ? urlInput.value.trim() : '';
     const key = keyInput ? keyInput.value.trim() : '';
     const autoSync = syncCheckbox ? syncCheckbox.checked : true;
     const intervalMin = intervalSelect ? parseInt(intervalSelect.value, 10) : 5;
+    const syncScope = scopeSelect ? scopeSelect.value : 'all_open';
+    const syncLimit = limitSelect ? parseInt(limitSelect.value, 10) : 300;
 
     if (!url || !key) {
         showToast('입력 확인', '서버 URL과 API Key를 모두 입력해 주세요.', '⚠️');
@@ -200,7 +210,7 @@ async function saveRedmineConfigAction() {
 
     try {
         if (window.eel && typeof eel.save_redmine_config === 'function') {
-            const res = await eel.save_redmine_config(url, key, autoSync, intervalMin)();
+            const res = await eel.save_redmine_config(url, key, autoSync, intervalMin, syncScope, syncLimit)();
             if (res.status === 'success') {
                 redmineState.configured = true;
                 redmineState.config = {
@@ -208,10 +218,12 @@ async function saveRedmineConfigAction() {
                     api_key: key,
                     user_name: res.user ? res.user.name : '',
                     auto_sync: autoSync ? 1 : 0,
-                    sync_interval_min: intervalMin
+                    sync_interval_min: intervalMin,
+                    sync_scope: syncScope,
+                    sync_limit: syncLimit
                 };
                 updateRedmineHeaderStatus();
-                showToast('설정 저장 완료', 'Redmine 연동이 성공적으로 저장되었습니다! 🎉', '✅');
+                showToast('설정 저장 완료', 'Redmine 연동 설정 및 동기화 범위가 저장되었습니다! 🎉', '✅');
                 
                 // 설정 완료 후 일감 탭으로 복귀
                 await loadRedmineProjectsAndMeta();
@@ -345,11 +357,13 @@ async function loadRedmineIssues() {
                 redmineState.filterStatusId,
                 redmineState.filterTrackerId,
                 redmineState.filterPriorityId,
-                redmineState.searchQuery
+                redmineState.searchQuery,
+                redmineState.filterAssignee
             )();
 
             if (res.status === 'success') {
                 renderIssueStats(res.stats);
+                updateAssigneeDropdown(res.assignees || []);
                 renderIssueCards(res.issues);
                 
                 // 첫 번째 일감 자동 선택
@@ -367,6 +381,29 @@ async function loadRedmineIssues() {
     } catch (e) {
         listContainer.innerHTML = `<div class="redmine-error">오류: ${escapeHtml(e.message || e)}</div>`;
     }
+}
+
+function updateAssigneeDropdown(assignees) {
+    const select = document.getElementById('redmine-assignee-filter');
+    if (!select) return;
+    const currentVal = redmineState.filterAssignee || select.value;
+    
+    const baseOptions = [
+        '<option value="">전체 담당자</option>',
+        '<option value="me">👤 내 일감</option>',
+        '<option value="unassigned">❓ 미할당 일감</option>'
+    ];
+    
+    if (assignees && assignees.length > 0) {
+        assignees.forEach(name => {
+            if (name && name !== '미할당') {
+                baseOptions.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+            }
+        });
+    }
+    
+    select.innerHTML = baseOptions.join('');
+    select.value = currentVal;
 }
 
 function renderIssueStats(stats) {
@@ -427,6 +464,12 @@ function renderIssueCards(issues) {
             }
         }
 
+        const asgName = iss.assigned_to_name || '미할당';
+        const isUnassigned = (!iss.assigned_to_id || asgName === '미할당');
+        const assigneeBadge = isUnassigned
+            ? `<span class="issue-assignee unassigned" title="담당자가 지정되지 않은 일감입니다">❓ 미할당</span>`
+            : `<span class="issue-assignee ${iss.is_my_issue ? 'my' : ''}">👤 ${escapeHtml(asgName)}</span>`;
+
         return `
             <div class="redmine-issue-card ${isSelected ? 'active' : ''}" onclick="selectRedmineIssue(${iss.id})">
                 <div class="issue-card-header">
@@ -439,7 +482,7 @@ function renderIssueCards(issues) {
                 <div class="issue-card-title">${escapeHtml(iss.subject)}</div>
                 <div class="issue-card-meta">
                     <span class="issue-project">📁 ${escapeHtml(iss.project_name || '')}</span>
-                    <span class="issue-assignee">👤 ${escapeHtml(iss.assigned_to_name || '미배정')}</span>
+                    ${assigneeBadge}
                 </div>
                 <div class="issue-card-progress-bar">
                     <div class="progress-fill" style="width: ${doneRatio}%"></div>
@@ -1138,12 +1181,49 @@ function startRedmineBackgroundPolling() {
 }
 
 // 필터 이벤트 바인딩
+function onRedmineAssigneeFilterChange() {
+    const assigneeSelect = document.getElementById('redmine-assignee-filter');
+    const myCheckbox = document.getElementById('redmine-filter-my-checkbox');
+    const val = assigneeSelect ? assigneeSelect.value : '';
+    
+    redmineState.filterAssignee = val;
+    if (val === 'me') {
+        redmineState.filterMyOnly = true;
+        if (myCheckbox) myCheckbox.checked = true;
+    } else {
+        redmineState.filterMyOnly = false;
+        if (myCheckbox) myCheckbox.checked = false;
+    }
+    
+    onRedmineFilterChange();
+}
+
+function onRedmineMyCheckboxChange() {
+    const myCheckbox = document.getElementById('redmine-filter-my-checkbox');
+    const assigneeSelect = document.getElementById('redmine-assignee-filter');
+    const isChecked = myCheckbox ? myCheckbox.checked : false;
+    
+    redmineState.filterMyOnly = isChecked;
+    if (isChecked) {
+        redmineState.filterAssignee = 'me';
+        if (assigneeSelect) assigneeSelect.value = 'me';
+    } else {
+        if (redmineState.filterAssignee === 'me') {
+            redmineState.filterAssignee = '';
+            if (assigneeSelect) assigneeSelect.value = '';
+        }
+    }
+    
+    onRedmineFilterChange();
+}
+
 function onRedmineFilterChange() {
     const projSelect = document.getElementById('redmine-project-filter');
     const statusSelect = document.getElementById('redmine-status-filter');
     const trackerSelect = document.getElementById('redmine-tracker-filter');
     const prioritySelect = document.getElementById('redmine-priority-filter');
     const searchInput = document.getElementById('redmine-search-input');
+    const assigneeSelect = document.getElementById('redmine-assignee-filter');
     const myCheckbox = document.getElementById('redmine-filter-my-checkbox');
 
     redmineState.selectedProjectId = projSelect && projSelect.value ? parseInt(projSelect.value, 10) : null;
@@ -1151,7 +1231,8 @@ function onRedmineFilterChange() {
     redmineState.filterTrackerId = trackerSelect && trackerSelect.value ? parseInt(trackerSelect.value, 10) : null;
     redmineState.filterPriorityId = prioritySelect && prioritySelect.value ? parseInt(prioritySelect.value, 10) : null;
     redmineState.searchQuery = searchInput ? searchInput.value.trim() : '';
-    redmineState.filterMyOnly = myCheckbox ? myCheckbox.checked : true;
+    redmineState.filterAssignee = assigneeSelect ? assigneeSelect.value : '';
+    redmineState.filterMyOnly = myCheckbox ? myCheckbox.checked : false;
 
     loadRedmineIssues();
 }

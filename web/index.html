@@ -554,15 +554,22 @@
                                 <option value="">전체 우선순위</option>
                             </select>
                         </div>
+                        <div class="filter-item">
+                            <select id="redmine-assignee-filter" class="form-select redmine-select" onchange="onRedmineAssigneeFilterChange()">
+                                <option value="">전체 담당자</option>
+                                <option value="me">👤 내 일감</option>
+                                <option value="unassigned">❓ 미할당 일감</option>
+                            </select>
+                        </div>
                         <div class="filter-item search-item">
                             <div class="redmine-search-box">
                                 <span class="search-icon">🔍</span>
-                                <input type="text" id="redmine-search-input" class="form-input" placeholder="일감 검색 (번호, 제목, 내용)..." oninput="onRedmineFilterChange()">
+                                <input type="text" id="redmine-search-input" class="form-input" placeholder="일감 검색 (번호, 제목, 내용, 담당자)..." oninput="onRedmineFilterChange()">
                             </div>
                         </div>
                         <div class="filter-item checkbox-item">
-                            <label class="redmine-checkbox-lbl">
-                                <input type="checkbox" id="redmine-filter-my-checkbox" checked onchange="onRedmineFilterChange()">
+                            <label class="redmine-checkbox-lbl" title="내게 할당된 일감만 빠르게 토글">
+                                <input type="checkbox" id="redmine-filter-my-checkbox" onchange="onRedmineMyCheckboxChange()">
                                 <span>내게 할당된 일감만</span>
                             </label>
                         </div>
@@ -650,6 +657,36 @@
                                     <option value="10">10분</option>
                                     <option value="30">30분</option>
                                 </select>
+                            </div>
+                        </div>
+
+                        <!-- 일감 동기화 범위 및 필터 대상 설정 -->
+                        <div class="config-section-divider" style="margin: 20px 0 14px 0; padding-top: 14px; border-top: 1px solid var(--border-color);">
+                            <h4 style="font-size: 0.95rem; color: #a5b4fc; display: flex; align-items: center; gap: 6px;">
+                                <span>📦</span> 일감 동기화 범위 및 대상 설정
+                            </h4>
+                        </div>
+
+                        <div class="form-row" style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px;">
+                            <div class="form-group">
+                                <label class="form-label">일감 동기화 대상 (Sync Scope)</label>
+                                <select id="redmine-cfg-scope" class="form-select">
+                                    <option value="all_open" selected>🌐 모든 열린 일감 (미할당 & 팀 일감 포함)</option>
+                                    <option value="my_only">👤 내게 할당된 일감만 (My Issues only)</option>
+                                    <option value="all_with_closed">📁 모든 일감 (최근 닫힌 일감 포함)</option>
+                                </select>
+                                <div class="form-hint">'모든 열린 일감' 선택 시 미할당 일감이 함께 캐싱되어 필터링이 가능해집니다.</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">최대 동기화 건수</label>
+                                <select id="redmine-cfg-limit" class="form-select">
+                                    <option value="100">최근 100건</option>
+                                    <option value="200">최근 200건</option>
+                                    <option value="300" selected>최근 300건 (권장)</option>
+                                    <option value="500">최근 500건</option>
+                                    <option value="1000">최근 1000건</option>
+                                </select>
+                                <div class="form-hint">서버 부하와 로컬 캐시 크기에 맞춰 조절합니다.</div>
                             </div>
                         </div>
 
