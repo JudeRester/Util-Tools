@@ -24,6 +24,19 @@ const redmineState = {
     lastCheckTime: null
 };
 
+function formatErrorMessage(err) {
+    if (!err) return '알 수 없는 오류가 발생했습니다.';
+    if (typeof err === 'string') return err;
+    if (err.message && typeof err.message === 'string') return err.message;
+    if (err.error && typeof err.error === 'string') return err.error;
+    if (err.error && typeof err.error === 'object') return formatErrorMessage(err.error);
+    try {
+        const jsonStr = JSON.stringify(err);
+        if (jsonStr && jsonStr !== '{}') return jsonStr;
+    } catch (e) {}
+    return String(err);
+}
+
 // ==========================================
 // 1. 초기화 및 설정 관리
 // ==========================================
@@ -363,7 +376,7 @@ async function loadRedmineIssues() {
                 !!redmineState.quickFilterDueToday
             )();
 
-            if (res.status === 'success') {
+            if (res && res.status === 'success') {
                 renderIssueStats(res.stats);
                 updateAssigneeDropdown(res.assignees || []);
                 renderIssueCards(res.issues);
@@ -377,11 +390,15 @@ async function loadRedmineIssues() {
                     renderEmptyIssueDetail();
                 }
             } else {
-                listContainer.innerHTML = `<div class="redmine-error">일감 로드 실패: ${escapeHtml(res.message)}</div>`;
+                const errMsg = res ? (res.message || '서버 응답 오류') : '백엔드 응답이 없습니다.';
+                listContainer.innerHTML = `<div class="redmine-error">일감 로드 실패: ${escapeHtml(errMsg)}</div>`;
             }
+        } else {
+            listContainer.innerHTML = `<div class="redmine-error">백엔드 API 연결 준비 중...</div>`;
         }
     } catch (e) {
-        listContainer.innerHTML = `<div class="redmine-error">오류: ${escapeHtml(e.message || e)}</div>`;
+        console.error("Redmine 일감 로드 예외:", e);
+        listContainer.innerHTML = `<div class="redmine-error">오류: ${escapeHtml(formatErrorMessage(e))}</div>`;
     }
 }
 
@@ -518,7 +535,8 @@ async function selectRedmineIssue(issueId) {
             }
         }
     } catch (e) {
-        detailContainer.innerHTML = `<div class="redmine-error">오류: ${escapeHtml(e.message || e)}</div>`;
+        console.error("일감 상세 로드 예외:", e);
+        detailContainer.innerHTML = `<div class="redmine-error">오류: ${escapeHtml(formatErrorMessage(e))}</div>`;
     }
 }
 
@@ -903,7 +921,8 @@ async function loadProjectWikis(projKey) {
             }
         }
     } catch (e) {
-        treeContainer.innerHTML = `<div class="redmine-error">오류: ${escapeHtml(e.message || e)}</div>`;
+        console.error("위키 목차 로드 예외:", e);
+        treeContainer.innerHTML = `<div class="redmine-error">오류: ${escapeHtml(formatErrorMessage(e))}</div>`;
     }
 }
 
@@ -965,7 +984,8 @@ async function selectWikiPage(projKey, title) {
             }
         }
     } catch (e) {
-        readerContainer.innerHTML = `<div class="redmine-error">오류: ${escapeHtml(e.message || e)}</div>`;
+        console.error("위키 본문 로드 예외:", e);
+        readerContainer.innerHTML = `<div class="redmine-error">오류: ${escapeHtml(formatErrorMessage(e))}</div>`;
     }
 }
 

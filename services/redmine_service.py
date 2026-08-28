@@ -445,14 +445,32 @@ def sync_redmine_issues(project_id: int = None, limit: int = None, scope: str = 
 
 
 @eel.expose
-def get_redmine_issues(filter_my: bool = False, project_id: int = None, status_id: int = None, 
-                       tracker_id: int = None, priority_id: int = None, search_query: str = None,
-                       assignee: str = None, due_today: bool = False):
+def get_redmine_issues(filter_my: bool = False, project_id=None, status_id=None, 
+                       tracker_id=None, priority_id=None, search_query: str = None,
+                       assignee: str = None, due_today: bool = False, *args, **kwargs):
     """
     SQLite 로컬 캐시에서 일감 목록 고속 조회 (0.01초)
     - stats: 전체(또는 선택된 프로젝트) 기준 불변 요약 통계
     - issues: 사용자의 현재 세부 필터 조건에 부합하는 일감 리스트
     """
+    def _safe_int(val):
+        if val is None or val == "" or str(val).lower() in ("null", "undefined", "none", "0"):
+            return None
+        try:
+            i = int(val)
+            return i if i > 0 else None
+        except (ValueError, TypeError):
+            return None
+
+    project_id = _safe_int(project_id)
+    status_id = _safe_int(status_id)
+    tracker_id = _safe_int(tracker_id)
+    priority_id = _safe_int(priority_id)
+    filter_my = bool(filter_my)
+    due_today = bool(due_today)
+    search_query = str(search_query).strip() if search_query else ""
+    assignee = str(assignee).strip() if assignee else ""
+
     conn = get_db_connection()
     try:
         # 1. 상단 대시보드 요약 통계 계산 (프로젝트 및 내 일감 기준 고정 통계)
