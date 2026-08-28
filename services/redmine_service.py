@@ -447,14 +447,54 @@ def sync_redmine_issues(project_id: int = None, limit: int = None, scope: str = 
 @eel.expose
 def get_redmine_issues(filter_my: bool = False, project_id: int = None, status_id: int = None, 
                        tracker_id: int = None, priority_id: int = None, search_query: str = None,
-                       assignee: str = None):
+                       assignee: str = None, due_today: bool = False):
     """
     SQLite 로컬 캐시에서 일감 목록 고속 조회 (0.01초)
-    - filter_my: True인 경우 내 일감만 필터링
-    - assignee: 'me' (내 일감), 'unassigned' (미할당 일감), 또는 특정 담당자 이름
+    - stats: 전체(또는 선택된 프로젝트) 기준 불변 요약 통계
+    - issues: 사용자의 현재 세부 필터 조건에 부합하는 일감 리스트
     """
     conn = get_db_connection()
     try:
+        # 1. 상단 대시보드 요약 통계 계산 (프로젝트 및 내 일감 기준 고정 통계)
+        stat_clauses = []
+        stat_params = []
+        if project_id:
+            stat_clauses.append("project_id = ?")
+            stat_params.append(project_id)
+        if filter_my or assignee == 'me':
+            stat_clauses.append("is_my_issue = 1")
+
+        stat_where = f"WHERE {' AND '.join(stat_clauses)}" if stat_clauses else ""
+        stat_rows = conn.execute(f"SELECT status_name, due_date, is_my_issue, assigned_to_id, assigned_to_name FROM redmine_issues {stat_where}", stat_params).fetchall()
+
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        stats = {
+            "total": len(stat_rows),
+            "in_progress": 0,
+            "new": 0,
+            "resolved": 0,
+            "due_today": 0,
+            "my_total": 0,
+            "unassigned_total": 0
+        }
+        for r in stat_rows:
+            st = str(r['status_name'] or '').lower()
+            if '진행' in st or 'progress' in st:
+                stats['in_progress'] += 1
+            elif '신규' in st or 'new' in st or '접수' in st:
+                stats['new'] += 1
+            elif '해결' in st or '피드백' in st or '완료' in st or 'resolved' in st or 'feedback' in st:
+                stats['resolved'] += 1
+
+            if r['due_date'] == today_str:
+                stats['due_today'] += 1
+
+            if r['is_my_issue'] == 1:
+                stats['my_total'] += 1
+            if not r['assigned_to_id'] or r['assigned_to_name'] == '미할당':
+                stats['unassigned_total'] += 1
+
+        # 2. 일감 카드 목록 필터링
         clauses = []
         params = []
 
@@ -478,6 +518,9 @@ def get_redmine_issues(filter_my: bool = False, project_id: int = None, status_i
         if priority_id:
             clauses.append("priority_id = ?")
             params.append(priority_id)
+        if due_today:
+            clauses.append("due_date = ?")
+            params.append(today_str)
         if search_query:
             q = f"%{search_query.strip()}%"
             clauses.append("(subject LIKE ? OR description LIKE ? OR id LIKE ? OR assigned_to_name LIKE ?)")
@@ -492,34 +535,6 @@ def get_redmine_issues(filter_my: bool = False, project_id: int = None, status_i
         # 전체 고유 담당자 목록 추출 (프론트엔드 드롭다운용)
         all_assignees_rows = conn.execute("SELECT DISTINCT assigned_to_name FROM redmine_issues WHERE assigned_to_name IS NOT NULL AND assigned_to_name != '' AND assigned_to_name != '미할당' ORDER BY assigned_to_name").fetchall()
         assignees_list = [r['assigned_to_name'] for r in all_assignees_rows]
-
-        # 요약 통계 계산
-        stats = {
-            "total": len(issues),
-            "in_progress": 0,
-            "new": 0,
-            "resolved": 0,
-            "due_today": 0,
-            "my_total": 0,
-            "unassigned_total": 0
-        }
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        for iss in issues:
-            st = str(iss.get('status_name', '')).lower()
-            if '진행' in st or 'progress' in st:
-                stats['in_progress'] += 1
-            elif '신규' in st or 'new' in st:
-                stats['new'] += 1
-            elif '해결' in st or '피드백' in st or 'resolved' in st or 'feedback' in st:
-                stats['resolved'] += 1
-
-            if iss.get('due_date') == today_str:
-                stats['due_today'] += 1
-
-            if iss.get('is_my_issue') == 1:
-                stats['my_total'] += 1
-            if not iss.get('assigned_to_id') or iss.get('assigned_to_name') == '미할당':
-                stats['unassigned_total'] += 1
 
         return {
             "status": "success",

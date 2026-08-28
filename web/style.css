@@ -6187,7 +6187,8 @@ body {
    Redmine (일감 & 프로젝트 위키) 스타일
    ========================================================================== */
 
-#tab-redmine {
+.tab-pane#tab-redmine.active,
+#tab-redmine.active {
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -6305,6 +6306,12 @@ body {
 .stat-card:hover {
     border-color: var(--primary-color);
     transform: translateY(-1px);
+}
+
+.stat-card.active {
+    border-color: #6366f1;
+    background: rgba(99, 102, 241, 0.15);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35);
 }
 
 .stat-num {

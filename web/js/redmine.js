@@ -15,6 +15,7 @@ const redmineState = {
     filterStatusId: null,
     filterTrackerId: null,
     filterPriorityId: null,
+    quickFilterDueToday: false,
     searchQuery: '',
     selectedIssueId: null,
     selectedWikiTitle: null,
@@ -358,7 +359,8 @@ async function loadRedmineIssues() {
                 redmineState.filterTrackerId,
                 redmineState.filterPriorityId,
                 redmineState.searchQuery,
-                redmineState.filterAssignee
+                redmineState.filterAssignee,
+                !!redmineState.quickFilterDueToday
             )();
 
             if (res.status === 'success') {
@@ -1217,6 +1219,52 @@ function onRedmineMyCheckboxChange() {
     onRedmineFilterChange();
 }
 
+function quickFilterByStat(type) {
+    const statusSelect = document.getElementById('redmine-status-filter');
+    
+    // 통계 카드 active 상태 토글
+    document.querySelectorAll('.redmine-stats-summary-bar .stat-card').forEach(c => c.classList.remove('active'));
+    const targetCard = document.getElementById(`stat-card-${type}`);
+    if (targetCard) targetCard.classList.add('active');
+
+    if (type === 'all') {
+        if (statusSelect) statusSelect.value = '';
+        redmineState.quickFilterDueToday = false;
+    } else if (type === 'progress') {
+        redmineState.quickFilterDueToday = false;
+        // 메타데이터 상태 중 '진행' 또는 'progress' 매칭
+        const progStatus = (redmineState.metadata.statuses || []).find(s => 
+            s.name.includes('진행') || s.name.toLowerCase().includes('progress')
+        );
+        if (statusSelect && progStatus) {
+            statusSelect.value = progStatus.id;
+        }
+    } else if (type === 'new') {
+        redmineState.quickFilterDueToday = false;
+        // 메타데이터 상태 중 '신규' 또는 'new' 매칭
+        const newStatus = (redmineState.metadata.statuses || []).find(s => 
+            s.name.includes('신규') || s.name.toLowerCase().includes('new') || s.name.includes('접수')
+        );
+        if (statusSelect && newStatus) {
+            statusSelect.value = newStatus.id;
+        }
+    } else if (type === 'resolved') {
+        redmineState.quickFilterDueToday = false;
+        // 메타데이터 상태 중 '해결', '피드백', '완료' 매칭
+        const resStatus = (redmineState.metadata.statuses || []).find(s => 
+            s.name.includes('해결') || s.name.includes('피드백') || s.name.includes('완료') || s.name.toLowerCase().includes('resolved')
+        );
+        if (statusSelect && resStatus) {
+            statusSelect.value = resStatus.id;
+        }
+    } else if (type === 'due_today') {
+        if (statusSelect) statusSelect.value = '';
+        redmineState.quickFilterDueToday = true;
+    }
+
+    onRedmineFilterChange();
+}
+
 function onRedmineFilterChange() {
     const projSelect = document.getElementById('redmine-project-filter');
     const statusSelect = document.getElementById('redmine-status-filter');
@@ -1233,6 +1281,11 @@ function onRedmineFilterChange() {
     redmineState.searchQuery = searchInput ? searchInput.value.trim() : '';
     redmineState.filterAssignee = assigneeSelect ? assigneeSelect.value : '';
     redmineState.filterMyOnly = myCheckbox ? myCheckbox.checked : false;
+
+    // 만약 상태 드롭다운이 변경되었는데 오늘마감 필터가 켜져있었다면 해제
+    if (statusSelect && statusSelect.value && redmineState.quickFilterDueToday) {
+        redmineState.quickFilterDueToday = false;
+    }
 
     loadRedmineIssues();
 }

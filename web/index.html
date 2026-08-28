@@ -510,23 +510,23 @@
                 <div id="redmine-pane-issues" class="redmine-sub-pane active">
                     <!-- 요약 통계 배지 바 -->
                     <div class="redmine-stats-summary-bar">
-                        <div class="stat-card" onclick="document.getElementById('redmine-status-filter').value=''; onRedmineFilterChange();">
+                        <div class="stat-card active" id="stat-card-all" onclick="quickFilterByStat('all')" title="전체 일감 보기">
                             <span class="stat-num" id="redmine-stat-total">0</span>
                             <span class="stat-lbl">전체 일감</span>
                         </div>
-                        <div class="stat-card progress-card" onclick="document.getElementById('redmine-status-filter').value='2'; onRedmineFilterChange();">
+                        <div class="stat-card progress-card" id="stat-card-progress" onclick="quickFilterByStat('progress')" title="진행 중 일감 보기">
                             <span class="stat-num" id="redmine-stat-progress">0</span>
                             <span class="stat-lbl">진행 중</span>
                         </div>
-                        <div class="stat-card new-card" onclick="document.getElementById('redmine-status-filter').value='1'; onRedmineFilterChange();">
+                        <div class="stat-card new-card" id="stat-card-new" onclick="quickFilterByStat('new')" title="신규 일감 보기">
                             <span class="stat-num" id="redmine-stat-new">0</span>
                             <span class="stat-lbl">신규</span>
                         </div>
-                        <div class="stat-card resolved-card">
+                        <div class="stat-card resolved-card" id="stat-card-resolved" onclick="quickFilterByStat('resolved')" title="해결 / 피드백 일감 보기">
                             <span class="stat-num" id="redmine-stat-resolved">0</span>
                             <span class="stat-lbl">해결 / 피드백</span>
                         </div>
-                        <div class="stat-card due-card">
+                        <div class="stat-card due-card" id="stat-card-due_today" onclick="quickFilterByStat('due_today')" title="오늘 마감 일감 보기">
                             <span class="stat-num" id="redmine-stat-due">0</span>
                             <span class="stat-lbl">오늘 마감</span>
                         </div>
