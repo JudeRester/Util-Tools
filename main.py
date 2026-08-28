@@ -52,7 +52,7 @@ start_options = {
 
 def main():
     print("🛠️ Utility Toolkit을 시작합니다 (모듈화 아키텍처 / 트레이 상주 모드)...")
-    tray_manager = TrayManager(base_dir, start_options)
+    tray_manager = TrayManager(BUNDLE_DIR, start_options)
     tray_manager.start()
 
 
