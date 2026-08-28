@@ -477,6 +477,43 @@ async function selectRedmineIssue(issueId) {
     }
 }
 
+function sanitizeHtmlContent(html) {
+    if (!html) return '';
+    // 위험한 script, iframe, object, embed 태그 및 인라인 이벤트 핸들러 제거
+    return html
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+        .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+        .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+        .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
+        .replace(/\son\w+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '')
+        .replace(/javascript\s*:/gi, '');
+}
+
+function formatRedmineContent(rawText) {
+    if (!rawText) return '';
+    
+    // 1. 이미 HTML 태그가 포함되어 있는 경우 (CKEditor / RichText 서식)
+    const hasHtmlTags = /<(?:p|div|span|h[1-6]|blockquote|table|ul|ol|li|br|strong|em|b|i|u|s|a|code|pre|img|hr)\b/i.test(rawText);
+    if (hasHtmlTags) {
+        return sanitizeHtmlContent(rawText);
+    }
+    
+    // 2. Markdown / Textile 포맷인 경우 Markdown Studio 파서 활용
+    if (typeof parseMarkdownToHtml === 'function') {
+        // Redmine Textile 헤더 (h1. h2. 등)를 마크다운 헤더로 변환
+        let normalizedMd = rawText
+            .replace(/^h1\.\s+(.+)$/gm, '# $1')
+            .replace(/^h2\.\s+(.+)$/gm, '## $1')
+            .replace(/^h3\.\s+(.+)$/gm, '### $1')
+            .replace(/^h4\.\s+(.+)$/gm, '#### $1')
+            .replace(/^h5\.\s+(.+)$/gm, '##### $1');
+        return parseMarkdownToHtml(normalizedMd);
+    }
+    
+    // 3. 일반 텍스트인 경우 줄바꿈 유지
+    return escapeHtml(rawText).replace(/\n/g, '<br>');
+}
+
 function renderIssueDetail(iss) {
     const container = document.getElementById('redmine-issue-detail-pane');
     if (!container) return;
@@ -531,7 +568,7 @@ function renderIssueDetail(iss) {
                     ${iss.journals.map(j => {
                         const jUser = (j.user && j.user.name) || '작성자';
                         const jDate = j.created_on ? j.created_on.replace('T', ' ').substring(0, 16) : '';
-                        const jNotes = j.notes ? escapeHtml(j.notes).replace(/\n/g, '<br>') : '';
+                        const jNotes = j.notes ? formatRedmineContent(j.notes) : '';
                         
                         // 변경 상세 (Details)
                         let detailsStr = '';
@@ -559,9 +596,9 @@ function renderIssueDetail(iss) {
         `;
     }
 
-    // 본문 설명 (Description) - 마크다운/텍스트 줄바꿈 처리
+    // 본문 설명 (Description) - HTML/마크다운 지능형 서식 렌더링
     const descHtml = iss.description 
-        ? `<div class="detail-description-body">${escapeHtml(iss.description).replace(/\n/g, '<br>')}</div>`
+        ? `<div class="detail-description-body">${formatRedmineContent(iss.description)}</div>`
         : `<div class="detail-description-body empty">설명이 등록되지 않았습니다.</div>`;
 
     container.innerHTML = `
@@ -898,13 +935,13 @@ function renderWikiReader(projKey, wiki) {
     const webUrl = wiki.web_url || '';
     const rawText = wiki.text || '';
 
-    // 마크다운 파서 렌더링 (Markdown Viewer 내장 파서 활용)
-    let renderedHtml = '';
-    if (typeof parseMarkdownText === 'function') {
-        renderedHtml = parseMarkdownText(rawText);
-    } else {
-        renderedHtml = escapeHtml(rawText).replace(/\n/g, '<br>');
-    }
+    // 현재 선택된 위키 상태 저장 (HTML 속성 인라인 탈출 버그 원천 차단)
+    redmineState.currentWikiText = rawText;
+    redmineState.currentWikiProject = projKey;
+    redmineState.currentWikiTitle = title;
+
+    // 지능형 포맷터 (HTML / Markdown / Textile 자동 감지)
+    const renderedHtml = formatRedmineContent(rawText);
 
     container.innerHTML = `
         <div class="wiki-header">
@@ -920,13 +957,13 @@ function renderWikiReader(projKey, wiki) {
                 <span>🕒 일시: ${updatedOn}</span>
             </div>
             <div class="wiki-action-toolbar">
-                <button class="btn btn-sm btn-secondary" onclick="toggleWikiEditMode('${escapeJsString(projKey)}', '${escapeJsString(title)}')">
+                <button type="button" class="btn btn-sm btn-secondary" onclick="toggleWikiEditMode()">
                     <span>✏️</span> 편집 모드
                 </button>
-                <button class="btn btn-sm btn-secondary" onclick="copyWikiToMarkdownStudio('${escapeJsString(rawText)}')">
+                <button type="button" class="btn btn-sm btn-secondary" onclick="copyCurrentWikiToMarkdownStudio()">
                     <span>📝</span> Markdown 스튜디오로 복사
                 </button>
-                <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(\`${escapeJsString(rawText)}\`); showToast('복사 완료', '위키 원본 코드가 클립보드에 복사되었습니다.', '📋');">
+                <button type="button" class="btn btn-sm btn-secondary" onclick="copyCurrentWikiRawText()">
                     <span>📋</span> 원본 복사
                 </button>
             </div>
@@ -937,17 +974,23 @@ function renderWikiReader(projKey, wiki) {
         </div>
 
         <div id="wiki-editor-body" class="wiki-editor-container" style="display: none;">
-            <textarea id="wiki-edit-textarea" class="wiki-textarea" placeholder="위키 마크다운 / 텍스타일 본문을 입력하세요...">${escapeHtml(rawText)}</textarea>
+            <textarea id="wiki-edit-textarea" class="wiki-textarea" placeholder="위키 마크다운 / 텍스타일 / HTML 본문을 입력하세요..."></textarea>
             <div class="wiki-editor-actions">
-                <button class="btn btn-primary" onclick="submitSaveWikiPage('${escapeJsString(projKey)}', '${escapeJsString(title)}')">
+                <button type="button" class="btn btn-primary" onclick="submitSaveCurrentWikiPage()">
                     <span>💾</span> 저장 및 위키 발행
                 </button>
-                <button class="btn btn-secondary" onclick="cancelWikiEdit('${escapeJsString(projKey)}', '${escapeJsString(title)}')">
+                <button type="button" class="btn btn-secondary" onclick="cancelCurrentWikiEdit()">
                     <span>✕</span> 취소
                 </button>
             </div>
         </div>
     `;
+
+    // 에디터 textarea에 DOM 프로퍼티로 안전하게 값 설정
+    const textarea = document.getElementById('wiki-edit-textarea');
+    if (textarea) {
+        textarea.value = rawText;
+    }
 }
 
 function renderEmptyWikiDetail() {
@@ -962,16 +1005,20 @@ function renderEmptyWikiDetail() {
     `;
 }
 
-function toggleWikiEditMode(projKey, title) {
+function toggleWikiEditMode() {
     const reader = document.getElementById('wiki-reader-body');
     const editor = document.getElementById('wiki-editor-body');
+    const textarea = document.getElementById('wiki-edit-textarea');
     if (reader && editor) {
+        if (textarea && redmineState.currentWikiText !== undefined) {
+            textarea.value = redmineState.currentWikiText;
+        }
         reader.style.display = 'none';
         editor.style.display = 'flex';
     }
 }
 
-function cancelWikiEdit(projKey, title) {
+function cancelCurrentWikiEdit() {
     const reader = document.getElementById('wiki-reader-body');
     const editor = document.getElementById('wiki-editor-body');
     if (reader && editor) {
@@ -980,9 +1027,11 @@ function cancelWikiEdit(projKey, title) {
     }
 }
 
-async function submitSaveWikiPage(projKey, title) {
+async function submitSaveCurrentWikiPage() {
+    const projKey = redmineState.currentWikiProject;
+    const title = redmineState.currentWikiTitle;
     const textarea = document.getElementById('wiki-edit-textarea');
-    if (!textarea) return;
+    if (!textarea || !projKey || !title) return;
     const text = textarea.value;
 
     try {
@@ -1000,13 +1049,25 @@ async function submitSaveWikiPage(projKey, title) {
     }
 }
 
-function copyWikiToMarkdownStudio(text) {
+function copyCurrentWikiToMarkdownStudio() {
     if (typeof switchTab === 'function') {
         switchTab('markdown');
         if (typeof applyLoadedMarkdown === 'function') {
-            applyLoadedMarkdown(text, 'Redmine_Wiki.md');
+            const text = redmineState.currentWikiText || '';
+            const title = redmineState.currentWikiTitle || 'Redmine_Wiki';
+            applyLoadedMarkdown(text, `${title}.md`);
             showToast('Markdown 스튜디오 이동', '위키 본문이 마크다운 에디터로 로드되었습니다. 📝', '✅');
         }
+    }
+}
+
+async function copyCurrentWikiRawText() {
+    try {
+        const text = redmineState.currentWikiText || '';
+        await navigator.clipboard.writeText(text);
+        showToast('복사 완료', '위키 원본 코드가 클립보드에 복사되었습니다. 📋', '✅');
+    } catch (e) {
+        showToast('복사 실패', '클립보드 접근 권한이 없습니다.', '⚠️');
     }
 }
 

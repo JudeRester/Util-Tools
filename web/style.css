@@ -6664,17 +6664,98 @@ body {
     background: rgba(0, 0, 0, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.04);
     border-radius: 8px;
-    padding: 12px 14px;
+    padding: 14px 16px;
     font-size: 0.88rem;
-    line-height: 1.6;
+    line-height: 1.65;
     color: #e2e8f0;
-    white-space: pre-wrap;
     word-break: break-word;
 }
 
 .detail-description-body.empty {
     color: #64748b;
     font-style: italic;
+}
+
+.detail-description-body blockquote,
+.wiki-body blockquote {
+    border-left: 3px solid #6366f1;
+    background: rgba(99, 102, 241, 0.06);
+    padding: 8px 14px;
+    margin: 10px 0;
+    border-radius: 0 6px 6px 0;
+    color: #cbd5e1;
+    font-size: 0.86rem;
+}
+
+.detail-description-body p,
+.wiki-body p {
+    margin: 6px 0 10px 0;
+}
+
+.detail-description-body h1, .detail-description-body h2, .detail-description-body h3, .detail-description-body h4,
+.wiki-body h1, .wiki-body h2, .wiki-body h3, .wiki-body h4 {
+    color: #f1f5f9;
+    margin: 14px 0 6px 0;
+    font-weight: 700;
+}
+
+.detail-description-body h1, .wiki-body h1 { font-size: 1.25rem; }
+.detail-description-body h2, .wiki-body h2 { font-size: 1.15rem; }
+.detail-description-body h3, .wiki-body h3 { font-size: 1.05rem; }
+.detail-description-body h4, .wiki-body h4 { font-size: 0.95rem; }
+
+.detail-description-body ul, .detail-description-body ol,
+.wiki-body ul, .wiki-body ol {
+    padding-left: 20px;
+    margin: 6px 0 10px 0;
+}
+
+.detail-description-body table,
+.wiki-body table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12px 0;
+    font-size: 0.84rem;
+}
+
+.detail-description-body th, .detail-description-body td,
+.wiki-body th, .wiki-body td {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 6px 10px;
+}
+
+.detail-description-body th,
+.wiki-body th {
+    background: rgba(255, 255, 255, 0.06);
+    color: #e2e8f0;
+    font-weight: 600;
+}
+
+.detail-description-body code,
+.wiki-body code {
+    background: rgba(255, 255, 255, 0.08);
+    color: #38bdf8;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-family: 'Consolas', monospace;
+    font-size: 0.84rem;
+}
+
+.detail-description-body pre,
+.wiki-body pre {
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.detail-description-body img,
+.wiki-body img {
+    max-width: 100%;
+    border-radius: 6px;
+    margin: 6px 0;
 }
 
 /* 첨부파일 리스트 */
@@ -6876,8 +6957,9 @@ body {
 
 .wiki-body {
     flex: 1;
-    line-height: 1.6;
+    line-height: 1.65;
     color: #e2e8f0;
+    word-break: break-word;
 }
 
 .wiki-editor-container {
