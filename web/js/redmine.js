@@ -123,18 +123,30 @@ function populateRedmineConfigForm() {
     }
 }
 
+function normalizeRedmineUrl(url) {
+    if (!url) return '';
+    let u = String(url).trim().replace(/\/+$/, '');
+    // 브라우저에서 복사한 /projects/xxx, /issues/xxx 등의 하위 웹 경로를 Base URL로 자동 정제
+    u = u.replace(/\/(projects|issues|my|wiki|users|settings|admin|enumerations|custom_fields|news|time_entries)(\/.*)?$/i, '').replace(/\/+$/, '');
+    return u;
+}
+
 async function testRedmineConnectionAction() {
     const urlInput = document.getElementById('redmine-cfg-url');
     const keyInput = document.getElementById('redmine-cfg-key');
     const testResultEl = document.getElementById('redmine-test-result');
 
-    const url = urlInput ? urlInput.value.trim() : '';
+    let url = urlInput ? urlInput.value.trim() : '';
     const key = keyInput ? keyInput.value.trim() : '';
 
     if (!url || !key) {
         showToast('입력 확인', '서버 URL과 API Key를 모두 입력해 주세요.', '⚠️');
         return;
     }
+
+    // URL 지능형 정규화 및 입력창 갱신
+    url = normalizeRedmineUrl(url);
+    if (urlInput) urlInput.value = url;
 
     if (testResultEl) {
         testResultEl.innerHTML = '<span class="loading-spinner"></span> 서버 연결 확인 중...';
@@ -172,7 +184,7 @@ async function saveRedmineConfigAction() {
     const syncCheckbox = document.getElementById('redmine-cfg-sync');
     const intervalSelect = document.getElementById('redmine-cfg-interval');
 
-    const url = urlInput ? urlInput.value.trim() : '';
+    let url = urlInput ? urlInput.value.trim() : '';
     const key = keyInput ? keyInput.value.trim() : '';
     const autoSync = syncCheckbox ? syncCheckbox.checked : true;
     const intervalMin = intervalSelect ? parseInt(intervalSelect.value, 10) : 5;
@@ -181,6 +193,10 @@ async function saveRedmineConfigAction() {
         showToast('입력 확인', '서버 URL과 API Key를 모두 입력해 주세요.', '⚠️');
         return;
     }
+
+    // URL 지능형 정규화 및 입력창 갱신
+    url = normalizeRedmineUrl(url);
+    if (urlInput) urlInput.value = url;
 
     try {
         if (window.eel && typeof eel.save_redmine_config === 'function') {

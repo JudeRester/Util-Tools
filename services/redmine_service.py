@@ -7,6 +7,7 @@ Redmine REST API 연동 서비스 모듈
 """
 
 import os
+import re
 import json
 import sqlite3
 import urllib.request
@@ -25,11 +26,21 @@ _SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
 
 def _normalize_url(url: str) -> str:
-    """서버 URL 정규화 (끝부분 슬래시 제거)"""
+    """
+    서버 URL 지능형 정규화
+    - 끝부분 슬래시(/) 제거
+    - 브라우저 주소창에서 복사한 하위 경로(/projects/..., /issues/..., /my/page, /wiki/... 등)
+      자동 감지 및 Redmine Base Server URL로 정제
+    """
     if not url:
         return ""
-    u = str(url).strip()
-    return u[:-1] if u.endswith('/') else u
+    u = str(url).strip().rstrip('/')
+    # Redmine 대표 웹 경로 패턴 제거 (Base URL만 추출)
+    # 예: http://220.73.178.169:8081/redmine/projects/customize-ez -> http://220.73.178.169:8081/redmine
+    # 예: http://redmine.example.com/issues/123 -> http://redmine.example.com
+    pattern = r'/(projects|issues|my|wiki|users|settings|admin|enumerations|custom_fields|news|time_entries)(/.*)?$'
+    u = re.sub(pattern, '', u, flags=re.IGNORECASE).rstrip('/')
+    return u
 
 
 def _request_redmine_api(server_url: str, api_key: str, endpoint: str, method: str = 'GET', data: dict = None, timeout: int = 10):
