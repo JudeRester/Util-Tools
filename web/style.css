@@ -859,7 +859,6 @@ select option,
 }
 
 /* 2. 통일된 버튼 계층 시스템 (Unified Modern Button Hierarchy) */
-button,
 .btn,
 .form-btn {
     display: inline-flex;
