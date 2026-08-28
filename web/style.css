@@ -6543,6 +6543,9 @@ input[type="checkbox"] {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
+    padding: 8px 12px;
+}
+
 .redmine-select {
     max-width: 180px;
 }
