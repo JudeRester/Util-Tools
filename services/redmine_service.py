@@ -17,6 +17,7 @@ import ssl
 from datetime import datetime
 import eel
 from services.db_service import get_db_connection
+import core.logger
 
 
 # SSL 컨텍스트 (사내 사설 인증서/자체 서명 HTTPS 대응)
@@ -87,10 +88,13 @@ def _request_redmine_api(server_url: str, api_key: str, endpoint: str, method: s
                     err_msg = json.dumps(err_json['errors'], ensure_ascii=False)
         except Exception:
             pass
+        core.logger.log_error("Redmine API", f"서버 응답 오류: {err_msg} (Endpoint: {endpoint})")
         return {"status": "error", "code": e.code, "message": f"Redmine 서버 오류 ({err_msg})"}
     except urllib.error.URLError as e:
+        core.logger.log_error("Redmine API", f"연결 실패: {e.reason} (URL: {full_url})")
         return {"status": "error", "message": f"Redmine 서버에 연결할 수 없습니다 ({e.reason})"}
     except Exception as e:
+        core.logger.log_error("Redmine API", f"요청 예외: {str(e)}", exc=e)
         return {"status": "error", "message": f"요청 실패: {str(e)}"}
 
 

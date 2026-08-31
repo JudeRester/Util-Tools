@@ -1,7 +1,7 @@
 /**
  * 콘솔 로그 출력 및 하단 스플리터(높이 조절기) 모듈
- * - [📋 최근 실행 결과]: 가장 최근에 발생한 동작의 세부 데이터/결과 출력
- * - [📜 시스템 로그]: 앱 실행 중 발생하는 모든 시스템 이벤트가 시간 순서대로 영구 누적 (지우기 버튼 클릭 시에만 초기화)
+ * - [📋 최근 실행 결과]: 사용자가 실행한 도구/생성기/스크립트의 최신 단일 결과 출력
+ * - [📜 시스템 로그]: 백엔드 에러/예외, API 통신 장애, 런타임 이벤트가 시간 순서대로 영구 누적
  */
 
 if (typeof window.escapeHtml !== 'function') {
@@ -19,8 +19,13 @@ if (typeof window.escapeHtml !== 'function') {
 const consoleState = {
     activeTab: 'result', // 'result' | 'logs'
     lastResult: '기능 버튼을 클릭하면 여기에 최근 실행 결과가 표시됩니다.',
-    logs: [] // { id, time, title, content, level }
+    logs: [], // { id, time, level: 'info'|'warn'|'error'|'success', category, message, details }
+    logFilter: 'all' // 'all' | 'error' | 'warn' | 'info'
 };
+
+// ==========================================
+// 1. 탭 전환 & 필터 관리
+// ==========================================
 
 function switchConsoleTab(tab) {
     consoleState.activeTab = tab;
@@ -28,6 +33,7 @@ function switchConsoleTab(tab) {
     const logsBtn = document.getElementById('console-tab-logs-btn');
     const resultView = document.getElementById('console-output');
     const logsView = document.getElementById('console-logs-stream');
+    const filtersBar = document.getElementById('console-log-filters');
 
     if (tab === 'result') {
         if (resultBtn) resultBtn.classList.add('active');
@@ -40,6 +46,7 @@ function switchConsoleTab(tab) {
             logsView.style.display = 'none';
             logsView.classList.remove('active');
         }
+        if (filtersBar) filtersBar.style.display = 'none';
     } else {
         if (resultBtn) resultBtn.classList.remove('active');
         if (logsBtn) logsBtn.classList.add('active');
@@ -52,13 +59,39 @@ function switchConsoleTab(tab) {
             logsView.classList.add('active');
             logsView.scrollTop = logsView.scrollHeight;
         }
+        if (filtersBar) filtersBar.style.display = 'inline-flex';
     }
 }
 
-function logToConsole(title, content, level = 'info') {
-    const timestamp = new Date().toLocaleTimeString();
-    const fullTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function setSystemLogFilter(filter) {
+    consoleState.logFilter = filter;
 
+    // 필터 버튼 활성화 상태 갱신
+    document.querySelectorAll('.log-filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-filter') === filter);
+    });
+
+    // 로그 항목 필터링 표시/숨김
+    const logsStreamEl = document.getElementById('console-logs-stream');
+    if (!logsStreamEl) return;
+
+    const entries = logsStreamEl.querySelectorAll('.log-entry');
+    entries.forEach(entry => {
+        const level = entry.getAttribute('data-level');
+        if (filter === 'all' || level === filter) {
+            entry.style.display = 'block';
+        } else {
+            entry.style.display = 'none';
+        }
+    });
+}
+
+// ==========================================
+// 2. 최근 실행 결과 (Execution Result Only)
+// ==========================================
+
+function setExecutionResult(title, content) {
+    const timestamp = new Date().toLocaleTimeString();
     let detailStr = '';
     if (typeof content === 'object' && content !== null) {
         try {
@@ -70,7 +103,6 @@ function logToConsole(title, content, level = 'info') {
         detailStr = String(content !== undefined && content !== null ? content : '');
     }
 
-    // 1. [최근 실행 결과] 뷰 업데이트
     let textContent = `[${timestamp}] ${title}\n`;
     if (detailStr) {
         textContent += detailStr;
@@ -83,23 +115,31 @@ function logToConsole(title, content, level = 'info') {
         consoleEl.scrollTop = 0;
     }
 
-    // 2. [시스템 로그] 누적 스트림에 추가 (최대 1,000건까지 보존)
-    let logType = level;
-    const titleLower = (title || '').toLowerCase();
-    if (titleLower.includes('오류') || titleLower.includes('실패') || titleLower.includes('error') || titleLower.includes('fail')) {
-        logType = 'error';
-    } else if (titleLower.includes('경고') || titleLower.includes('warn') || titleLower.includes('주의')) {
-        logType = 'warn';
-    } else if (titleLower.includes('완료') || titleLower.includes('성공') || titleLower.includes('success')) {
-        logType = 'success';
+    // 하단 콘솔이 접혀있을 때 실시간 토스트 팝업
+    if (isConsoleCollapsed) {
+        showToast(title, content);
     }
+}
+
+// 기존 코드와의 100% 호환을 위한 alias
+function logToConsole(title, content) {
+    setExecutionResult(title, content);
+}
+
+// ==========================================
+// 3. 시스템 로그 스트림 (Backend Errors & Diagnostics)
+// ==========================================
+
+function logSystemEvent(level = 'info', category = 'System', message = '', details = '') {
+    const fullTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     const logItem = {
-        id: Date.now() + Math.random(),
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         time: fullTimeStr,
-        title: title || '실행',
-        content: detailStr,
-        level: logType
+        level: level,
+        category: category,
+        message: String(message || ''),
+        details: String(details || '')
     };
 
     consoleState.logs.push(logItem);
@@ -107,32 +147,40 @@ function logToConsole(title, content, level = 'info') {
         consoleState.logs.shift();
     }
 
-    // 뱃지 개수 갱신
-    const badge = document.getElementById('console-log-count-badge');
-    if (badge) {
-        badge.textContent = consoleState.logs.length.toLocaleString();
-    }
+    // 뱃지 및 에러 강조 갱신
+    updateSystemLogBadge();
 
-    // 시스템 로그 스트림 DOM에 엘리먼트 추가
+    // DOM에 로그 엘리먼트 추가
     const logsStreamEl = document.getElementById('console-logs-stream');
     if (logsStreamEl) {
         const emptyMsg = logsStreamEl.querySelector('.console-log-empty');
         if (emptyMsg) emptyMsg.remove();
 
         const logRow = document.createElement('div');
-        logRow.className = `log-entry log-entry-${logType}`;
-        
-        let contentHtml = '';
-        if (detailStr) {
-            contentHtml = `<div class="log-entry-content">${escapeHtml(detailStr)}</div>`;
+        logRow.className = `log-entry log-entry-${level}`;
+        logRow.setAttribute('data-level', level);
+
+        // 현재 필터 조건 적용
+        if (consoleState.logFilter !== 'all' && consoleState.logFilter !== level) {
+            logRow.style.display = 'none';
+        }
+
+        let detailsHtml = '';
+        if (logItem.details) {
+            detailsHtml = `
+                <div class="log-entry-details">
+                    <pre>${escapeHtml(logItem.details)}</pre>
+                </div>
+            `;
         }
 
         logRow.innerHTML = `
             <div class="log-entry-header">
                 <span class="log-time">${escapeHtml(fullTimeStr)}</span>
-                <span class="log-title">${escapeHtml(title)}</span>
+                <span class="log-cat-badge">${escapeHtml(category)}</span>
+                <span class="log-title">${escapeHtml(logItem.message)}</span>
             </div>
-            ${contentHtml}
+            ${detailsHtml}
         `;
 
         logsStreamEl.appendChild(logRow);
@@ -143,28 +191,92 @@ function logToConsole(title, content, level = 'info') {
         }
     }
 
-    // 하단 로그창이 접혀있는 상태인 경우 우측 하단에 실시간 토스트 알림 팝업!
-    if (isConsoleCollapsed) {
-        showToast(title, content);
+    // 에러 발생 시 토스트로도 알림
+    if (level === 'error' && isConsoleCollapsed) {
+        showToast(`🚨 [${category}] 에러`, message, '❌', 4500);
     }
 }
 
+function updateSystemLogBadge() {
+    const badge = document.getElementById('console-log-count-badge');
+    if (!badge) return;
+
+    const total = consoleState.logs.length;
+    const errors = consoleState.logs.filter(l => l.level === 'error').length;
+
+    if (errors > 0) {
+        badge.textContent = `🚨 ${errors} | ${total}`;
+        badge.classList.add('has-error');
+    } else {
+        badge.textContent = `${total}`;
+        badge.classList.remove('has-error');
+    }
+}
+
+// Eel 백엔드에서 호출하는 실시간 로그 리스너
+if (window.eel) {
+    window.eel.expose(on_backend_log);
+}
+function on_backend_log(level, category, message, details) {
+    logSystemEvent(level, category, message, details);
+}
+
+// 앱 부팅 시 백엔드 버퍼 로그 동기화 및 전역 JS 에러 핸들러 설정
+async function initSystemLogger() {
+    // 1. 백엔드 초기 로그 가져오기
+    if (window.eel && typeof eel.get_backend_system_logs === 'function') {
+        try {
+            const logs = await eel.get_backend_system_logs()();
+            if (Array.isArray(logs) && logs.length > 0) {
+                logs.forEach(l => {
+                    logSystemEvent(l.level, l.category, l.message, l.details);
+                });
+            }
+        } catch (e) {
+            console.error('Failed to load initial backend logs:', e);
+        }
+    }
+
+    // 2. 브라우저 전역 에러 핸들러 등록
+    window.addEventListener('error', (e) => {
+        const stack = e.error && e.error.stack ? e.error.stack : `${e.filename || 'unknown'}:${e.lineno || 0}:${e.colno || 0}`;
+        logSystemEvent('error', 'JS Runtime', e.message || 'JavaScript 런타임 오류', stack);
+    });
+
+    window.addEventListener('unhandledrejection', (e) => {
+        const reason = e.reason;
+        const msg = (reason && reason.message) || String(reason || 'Unhandled Promise Rejection');
+        const stack = (reason && reason.stack) || '';
+        logSystemEvent('error', 'Promise Rejection', msg, stack);
+    });
+}
+
+// 자동 초기화 실행
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSystemLogger);
+} else {
+    initSystemLogger();
+}
+
+// ==========================================
+// 4. 지우기 & 복사
+// ==========================================
+
 function clearConsole() {
     if (consoleState.activeTab === 'result') {
-        consoleState.lastResult = '결과가 비워졌습니다.';
+        consoleState.lastResult = '기능 버튼을 클릭하면 여기에 최근 실행 결과가 표시됩니다.';
         const consoleEl = document.getElementById('console-output');
         if (consoleEl) {
-            consoleEl.textContent = '기능 버튼을 클릭하면 여기에 최근 실행 결과가 표시됩니다.';
+            consoleEl.textContent = consoleState.lastResult;
         }
         showToast('실행 결과 초기화', '최근 실행 결과 창이 비워졌습니다.', '🧹', 2000);
     } else {
         consoleState.logs = [];
         const logsStreamEl = document.getElementById('console-logs-stream');
         if (logsStreamEl) {
-            logsStreamEl.innerHTML = '<div class="console-log-empty">시스템 로그가 비워졌습니다. 새로운 동작이 발생하면 계속 누적됩니다.</div>';
+            logsStreamEl.innerHTML = '<div class="console-log-empty">시스템 로그가 비워졌습니다. 새로운 시스템 이벤트나 백엔드 에러가 발생하면 계속 누적됩니다.</div>';
         }
-        const badge = document.getElementById('console-log-count-badge');
-        if (badge) badge.textContent = '0';
+        updateSystemLogBadge();
         showToast('시스템 로그 초기화', '누적된 시스템 로그가 모두 비워졌습니다.', '🧹', 2000);
     }
 }
@@ -180,7 +292,7 @@ async function copyConsoleOutput() {
             return;
         }
         textToCopy = consoleState.logs.map(l => {
-            return `[${l.time}] ${l.title}${l.content ? '\n' + l.content : ''}`;
+            return `[${l.time}] [${(l.level || 'info').toUpperCase()}] [${l.category || 'System'}] ${l.message}${l.details ? '\n' + l.details : ''}`;
         }).join('\n\n----------------------------------------\n\n');
     }
 

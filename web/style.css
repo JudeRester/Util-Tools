@@ -693,12 +693,68 @@ body {
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.2);
     color: #ffffff;
+    transition: var(--transition);
+}
+
+.console-count-badge.has-error {
+    background: #ef4444;
+    color: #ffffff;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
 }
 
 .console-actions {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+}
+
+/* 시스템 로그 레벨 필터 바 */
+.console-log-filters {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.log-filter-btn {
+    padding: 2px 7px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.log-filter-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.log-filter-btn.active {
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.log-filter-btn.filter-error.active {
+    background: rgba(239, 68, 68, 0.25);
+    color: #fca5a5;
+}
+
+.log-filter-btn.filter-warn.active {
+    background: rgba(245, 158, 11, 0.25);
+    color: #fcd34d;
+}
+
+.log-filter-btn.filter-info.active {
+    background: rgba(59, 130, 246, 0.25);
+    color: #93c5fd;
 }
 
 .console-toggle-btn {
@@ -786,6 +842,7 @@ body {
 
 .log-entry-error {
     border-left-color: #ef4444;
+    background: rgba(239, 68, 68, 0.04);
 }
 
 .log-entry-success {
@@ -805,8 +862,34 @@ body {
     font-weight: 500;
 }
 
+.log-cat-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+}
+
+.log-entry-error .log-cat-badge {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+.log-entry-warn .log-cat-badge {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fcd34d;
+}
+
 .log-title {
     color: #e2e8f0;
+    flex: 1;
+    word-break: break-all;
+}
+
+.log-entry-error .log-title {
+    color: #fca5a5;
 }
 
 .log-entry-content {
@@ -817,6 +900,20 @@ body {
     white-space: pre-wrap;
     word-break: break-all;
     font-size: 0.8rem;
+}
+
+.log-entry-details {
+    margin-top: 4px;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 4px;
+    color: #f87171;
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+    border-left: 2px solid #ef4444;
 }
 
 /* Edit Shortcuts Button */

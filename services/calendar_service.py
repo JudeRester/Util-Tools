@@ -10,6 +10,7 @@ import urllib.parse
 import datetime
 import eel
 from core.paths import CALENDAR_CONFIG_PATH as CALENDAR_CONFIG_FILE, CALENDAR_CONFIG_EXAMPLE_PATH as CALENDAR_CONFIG_EXAMPLE_FILE
+import core.logger
 
 DEFAULT_CONFIG = {
     "ics_urls": [
@@ -267,6 +268,9 @@ def fetch_calendar_events(force_refresh=False):
         # 시작 날짜 및 시간순 정렬
         all_events.sort(key=lambda x: (x.get("startDate", ""), x.get("startTime") or "00:00"))
 
+        if errors:
+            core.logger.log_warn("Calendar", f"일부 캘린더 동기화 실패 ({len(errors)}건)", details="\n".join(errors))
+
         return {
             "status": "success" if not errors else "partial",
             "events": all_events,
@@ -275,4 +279,5 @@ def fetch_calendar_events(force_refresh=False):
             "lastUpdated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
     except Exception as e:
+        core.logger.log_error("Calendar", f"캘린더 조회 실패: {str(e)}", exc=e)
         return {"status": "error", "message": str(e), "events": []}

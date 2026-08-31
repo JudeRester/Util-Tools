@@ -6,6 +6,10 @@ import sys
 import eel
 
 from core.paths import WEB_DIR, APP_DIR, BUNDLE_DIR
+import core.logger
+
+# 0. 백엔드 시스템 로거 초기화
+core.logger.setup_logger()
 
 # 1. Eel 초기화
 eel.init(WEB_DIR)
@@ -62,8 +66,9 @@ def app_cleanup():
         try:
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
             conn.commit()
+            core.logger.log_info("Lifecycle", "SQLite WAL 체크포인트(TRUNCATE) 완료: app.db 병합됨")
         except Exception as e:
-            print(f"[Shutdown] WAL 체크포인트 오류: {e}")
+            core.logger.log_error("Lifecycle", f"WAL 체크포인트 오류: {e}", exc=e)
         finally:
             conn.close()
 
@@ -74,13 +79,13 @@ def app_cleanup():
                 shutil.rmtree(temp_att_dir, ignore_errors=True)
             except Exception:
                 pass
-        print("🛑 Utility Toolkit이 안전하게 종료되었습니다.")
+        core.logger.log_info("Lifecycle", "🛑 Utility Toolkit이 안전하게 종료되었습니다.")
     except Exception as ex:
-        print(f"[Shutdown] 종료 정리 중 오류: {ex}")
+        core.logger.log_error("Lifecycle", f"종료 정리 중 예외 발생: {ex}", exc=ex)
 
 
 def main():
-    print("🛠️ Utility Toolkit을 시작합니다 (모듈화 아키텍처 / 트레이 상주 모드)...")
+    core.logger.log_info("Lifecycle", "🛠️ Utility Toolkit을 시작합니다 (모듈화 아키텍처 / 트레이 상주 모드)...")
     tray_manager = TrayManager(BUNDLE_DIR, start_options, on_exit=app_cleanup)
     tray_manager.start()
 

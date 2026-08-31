@@ -39,6 +39,7 @@ hidden_imports = [
     'core',
     'core.paths',
     'core.tray',
+    'core.logger',
     'services',
     'services.db_service',
     'services.system_service',

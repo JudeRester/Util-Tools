@@ -1183,6 +1183,13 @@
                     </button>
                 </div>
                 <div class="console-actions">
+                    <!-- 시스템 로그 필터 버튼군 (로그 탭 활성화 시 표시) -->
+                    <div id="console-log-filters" class="console-log-filters" style="display: none;">
+                        <button type="button" class="log-filter-btn active" data-filter="all" onclick="setSystemLogFilter('all')" title="모든 시스템 로그 표시">전체</button>
+                        <button type="button" class="log-filter-btn filter-error" data-filter="error" onclick="setSystemLogFilter('error')" title="에러 로그만 표시">❌ 에러</button>
+                        <button type="button" class="log-filter-btn filter-warn" data-filter="warn" onclick="setSystemLogFilter('warn')" title="경고 로그만 표시">⚠️ 경고</button>
+                        <button type="button" class="log-filter-btn filter-info" data-filter="info" onclick="setSystemLogFilter('info')" title="정보 로그만 표시">ℹ️ 정보</button>
+                    </div>
                     <button type="button" class="mini-tool-btn" onclick="copyConsoleOutput()" title="현재 화면 내용 클립보드 복사">
                         <span>📋</span> 복사
                     </button>
