@@ -21,7 +21,8 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 | **🧪 JS 실행기** | • JSFiddle / RunJS 스타일의 **JavaScript 코드 샌드박스** (비동기 `async/await` 완벽 지원)<br>• `console.log/warn/error` 출력 캡처, 실행 시간 측정, `Ctrl + Enter` 실행, 코드 자동 영구 보존 |
 | **📝 빠른 메모** | • 자원 소모가 전혀 없는 **초경량 스크래치패드 / 메모장**<br>• 다중 메모 생성, 실시간 자동 저장(Autosave), 고정(Pin) 기능, 마우스 드래그블 스플리터 제공 |
 | **📅 달력 & 일정** | • **구글 캘린더(Google Calendar) 및 iCal(ICS) 비공개 주소 실시간 구독 및 동기화**<br>• 다크 테마 월간 캘린더, 날짜별 일정 뱃지, 오늘의 일정(Today's Agenda) 상세 뷰 |
-| **💾 통합 백업 / 복원** | • 중앙 SQLite DB 및 설정 데이터를 **단일 JSON 백업 파일로 일괄/선택적 내보내기 및 복원(Merge/Replace)** 지원 |
+| **✂️ 이미지 슬라이서** | • **경계선 분할 & 다중 절단선 일괄 분할 스튜디오 (Pillow 고속 엔진)**<br>• 클립보드 붙여넣기(`Ctrl+V`), **고정 px 간격 일괄 생성**, **균등 N등분**, **스마트 여백 자동 감지** 및 **ZIP 일괄 다운로드 / 폴더 저장** |
+| **💾 통합 백업 / 복원** | • **Zero-Memory Python 백엔드 스트리밍 아키텍처** (브라우저 메모리 0MB 소모)<br>• 중앙 SQLite DB 및 설정을 **단일 JSON 및 90% 압축 ZIP 포맷으로 초고속(2.5초) 일괄/선택적 내보내기 & 복원(Merge/Replace)** |
 | **🛠️ 시스템 트레이** | • 검은색 콘솔 창 없는 순수 GUI 구동 및 Windows 시스템 트레이 상주 (`utiltools.ico` 연동)<br>• V8 힙 128MB 제한 및 Windows WorkingSet 유휴 RAM 자동 회수 엔진 탑재 |
 
 ---
@@ -107,6 +108,380 @@ sequenceDiagram
 | **저장 형태** | 단일 `.json` 백업 파일 내 `data.emails` 배열 | 실제 원본 파일 (`emails/*.eml`) |
 | **포함 내용** | 발신/수신자, 정규화 제목, 날짜, 카테고리, **전체 텍스트/HTML 본문**, 스레드 키, 첨부파일 메타데이터 | 이메일 원본 전체 (바이너리 MIME 스트림 포함) |
 | **주요 용도** | **타 PC 마이그레이션 / 스키마 독립 백업 & 복원** | Outlook 등 **OS 기본 메일 프로그램으로 원본 열기** |
+
+---
+
+## 🗄️ 중앙 SQLite 데이터베이스 구조 (`data/app.db`)
+
+Util-Tools는 모든 사용자 데이터와 로컬 캐시를 단일 중앙 SQLite 데이터베이스([`data/app.db`](file:///D:/python/data/app.db))에서 관리합니다.
+
+### 1. ⚙️ 데이터베이스 엔진 및 성능 PRAGMA 설정
+- **파일 경로**: `D:\python\data\app.db` (Git 추적 제외)
+- **커넥션 매니저**: [`services/db_service.py`](file:///D:/python/services/db_service.py)
+- **핵심 PRAGMA 최적화**:
+  - `PRAGMA journal_mode=WAL;`: 동시 다중 읽기/쓰기를 지원하여 UI 멈춤 방지
+  - `PRAGMA synchronous=NORMAL;`: 디스크 쓰기 I/O를 최적화하면서 크래시 안전성 보장
+  - `PRAGMA busy_timeout=5000;`: 동시성 락 충돌 시 최대 5초간 자동 대기
+  - `PRAGMA wal_checkpoint(TRUNCATE);`: 앱 종료 시 WAL 로그를 본 DB로 자동 병합 및 용량 최소화
+
+---
+
+### 2. 🏛️ 테이블 관계 및 도메인 다이어그램 (ERD)
+
+```mermaid
+erDiagram
+    %% Core Productivity Tables
+    EMAILS {
+        text id PK
+        text subject
+        text clean_subject
+        text thread_key
+        text from_addr
+        text to_addr
+        text date_str
+        text category
+        text snippet
+        text body_text
+        text body_html
+        text attachments_json
+        text file_path
+        text created_at
+    }
+
+    NOTES {
+        text id PK
+        text title
+        text content
+        text category
+        text color
+        integer is_pinned
+        text created_at
+        text updated_at
+    }
+
+    DIAGRAMS {
+        text id PK
+        text title
+        text code
+        text category
+        text type
+        text description
+        text created_at
+        text updated_at
+    }
+
+    SHORTCUTS {
+        text id PK
+        text title
+        text key_combo
+        text url_or_path
+        text category
+        text description
+        text icon
+        text created_at
+    }
+
+    QUICK_LAUNCH {
+        text id PK
+        text title
+        text path
+        text icon
+        text category
+        text description
+        integer order_index
+        text created_at
+    }
+
+    GENERATORS {
+        text id PK
+        text title
+        text language
+        text template
+        text description
+        text category
+        text icon
+        text variables_json
+        text created_at
+    }
+
+    MOCK_TEMPLATES {
+        text id PK
+        text title
+        text description
+        text icon
+        text schema_json
+        text created_at
+        text updated_at
+    }
+
+    AI_EMBEDDINGS {
+        text key PK
+        text hash
+        blob vector
+        text updated_at
+    }
+
+    %% Redmine Local Cache Domain
+    REDMINE_CONFIG {
+        text id PK
+        text server_url
+        text api_key
+        integer user_id
+        text user_name
+        integer auto_sync
+        integer sync_interval_min
+        text sync_scope
+        integer sync_limit
+    }
+
+    REDMINE_ISSUES {
+        integer id PK
+        integer project_id
+        text project_name
+        text tracker_name
+        text status_name
+        text priority_name
+        text assigned_to_name
+        text subject
+        text description
+        text start_date
+        text due_date
+        integer done_ratio
+        integer is_my_issue
+        text updated_on
+    }
+
+    REDMINE_WIKIS {
+        text id PK
+        text project_id
+        text title
+        integer version
+        text text
+        text updated_on
+    }
+
+    REDMINE_PROJECTS {
+        integer id PK
+        text name
+        text identifier
+        text description
+        integer status
+    }
+
+    REDMINE_CONFIG ||--o{ REDMINE_ISSUES : caches
+    REDMINE_PROJECTS ||--o{ REDMINE_ISSUES : contains
+    REDMINE_PROJECTS ||--o{ REDMINE_WIKIS : contains
+```
+
+---
+
+### 3. 📋 테이블별 상세 스키마 명세 (Schema Specifications)
+
+#### ① `emails` (대용량 이메일 아카이브)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `TEXT` | `PRIMARY KEY` | 이메일 고유 해시 식별자 |
+| `subject` | `TEXT` | - | 원본 이메일 제목 |
+| `clean_subject` | `TEXT` | - | Re:/Fwd: 접두사가 제거된 정규화된 스레드 제목 |
+| `thread_key` | `TEXT` | - | 대화 스레드 그룹핑 키 (인덱스 생성) |
+| `from_addr` | `TEXT` | - | 발신자 이름 및 이메일 주소 |
+| `to_addr` | `TEXT` | - | 수신자 목록 |
+| `date_str` | `TEXT` | - | 작성 일시 (RFC2822 / ISO8601) |
+| `category` | `TEXT` | `'기타'` | 6대 자동 분류 카테고리 (인덱스 생성) |
+| `snippet` | `TEXT` | - | 본문 150자 미리보기 요약문 |
+| `body_text` | `TEXT` | - | 일반 텍스트 본문 |
+| `body_html` | `TEXT` | - | HTML 서식 본문 |
+| `attachments_json`| `TEXT` | `'[]'` | 첨부파일 메타데이터 JSON 배열 |
+| `message_id` | `TEXT` | - | 이메일 헤더 `Message-ID` |
+| `in_reply_to` | `TEXT` | - | 회신 대상 `In-Reply-To` 헤더 |
+| `references_header`| `TEXT`| - | 참조 체인 `References` 헤더 |
+| `file_path` | `TEXT` | - | 로컬 `emails/*.eml` 물리 파일 경로 |
+| `created_at` | `TEXT` | - | DB 등록 일시 |
+
+> **인덱스**: `idx_emails_category`, `idx_emails_thread_key`, `idx_emails_date`, `idx_emails_created_at`, `idx_emails_sort (created_at DESC, date_str DESC)`
+
+---
+
+#### ② `notes` (빠른 메모 / 스크래치패드)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `TEXT` | `PRIMARY KEY` | 메모 고유 식별자 |
+| `title` | `TEXT` | - | 메모 제목 |
+| `content` | `TEXT` | - | 메모 내용 (텍스트/마크다운) |
+| `category` | `TEXT` | `''` | 카테고리 태그 |
+| `color` | `TEXT` | `''` | 메모 카드 테마 색상 코드 |
+| `is_pinned` | `INTEGER` | `0` | 상단 고정 여부 (1: 고정, 0: 일반) |
+| `created_at` | `TEXT` | - | 생성 일시 |
+| `updated_at` | `TEXT` | - | 최종 수정 일시 (자동 갱신) |
+
+> **인덱스**: `idx_notes_pinned`, `idx_notes_updated_at`, `idx_notes_created_at`, `idx_notes_sort (is_pinned DESC, updated_at DESC, created_at DESC)`
+
+---
+
+#### ③ `diagrams` (Mermaid 다이어그램)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `TEXT` | `PRIMARY KEY` | 다이어그램 고유 식별자 |
+| `title` | `TEXT` | - | 다이어그램 제목 |
+| `code` | `TEXT` | - | Mermaid 다이어그램 소스 코드 |
+| `category` | `TEXT` | - | 분류 카테고리 |
+| `type` | `TEXT` | `''` | 다이어그램 종류 (flowchart, sequence, mindmap 등) |
+| `description` | `TEXT` | - | 상세 설명 |
+| `created_at` | `TEXT` | - | 생성 일시 |
+| `updated_at` | `TEXT` | - | 수정 일시 |
+
+> **인덱스**: `idx_diagrams_category`, `idx_diagrams_updated_at`
+
+---
+
+#### ④ `shortcuts` (폴더 바로가기)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `TEXT` | `PRIMARY KEY` | 바로가기 ID |
+| `title` | `TEXT` | - | 표시 명칭 |
+| `key_combo` | `TEXT` | `''` | 단축키 조합 (선택 사항) |
+| `url_or_path` | `TEXT` | - | 대상 폴더 경로 또는 URL |
+| `category` | `TEXT` | `'folder'` | 카테고리 |
+| `description` | `TEXT` | `''` | 툴팁 설명문 |
+| `icon` | `TEXT` | `'📁'` | 이모지/아이콘 |
+| `created_at` | `TEXT` | - | 생성 일시 |
+
+> **인덱스**: `idx_shortcuts_category`
+
+---
+
+#### ⑤ `quick_launch` (빠른 실행)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `TEXT` | `PRIMARY KEY` | 빠른 실행 ID |
+| `title` | `TEXT` | - | 실행 항목 이름 |
+| `path` | `TEXT` | - | 실행 파일 경로, URL, 또는 CLI 명령어 |
+| `icon` | `TEXT` | `'⚡'` | 표시 아이콘 |
+| `category` | `TEXT` | `'cmd'` | 실행 타입 (`cmd`, `exe`, `url`, `ssh`) |
+| `description` | `TEXT` | `''` | 설명 |
+| `order_index` | `INTEGER` | `0` | 드래그 앤 드롭 정렬 순서 인덱스 |
+| `created_at` | `TEXT` | - | 생성 일시 |
+
+> **인덱스**: `idx_quick_launch_order`
+
+---
+
+#### ⑥ `generators` (커스텀 데이터 생성기)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `TEXT` | `PRIMARY KEY` | 생성기 ID |
+| `title` | `TEXT` | - | 생성기 이름 |
+| `language` | `TEXT` | `'javascript'` | 스크립트 엔진 |
+| `template` | `TEXT` | - | 실행 JavaScript 코드 본문 |
+| `description` | `TEXT` | - | 생성기 설명 |
+| `category` | `TEXT` | - | 카테고리 |
+| `icon` | `TEXT` | `'🔢'` | 아이콘 |
+| `variables_json`| `TEXT` | `'[]'` | 사용자 입력 파라미터 정의 JSON |
+| `created_at` | `TEXT` | - | 생성 일시 |
+
+> **인덱스**: `idx_generators_category`
+
+---
+
+#### ⑦ `mock_templates` (모의 데이터 서식 양식)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `TEXT` | `PRIMARY KEY` | 양식 ID |
+| `title` | `TEXT` | `NOT NULL` | 양식 이름 (예: 회원 목록 양식) |
+| `description` | `TEXT` | `''` | 양식 설명 |
+| `icon` | `TEXT` | `'📋'` | 아이콘 |
+| `schema_json` | `TEXT` | `NOT NULL` | 컬럼 정의(컬럼명, 데이터타입, 생성규칙) JSON |
+| `created_at` | `TEXT` | - | 생성 일시 |
+| `updated_at` | `TEXT` | - | 수정 일시 |
+
+> **인덱스**: `idx_mock_templates_updated`
+
+---
+
+#### ⑧ `ai_embeddings` (AI 시맨틱 임베딩 벡터 캐시)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `key` | `TEXT` | `PRIMARY KEY` | 데이터 고유 식별 키 (예: `emails:em_102`) |
+| `hash` | `TEXT` | `NOT NULL` | 텍스트 변경 감지용 MD5/SHA256 해시 |
+| `vector` | `BLOB` | `NOT NULL` | 384차원 float32 임베딩 바이너리 배열 |
+| `updated_at` | `TEXT` | - | 임베딩 생성/갱신 일시 |
+
+> **인덱스**: `idx_ai_embeddings_hash`
+
+---
+
+#### ⑨ `redmine_config` (Redmine 연결 및 동기화 설정)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `TEXT` | `PRIMARY KEY` | 설정 프로필 ID (`'default'`) |
+| `server_url` | `TEXT` | - | Redmine 서버 URL (`https://...`) |
+| `api_key` | `TEXT` | - | 사용자 REST API 접근 키 |
+| `user_id` | `INTEGER` | - | 로그인된 Redmine 사용자 ID |
+| `user_name` | `TEXT` | - | 사용자 실명 |
+| `user_login` | `TEXT` | - | 사용자 로그인 계정명 |
+| `auto_sync` | `INTEGER` | `1` | 백그라운드 자동 동기화 활성화 여부 |
+| `sync_interval_min`| `INTEGER`| `5` | 동기화 주기 (분 단위) |
+| `sync_scope` | `TEXT` | `'all_open'` | 동기화 범위 (`my_issues`, `all_open`, `project`) |
+| `sync_limit` | `INTEGER` | `300` | 일괄 동기화 최대 일감 수 |
+| `sync_project_id` | `INTEGER`| `0` | 특정 프로젝트 ID 지정 동기화 시 사용 |
+| `updated_at` | `TEXT` | - | 설정 수정 일시 |
+
+---
+
+#### ⑩ `redmine_issues` (Redmine 일감 로컬 오프라인 캐시)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `INTEGER` | `PRIMARY KEY` | Redmine 일감 번호 (#Issue ID) |
+| `project_id` | `INTEGER` | - | 소속 프로젝트 ID |
+| `project_name` | `TEXT` | - | 소속 프로젝트 명칭 |
+| `tracker_name` | `TEXT` | - | 트래커 (결함, 기능, 지원 등) |
+| `status_name` | `TEXT` | - | 상태 (신규, 진행, 해결, 완료 등) |
+| `priority_name`| `TEXT` | - | 우선순위 (낮음, 보통, 높음, 긴급 등) |
+| `author_name` | `TEXT` | - | 등록자 이름 |
+| `assigned_to_name`| `TEXT` | - | 담당자 이름 |
+| `subject` | `TEXT` | - | 일감 제목 |
+| `description` | `TEXT` | - | 일감 설명 본문 |
+| `start_date` | `TEXT` | - | 시작일 |
+| `due_date` | `TEXT` | - | 완료 기한일 |
+| `done_ratio` | `INTEGER` | `0` | 진척도 (0 ~ 100%) |
+| `estimated_hours`| `REAL` | - | 추정 시간 |
+| `updated_on` | `TEXT` | - | Redmine 서버 기준 최종 수정 일시 |
+| `created_on` | `TEXT` | - | 등록 일시 |
+| `is_my_issue` | `INTEGER` | `0` | 내 담당 일감 여부 플래그 (1: 내 일감) |
+| `raw_json` | `TEXT` | - | Redmine API 원본 전체 응답 JSON |
+
+> **인덱스**: `idx_redmine_issues_project`, `idx_redmine_issues_status`, `idx_redmine_issues_assigned`, `idx_redmine_issues_my`, `idx_redmine_issues_due`, `idx_redmine_issues_updated`, `idx_redmine_issues_sort (updated_on DESC, id DESC)`
+
+---
+
+#### ⑪ `redmine_wikis` (Redmine 프로젝트 위키 문서 캐시)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `TEXT` | `PRIMARY KEY` | 위키 복합 키 (`{project_id}:{title}`) |
+| `project_id` | `TEXT` | - | 프로젝트 식별자 |
+| `project_name` | `TEXT` | - | 프로젝트 명칭 |
+| `title` | `TEXT` | - | 위키 페이지 제목 |
+| `version` | `INTEGER` | `1` | 위키 문서 버전 |
+| `author_name` | `TEXT` | - | 작성자 |
+| `comments` | `TEXT` | - | 버전 코멘트 |
+| `text` | `TEXT` | - | 위키 본문 (Textile / Markdown) |
+| `updated_on` | `TEXT` | - | 최종 수정 일시 |
+| `created_on` | `TEXT` | - | 최초 작성 일시 |
+
+> **인덱스**: `idx_redmine_wikis_project`, `idx_redmine_wikis_title`
+
+---
+
+#### ⑫ `redmine_projects` & ⑬ `redmine_meta` (프로젝트 및 메타데이터 캐시)
+- **`redmine_projects`**: `id` (PK), `name`, `identifier`, `description`, `status`
+- **`redmine_meta`**: `key` (PK, 예: `'statuses'`, `'trackers'`), `data_json`, `updated_at`
+
+---
+
+### 4. 📁 파일 기반 설정 파일 (File-based JSON Configurations)
+데이터베이스 외에 다음 설정 파일들은 독립된 JSON 파일로 관리되어 외부 연동 및 설정을 지원합니다:
+- **`calendar_config.json`**: 구글 캘린더 비공개 주소 및 iCal(ICS) 웹 구독 목록
+- **`app_settings.json`**: 윈도우 창 크기, 콘솔 높이, 분할창 크기 등 사용자 인터페이스 영구 설정
 
 ---
 
