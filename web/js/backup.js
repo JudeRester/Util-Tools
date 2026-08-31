@@ -1,31 +1,40 @@
 /**
- * 통합 데이터 백업 & 복원 (Export / Import) 제어 모듈
- * 백엔드 DATA_REGISTRY와 연동되어 신규 메뉴나 도구가 추가되어도 자동으로 감지하고 백업/복원에 반영합니다.
+ * 통합 데이터 백업 & 복원 (Export / Import) 제어 모듈 (web/js/backup.js)
+ * - Python 백엔드 Zero-Memory 직접 파일 I/O 연동 (대용량 파일도 브라우저 랙 0)
+ * - Windows 표준 파일 대화상자로 JSON 및 ZIP 백업 파일 직접 저장/로드
+ * - 백엔드 DATA_REGISTRY와 연동되어 신규 모듈 자동 감지 및 실시간 UI 갱신
  */
 
 let registeredBackupModules = [];
 let selectedExportKeys = new Set();
-let incomingImportPayload = null;
+let incomingBackupFile = null; // { file_path, file_name, file_size_str, exported_at, modules: [] }
+let incomingImportPayload = null; // 인라인 JSON 텍스트 직접 입력 fallback
 let selectedImportKeys = new Set();
 
+// ==========================================
 // 1. 모달 열기/닫기
+// ==========================================
 async function openBackupModal() {
     await fetchRegisteredBackupModules();
     switchBackupTab('export');
-    document.getElementById('backup-modal').classList.add('show');
+    const modal = document.getElementById('backup-modal');
+    if (modal) modal.classList.add('show');
 }
 
 function closeBackupModal() {
-    document.getElementById('backup-modal').classList.remove('show');
+    const modal = document.getElementById('backup-modal');
+    if (modal) modal.classList.remove('show');
     resetImportForm();
 }
 
+// ==========================================
 // 2. 백엔드 등록 모듈 동적 로드
+// ==========================================
 async function fetchRegisteredBackupModules() {
     try {
         if (window.eel && typeof eel.get_registered_backup_modules === 'function') {
             const res = await eel.get_registered_backup_modules()();
-            if (res.status === 'success' && Array.isArray(res.data)) {
+            if (res && res.status === 'success' && Array.isArray(res.data)) {
                 registeredBackupModules = res.data;
             }
         }
@@ -41,7 +50,10 @@ async function fetchRegisteredBackupModules() {
             { key: "notes", label: "빠른 메모", icon: "📝", item_count: 0 },
             { key: "calendar", label: "달력 & 일정 구독", icon: "📅", item_count: 0 },
             { key: "diagrams", label: "Mermaid 다이어그램", icon: "📊", item_count: 0 },
-            { key: "settings", label: "앱 설정 & UI 레이아웃", icon: "⚙️", item_count: 0 }
+            { key: "emails", label: "이메일 아카이브", icon: "📧", item_count: 0 },
+            { key: "mock_templates", label: "모의 데이터 양식", icon: "🎲", item_count: 0 },
+            { key: "settings", label: "앱 설정 & UI 레이아웃", icon: "⚙️", item_count: 0 },
+            { key: "redmine_config", label: "Redmine 연동 설정", icon: "🦊", item_count: 0 }
         ];
     }
 
@@ -50,7 +62,9 @@ async function fetchRegisteredBackupModules() {
     renderExportModulesList();
 }
 
+// ==========================================
 // 3. 서브 탭 전환 (Export vs Import)
+// ==========================================
 function switchBackupTab(tab) {
     const exportBtn = document.getElementById('backup-tab-export');
     const importBtn = document.getElementById('backup-tab-import');
@@ -58,20 +72,22 @@ function switchBackupTab(tab) {
     const importPane = document.getElementById('backup-import-pane');
 
     if (tab === 'export') {
-        exportBtn?.classList.add('active');
-        importBtn?.classList.remove('active');
+        if (exportBtn) exportBtn.classList.add('active');
+        if (importBtn) importBtn.classList.remove('active');
         if (exportPane) exportPane.style.display = 'block';
         if (importPane) importPane.style.display = 'none';
         renderExportModulesList();
     } else {
-        importBtn?.classList.add('active');
-        exportBtn?.classList.remove('active');
+        if (importBtn) importBtn.classList.add('active');
+        if (exportBtn) exportBtn.classList.remove('active');
         if (importPane) importPane.style.display = 'block';
         if (exportPane) exportPane.style.display = 'none';
     }
 }
 
-// 4. 내보내기(Export) 모듈 목록 렌더링
+// ==========================================
+// 4. 내보내기(Export) 모듈 목록 & 실행
+// ==========================================
 function renderExportModulesList() {
     const listEl = document.getElementById('backup-export-modules-list');
     const selectAllCb = document.getElementById('export-select-all');
@@ -119,7 +135,7 @@ function toggleAllExportCheckboxes(checked) {
     renderExportModulesList();
 }
 
-// 5. 내보내기 실행 (다운로드 및 복사)
+// 4-1. 백엔드 Zero-Memory 직접 파일 저장 (JSON 또는 ZIP)
 async function executeExportDownload() {
     if (selectedExportKeys.size === 0) {
         await showAppAlert('내보낼 데이터 항목을 최소 1개 이상 선택해 주세요.', '선택 필요', '⚠️');
@@ -128,6 +144,23 @@ async function executeExportDownload() {
 
     try {
         const keys = Array.from(selectedExportKeys);
+
+        // 1. Python 백엔드 직접 파일 저장 (Zero-Memory)
+        if (window.eel && typeof eel.export_toolkit_to_file === 'function') {
+            const res = await eel.export_toolkit_to_file(keys, 'json')();
+            if (res && res.status === 'success') {
+                logToConsole('데이터 백업 파일 저장 완료', `[${res.file_name}] (${res.file_size_str}) -> ${res.file_path}`);
+                showToast('백업 완료', `백업 파일(${res.file_name}, ${res.file_size_str})이 성공적으로 저장되었습니다! 💾`, '✅', 3500);
+                return;
+            } else if (res && res.status === 'cancelled') {
+                // 사용자가 저장 취소
+                return;
+            } else if (res && res.status === 'error') {
+                throw new Error(res.message);
+            }
+        }
+
+        // 2. 브라우저 로컬스토리지 Fallback Export
         let exportData = null;
         let filename = `utility-toolkit-backup-${new Date().toISOString().slice(0, 10)}.json`;
 
@@ -136,14 +169,13 @@ async function executeExportDownload() {
             if (res.status === 'success') {
                 exportData = res.payload;
                 if (res.filename) filename = res.filename;
-            } else {
-                throw new Error(res.message || '백엔드 내보내기 오류');
             }
-        } else {
-            // LocalStorage Fallback Export
+        }
+
+        if (!exportData) {
             exportData = {
                 app: "Utility-Toolkit",
-                version: "1.2.0",
+                version: "2.0.0",
                 exported_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
                 data: {}
             };
@@ -187,7 +219,7 @@ async function copyExportJsonToClipboard() {
 
         if (window.eel && typeof eel.export_toolkit_data === 'function') {
             const res = await eel.export_toolkit_data(keys)();
-            if (res.status === 'success') {
+            if (res && res.status === 'success') {
                 exportData = res.payload;
             }
         }
@@ -209,8 +241,33 @@ async function copyExportJsonToClipboard() {
     }
 }
 
-// 6. 가져오기 (Import) - 파일 선택 및 드래그 앤 드롭
-function triggerImportFileInput() {
+// ==========================================
+// 5. 가져오기(Import) - Zero-Memory 파일 선택 및 요약
+// ==========================================
+
+async function triggerImportFileInput() {
+    // 1. Python 백엔드 OS 탐색기 직접 열기 (Zero-Memory)
+    if (window.eel && typeof eel.pick_backup_file_and_get_summary === 'function') {
+        try {
+            const res = await eel.pick_backup_file_and_get_summary()();
+            if (res && res.status === 'success') {
+                incomingBackupFile = res;
+                incomingImportPayload = null;
+                renderImportFileSummary(res);
+                return;
+            } else if (res && res.status === 'cancelled') {
+                // 사용자 취소
+                return;
+            } else if (res && res.status === 'error') {
+                showToast('백업 파일 열기 실패', res.message, '⚠️');
+                return;
+            }
+        } catch (e) {
+            console.warn("백엔드 파일 선택 실패, 브라우저 input fallback:", e);
+        }
+    }
+
+    // 2. 브라우저 input fallback
     const input = document.getElementById('backup-file-input');
     if (input) input.click();
 }
@@ -222,22 +279,65 @@ function handleBackupFileSelect(event) {
     const reader = new FileReader();
     reader.onload = (e) => {
         const content = e.target.result;
-        const textarea = document.getElementById('import-json-textarea');
-        if (textarea) textarea.value = content;
-        parseAndPreviewImportJson(content);
+        parseAndPreviewImportJson(content, file.name, file.size);
     };
     reader.readAsText(file);
 }
 
+function renderImportFileSummary(fileInfo) {
+    const bannerEl = document.getElementById('import-file-banner');
+    const previewBox = document.getElementById('import-preview-box');
+    const checklist = document.getElementById('import-modules-checklist');
+    const restoreBtn = document.getElementById('execute-import-btn');
+    const dropzone = document.getElementById('backup-dropzone');
+
+    if (bannerEl) {
+        bannerEl.style.display = 'flex';
+        bannerEl.innerHTML = `
+            <div class="import-file-meta">
+                <span class="file-icon">📦</span>
+                <div class="file-details">
+                    <span class="file-name">${escapeHtml(fileInfo.file_name)}</span>
+                    <span class="file-sub">크기: <b>${fileInfo.file_size_str}</b> | 백업 일시: ${escapeHtml(fileInfo.exported_at || '알 수 없음')}</span>
+                </div>
+            </div>
+            <button type="button" class="mini-tool-btn" onclick="triggerImportFileInput()" title="다른 백업 파일 선택">🔄 파일 변경</button>
+        `;
+    }
+
+    if (dropzone) dropzone.style.display = 'none';
+
+    // 모듈 체크리스트 렌더링
+    selectedImportKeys = new Set((fileInfo.modules || []).map(m => m.key));
+
+    if (checklist) {
+        checklist.innerHTML = (fileInfo.modules || []).map(m => {
+            return `
+                <div class="backup-module-card selected" onclick="toggleImportKey('${m.key}', this)">
+                    <input type="checkbox" checked onclick="event.stopPropagation(); toggleImportKey('${m.key}', this.closest('.backup-module-card'))">
+                    <div class="backup-module-info">
+                        <div class="backup-module-title">${m.icon} ${escapeHtml(m.label)}</div>
+                        <div class="backup-module-sub">${m.count_str}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    if (previewBox) previewBox.style.display = 'block';
+    if (restoreBtn) restoreBtn.disabled = selectedImportKeys.size === 0;
+}
+
 function onImportJsonTextChange() {
     const textarea = document.getElementById('import-json-textarea');
-    if (textarea) {
+    if (textarea && textarea.value.trim()) {
+        incomingBackupFile = null;
         parseAndPreviewImportJson(textarea.value);
     }
 }
 
-// 7. 가져온 JSON 파싱 및 복원 대상 모듈 미리보기
-function parseAndPreviewImportJson(rawText) {
+// 6. JSON 텍스트 직접 입력 미리보기 파싱
+function parseAndPreviewImportJson(rawText, fileName = '', fileSize = 0) {
     const previewBox = document.getElementById('import-preview-box');
     const checklist = document.getElementById('import-modules-checklist');
     const restoreBtn = document.getElementById('execute-import-btn');
@@ -321,18 +421,26 @@ function resetImportForm() {
     const previewBox = document.getElementById('import-preview-box');
     const restoreBtn = document.getElementById('execute-import-btn');
     const fileInput = document.getElementById('backup-file-input');
+    const bannerEl = document.getElementById('import-file-banner');
+    const dropzone = document.getElementById('backup-dropzone');
 
     if (textarea) textarea.value = '';
     if (previewBox) previewBox.style.display = 'none';
     if (restoreBtn) restoreBtn.disabled = true;
     if (fileInput) fileInput.value = '';
+    if (bannerEl) bannerEl.style.display = 'none';
+    if (dropzone) dropzone.style.display = 'flex';
+
+    incomingBackupFile = null;
     incomingImportPayload = null;
     selectedImportKeys.clear();
 }
 
-// 8. 데이터 복원 실행 (Import)
+// ==========================================
+// 7. 데이터 복원 실행 (Zero-Memory Backend Restore)
+// ==========================================
 async function executeImportRestore() {
-    if (!incomingImportPayload || selectedImportKeys.size === 0) {
+    if ((!incomingBackupFile && !incomingImportPayload) || selectedImportKeys.size === 0) {
         await showAppAlert('복원할 데이터 모듈을 선택해 주세요.', '알림', '⚠️');
         return;
     }
@@ -353,16 +461,29 @@ async function executeImportRestore() {
         let success = false;
         let restoredCount = 0;
 
-        if (window.eel && typeof eel.import_toolkit_data === 'function') {
-            const res = await eel.import_toolkit_data(incomingImportPayload, keys, mode)();
-            if (res.status === 'success') {
+        // 1. Python 백엔드 디스크 직접 고속 복원 (Zero-Memory)
+        if (incomingBackupFile && window.eel && typeof eel.restore_toolkit_from_file === 'function') {
+            showToast('데이터 복원 중', 'Python 백엔드에서 SQLite DB로 고속 복원하고 있습니다... ⏳', '📦', 2000);
+            const res = await eel.restore_toolkit_from_file(incomingBackupFile.file_path, keys, mode)();
+            if (res && res.status === 'success') {
                 success = true;
                 restoredCount = res.restored_keys ? res.restored_keys.length : keys.length;
             } else {
-                throw new Error(res.message || '백엔드 복원 오류');
+                throw new Error((res && res.message) || '백엔드 파일 복원 오류');
             }
-        } else {
-            // LocalStorage Fallback Import
+        } 
+        // 2. 인라인 JSON 텍스트 복원
+        else if (incomingImportPayload && window.eel && typeof eel.import_toolkit_data === 'function') {
+            const res = await eel.import_toolkit_data(incomingImportPayload, keys, mode)();
+            if (res && res.status === 'success') {
+                success = true;
+                restoredCount = res.restored_keys ? res.restored_keys.length : keys.length;
+            } else {
+                throw new Error((res && res.message) || '백엔드 데이터 복원 오류');
+            }
+        }
+        // 3. 브라우저 로컬스토리지 fallback
+        else if (incomingImportPayload) {
             const data = incomingImportPayload.data;
             if (keys.includes('shortcuts') && data.shortcuts) localStorage.setItem('folder_shortcuts', JSON.stringify(data.shortcuts));
             if (keys.includes('quick_launch') && data.quick_launch) localStorage.setItem('quick_launch_items', JSON.stringify(data.quick_launch));
@@ -384,10 +505,11 @@ async function executeImportRestore() {
             if (typeof initCalendar === 'function') initCalendar();
             if (typeof loadSavedDiagrams === 'function') loadSavedDiagrams();
             if (typeof loadAppSettings === 'function') await loadAppSettings();
+            if (typeof initEmailViewer === 'function') initEmailViewer();
 
             closeBackupModal();
             logToConsole('데이터 복원 완료', `총 ${restoredCount}개의 데이터 모듈이 안전하게 복원되었습니다.`);
-            showToast('데이터 복원 완료', `총 ${restoredCount}개의 데이터 모듈이 성공적으로 복원되었습니다! 🎉`, '✅');
+            showToast('데이터 복원 완료', `총 ${restoredCount}개의 데이터 모듈이 성공적으로 복원되었습니다! 🎉`, '✅', 4000);
         }
     } catch (err) {
         console.error("복원 실패:", err);

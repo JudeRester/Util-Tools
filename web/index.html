@@ -1708,18 +1708,24 @@
                         기존에 백업한 JSON 파일을 업로드하거나 아래 텍스트 상자에 붙여넣어 데이터를 복원하세요.
                     </div>
 
-                    <!-- 파일 드롭존 -->
+                    <!-- 백엔드 파일 로드 완료 배너 (Zero-Memory) -->
+                    <div id="import-file-banner" class="import-file-banner" style="display: none;"></div>
+
+                    <!-- 파일 드롭존 / 선택 버튼 -->
                     <div class="backup-dropzone" id="backup-dropzone" onclick="triggerImportFileInput()">
-                        <input type="file" id="backup-file-input" accept=".json" style="display: none;" onchange="handleBackupFileSelect(event)">
+                        <input type="file" id="backup-file-input" accept=".json,.zip" style="display: none;" onchange="handleBackupFileSelect(event)">
                         <div class="dropzone-icon">📂</div>
-                        <div class="dropzone-text"><b>클릭하여 백업 파일(.json) 선택</b> 또는 파일을 여기로 드래그 앤 드롭</div>
+                        <div class="dropzone-text"><b>클릭하여 백업 파일(.json 또는 .zip) 선택</b></div>
+                        <div class="dropzone-sub">대용량 백업 파일도 브라우저 랙 없이 Python 백엔드에서 고속 직접 복원됩니다.</div>
                     </div>
 
-                    <!-- 또는 텍스트 입력창 -->
-                    <div class="backup-json-text-section">
-                        <label>또는 백업 JSON 텍스트 직접 입력:</label>
-                        <textarea id="import-json-textarea" class="backup-textarea" placeholder="{&#10;  &quot;app&quot;: &quot;Utility-Toolkit&quot;,&#10;  &quot;data&quot;: { ... }&#10;}" oninput="onImportJsonTextChange()"></textarea>
-                    </div>
+                    <!-- 또는 텍스트 직접 입력 (접을 수 있는 보조 입력) -->
+                    <details class="backup-json-details">
+                        <summary>또는 백업 JSON 텍스트 직접 붙여넣기</summary>
+                        <div class="backup-json-text-section">
+                            <textarea id="import-json-textarea" class="backup-textarea" placeholder="{&#10;  &quot;app&quot;: &quot;Utility-Toolkit&quot;,&#10;  &quot;data&quot;: { ... }&#10;}" oninput="onImportJsonTextChange()"></textarea>
+                        </div>
+                    </details>
 
                     <!-- 복원 모드 선택 & 미리보기 -->
                     <div class="backup-restore-options">
