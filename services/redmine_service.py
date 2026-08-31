@@ -270,26 +270,45 @@ def get_redmine_metadata():
 
 @eel.expose
 def fetch_redmine_projects():
-    """참여 중인 전체 프로젝트 목록 서버 동기화"""
+    """참여 중인 전체 프로젝트 목록 서버 동기화 (100건 초과 페이지네이션 지원)"""
     conn = get_db_connection()
     try:
         row = conn.execute("SELECT server_url, api_key FROM redmine_config WHERE id = 'default'").fetchone()
         if not row or not row['server_url'] or not row['api_key']:
             return {"status": "error", "message": "Redmine 설정이 필요합니다."}
 
-        res = _request_redmine_api(row['server_url'], row['api_key'], "projects.json?limit=100")
-        if res.get("status") != "success":
-            return res
+        server_url, api_key = row['server_url'], row['api_key']
+        projects = []
+        offset = 0
+        limit = 100
+        while True:
+            res = _request_redmine_api(server_url, api_key, f"projects.json?limit={limit}&offset={offset}")
+            if res.get("status") != "success":
+                if not projects:
+                    return res
+                break
 
-        projects = res.get("data", {}).get("projects", [])
+            data = res.get("data", {})
+            page_projects = data.get("projects", [])
+            if not page_projects:
+                break
+            projects.extend(page_projects)
 
-        conn.execute("DELETE FROM redmine_projects")
-        for p in projects:
-            conn.execute("""
+            total_count = data.get("total_count", len(projects))
+            offset += len(page_projects)
+            if offset >= total_count or len(page_projects) < limit:
+                break
+
+        records = [
+            (p.get('id'), p.get('name'), p.get('identifier'), p.get('description', ''), p.get('status', 1))
+            for p in projects
+        ]
+        with conn:
+            conn.execute("DELETE FROM redmine_projects")
+            conn.executemany("""
                 INSERT OR REPLACE INTO redmine_projects (id, name, identifier, description, status)
                 VALUES (?, ?, ?, ?, ?)
-            """, (p.get('id'), p.get('name'), p.get('identifier'), p.get('description', ''), p.get('status', 1)))
-        conn.commit()
+            """, records)
 
         return {"status": "success", "count": len(projects), "projects": projects}
     except Exception as e:
@@ -323,7 +342,7 @@ def get_redmine_projects():
 @eel.expose
 def sync_redmine_issues(project_id: int = None, limit: int = None, scope: str = None):
     """
-    서버로부터 일감 목록 동기화
+    서버로부터 일감 목록 동기화 (100건 초과 페이지네이션 및 Bulk Upsert 지원)
     - scope: 'all_open' (내 참여 프로젝트 전체 열린 일감 + 미할당 일감 포함)
              'my_only' (내게 할당된 일감만)
              'all_with_closed' (최근 닫힌 일감 포함 전체)
@@ -345,12 +364,24 @@ def sync_redmine_issues(project_id: int = None, limit: int = None, scope: str = 
 
         all_fetched_map = {}
 
-        # 1. 내게 할당된 열린 일감은 어떤 스코프에서도 항상 우선 확보
-        my_endpoint = "issues.json?assigned_to_id=me&status_id=open&limit=100&sort=updated_on:desc"
-        res_my = _request_redmine_api(server_url, api_key, my_endpoint)
-        if res_my.get("status") == "success":
-            for iss in res_my.get("data", {}).get("issues", []):
+        # 1. 내게 할당된 열린 일감은 어떤 스코프에서도 항상 우선 확보 (페이징 루프 지원)
+        offset_my = 0
+        limit_my = 100
+        while offset_my < max_limit:
+            my_endpoint = f"issues.json?assigned_to_id=me&status_id=open&limit={limit_my}&offset={offset_my}&sort=updated_on:desc"
+            res_my = _request_redmine_api(server_url, api_key, my_endpoint)
+            if res_my.get("status") != "success":
+                break
+            data_my = res_my.get("data", {})
+            page_my_issues = data_my.get("issues", [])
+            if not page_my_issues:
+                break
+            for iss in page_my_issues:
                 all_fetched_map[iss['id']] = iss
+            offset_my += len(page_my_issues)
+            total_my = data_my.get("total_count", len(all_fetched_map))
+            if offset_my >= total_my or len(page_my_issues) < limit_my:
+                break
 
         # 2. 동기화 범위(Scope)에 따른 확장 일감 수집 (미할당 및 팀 일감 포함)
         status_param = "open" if sync_scope != "all_with_closed" else "*"
@@ -379,15 +410,26 @@ def sync_redmine_issues(project_id: int = None, limit: int = None, scope: str = 
                     break
 
         elif sync_scope == "my_only" and target_project_id and int(target_project_id) > 0:
-            proj_endpoint = f"issues.json?project_id={target_project_id}&status_id=open&limit=100&sort=updated_on:desc"
-            res_proj = _request_redmine_api(server_url, api_key, proj_endpoint)
-            if res_proj.get("status") == "success":
-                for iss in res_proj.get("data", {}).get("issues", []):
+            offset_proj = 0
+            page_size = min(100, max_limit)
+            while offset_proj < max_limit:
+                proj_endpoint = f"issues.json?project_id={target_project_id}&status_id=open&limit={page_size}&offset={offset_proj}&sort=updated_on:desc"
+                res_proj = _request_redmine_api(server_url, api_key, proj_endpoint)
+                if res_proj.get("status") != "success":
+                    break
+                page_issues = res_proj.get("data", {}).get("issues", [])
+                if not page_issues:
+                    break
+                for iss in page_issues:
                     all_fetched_map[iss['id']] = iss
+                offset_proj += len(page_issues)
+                if len(page_issues) < page_size:
+                    break
 
         all_fetched = list(all_fetched_map.values())
 
-        # SQLite에 일괄 갱신
+        # SQLite에 Bulk Upsert로 초고속 갱신
+        records = []
         for iss in all_fetched:
             p = iss.get('project') or {}
             t = iss.get('tracker') or {}
@@ -400,14 +442,7 @@ def sync_redmine_issues(project_id: int = None, limit: int = None, scope: str = 
             asg_name = asg.get('name', '') if asg_id else '미할당'
             is_my = 1 if (asg_id == my_user_id and my_user_id is not None) else 0
 
-            conn.execute("""
-                INSERT OR REPLACE INTO redmine_issues 
-                (id, project_id, project_name, tracker_id, tracker_name, status_id, status_name, 
-                 priority_id, priority_name, author_id, author_name, assigned_to_id, assigned_to_name,
-                 subject, description, start_date, due_date, done_ratio, estimated_hours,
-                 updated_on, created_on, is_my_issue, raw_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
+            records.append((
                 iss.get('id'),
                 p.get('id'), p.get('name', ''),
                 t.get('id'), t.get('name', ''),
@@ -426,7 +461,16 @@ def sync_redmine_issues(project_id: int = None, limit: int = None, scope: str = 
                 is_my,
                 json.dumps(iss, ensure_ascii=False)
             ))
-        conn.commit()
+
+        with conn:
+            conn.executemany("""
+                INSERT OR REPLACE INTO redmine_issues 
+                (id, project_id, project_name, tracker_id, tracker_name, status_id, status_name, 
+                 priority_id, priority_name, author_id, author_name, assigned_to_id, assigned_to_name,
+                 subject, description, start_date, due_date, done_ratio, estimated_hours,
+                 updated_on, created_on, is_my_issue, raw_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, records)
 
         my_count = sum(1 for iss in all_fetched if (iss.get('assigned_to') or {}).get('id') == my_user_id)
         unassigned_count = sum(1 for iss in all_fetched if not (iss.get('assigned_to') or {}).get('id'))
@@ -651,7 +695,7 @@ def get_redmine_issue_detail(issue_id: int, refresh_from_server: bool = True):
 @eel.expose
 def get_redmine_project_members(project_id: int, *args, **kwargs):
     """
-    프로젝트 멤버/그룹 목록 조회 (GET /projects/{project_id}/memberships.json)
+    프로젝트 멤버/그룹 목록 조회 (100건 초과 페이지네이션 지원)
     """
     conn = get_db_connection()
     try:
@@ -659,21 +703,38 @@ def get_redmine_project_members(project_id: int, *args, **kwargs):
         if not cfg or not cfg['server_url'] or not cfg['api_key']:
             return {"status": "error", "message": "Redmine 연결 설정이 필요합니다."}
 
-        res = _request_redmine_api(cfg['server_url'], cfg['api_key'], f"projects/{project_id}/memberships.json?limit=100")
-        if res.get("status") == "success":
-            memberships = res.get("data", {}).get("memberships", [])
-            members = []
-            seen_ids = set()
-            for m in memberships:
-                u = m.get("user") or m.get("group")
-                if u and u.get("id") not in seen_ids:
-                    seen_ids.add(u.get("id"))
-                    members.append({
-                        "id": u.get("id"),
-                        "name": u.get("name")
-                    })
-            return {"status": "success", "members": members}
-        return res
+        memberships = []
+        offset = 0
+        limit = 100
+        while True:
+            res = _request_redmine_api(cfg['server_url'], cfg['api_key'], f"projects/{project_id}/memberships.json?limit={limit}&offset={offset}")
+            if res.get("status") != "success":
+                if not memberships:
+                    return res
+                break
+
+            data = res.get("data", {})
+            page_m = data.get("memberships", [])
+            if not page_m:
+                break
+            memberships.extend(page_m)
+
+            total_count = data.get("total_count", len(memberships))
+            offset += len(page_m)
+            if offset >= total_count or len(page_m) < limit:
+                break
+
+        members = []
+        seen_ids = set()
+        for m in memberships:
+            u = m.get("user") or m.get("group")
+            if u and u.get("id") not in seen_ids:
+                seen_ids.add(u.get("id"))
+                members.append({
+                    "id": u.get("id"),
+                    "name": u.get("name")
+                })
+        return {"status": "success", "members": members}
     except Exception as e:
         return {"status": "error", "message": f"멤버 조회 실패: {str(e)}"}
     finally:

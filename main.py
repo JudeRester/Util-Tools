@@ -50,9 +50,38 @@ start_options = {
 }
 
 
+def app_cleanup():
+    """애플리케이션 정상 종료 시 리소스 정리 및 SQLite WAL 체크포인트 병합"""
+    try:
+        from services.db_service import get_db_connection
+        from core.paths import DATA_DIR
+        import shutil
+
+        # 1. SQLite WAL 체크포인트 강제 실행 (모든 트랜잭션을 본 DB 파일에 병합)
+        conn = get_db_connection()
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            conn.commit()
+        except Exception as e:
+            print(f"[Shutdown] WAL 체크포인트 오류: {e}")
+        finally:
+            conn.close()
+
+        # 2. 세션 임시 첨부파일 디렉토리 정리
+        temp_att_dir = os.path.join(DATA_DIR, "temp_attachments")
+        if os.path.exists(temp_att_dir):
+            try:
+                shutil.rmtree(temp_att_dir, ignore_errors=True)
+            except Exception:
+                pass
+        print("🛑 Utility Toolkit이 안전하게 종료되었습니다.")
+    except Exception as ex:
+        print(f"[Shutdown] 종료 정리 중 오류: {ex}")
+
+
 def main():
     print("🛠️ Utility Toolkit을 시작합니다 (모듈화 아키텍처 / 트레이 상주 모드)...")
-    tray_manager = TrayManager(BUNDLE_DIR, start_options)
+    tray_manager = TrayManager(BUNDLE_DIR, start_options, on_exit=app_cleanup)
     tray_manager.start()
 
 

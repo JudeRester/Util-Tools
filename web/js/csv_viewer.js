@@ -479,7 +479,10 @@ function renderCsvTable() {
             <th class="${sortClass}" data-col-idx="${idx}" ${widthStyle} onclick="onCsvHeaderClick(event, ${idx})" title="'${escapeHtml(header)}' 기준 정렬 (우측 경계선 드래그 시 너비 조절, 더블클릭 시 초기화)">
                 <div class="th-content">
                     <span class="th-title">${escapeHtml(header)}</span>
-                    <span class="th-sort-icon">${sortIcon}</span>
+                    <div class="th-actions">
+                        <span class="th-stats-btn" onclick="event.stopPropagation(); showColumnStats(${idx})" title="이 열의 수치/통계 요약 보기">Σ</span>
+                        <span class="th-sort-icon">${sortIcon}</span>
+                    </div>
                 </div>
                 <div class="col-resize-handle" onmousedown="startColResize(event, ${idx})" ondblclick="resetColWidth(event, ${idx})" title="드래그하여 너비 조절 (더블클릭 시 기본 맞춤)"></div>
             </th>
@@ -553,8 +556,8 @@ function onCsvHeaderClick(event, colIdx) {
         _csvResizingState.justResized = false;
         return;
     }
-    // 리사이즈 핸들을 직접 클릭했을 때도 정렬 방지
-    if (event.target.classList.contains('col-resize-handle')) {
+    // 리사이즈 핸들 또는 통계 버튼을 직접 클릭했을 때도 정렬 방지
+    if (event.target.classList.contains('col-resize-handle') || event.target.classList.contains('th-stats-btn')) {
         return;
     }
     sortCsvByColumn(colIdx);
@@ -833,5 +836,92 @@ async function downloadFilteredCsv() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    }
+}
+
+async function exportCsvToExcel() {
+    if (!csvState.headers || csvState.headers.length === 0) {
+        await showAppAlert('내보낼 데이터가 없습니다.', '알림', '⚠️');
+        return;
+    }
+
+    const rowsToExport = csvState.filteredRows;
+    const headers = csvState.headers;
+    const baseName = csvState.fileName ? csvState.fileName.replace(/\.[^/.]+$/, '') : 'export';
+    const exportName = `${baseName}.xlsx`;
+
+    if (window.eel && typeof eel.export_csv_to_excel === 'function') {
+        showToast('Excel 생성 중', '테이블 데이터를 Excel(.xlsx) 파일로 변환하고 있습니다...', '⏳', 1500);
+        try {
+            const res = await eel.export_csv_to_excel(headers, rowsToExport, exportName)();
+            if (res && res.status === 'success') {
+                logToConsole('Excel 파일 저장 완료', res.path);
+                showToast('Excel 저장 완료', `Excel 파일이 성공적으로 생성되었습니다! 📊\n(${res.path})`, '✅');
+            } else if (res && res.status === 'cancelled') {
+                // 사용자가 대화상자에서 취소
+            } else {
+                showToast('저장 실패', (res && res.message) || 'Excel 저장에 실패했습니다.', '⚠️');
+            }
+        } catch (e) {
+            showToast('오류 발생', e.message || String(e), '⚠️');
+        }
+    } else {
+        showToast('지원 불가', '현재 환경에서는 Excel 내보내기 백엔드 API를 사용할 수 없습니다.', '⚠️');
+    }
+}
+
+function showColumnStats(colIdx) {
+    if (colIdx < 0 || !csvState.headers || colIdx >= csvState.headers.length) return;
+
+    const colName = csvState.headers[colIdx];
+    const rows = csvState.filteredRows || [];
+    if (rows.length === 0) {
+        showToast('통계 알림', '데이터가 비어있습니다.', '⚠️');
+        return;
+    }
+
+    let numCount = 0;
+    let sum = 0;
+    let min = Infinity;
+    let max = -Infinity;
+    let emptyCount = 0;
+
+    rows.forEach(r => {
+        const val = r[colIdx];
+        if (val === null || val === undefined || String(val).trim() === '') {
+            emptyCount++;
+            return;
+        }
+        const cleanStr = String(val).replace(/,/g, '').trim();
+        const num = Number(cleanStr);
+        if (!isNaN(num) && cleanStr !== '') {
+            numCount++;
+            sum += num;
+            if (num < min) min = num;
+            if (num > max) max = num;
+        }
+    });
+
+    const totalRows = rows.length;
+    if (numCount > 0) {
+        const avg = sum / numCount;
+        const formattedSum = Number.isInteger(sum) ? sum.toLocaleString() : sum.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        const formattedAvg = avg.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        const formattedMin = Number.isInteger(min) ? min.toLocaleString() : min.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        const formattedMax = Number.isInteger(max) ? max.toLocaleString() : max.toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+        showToast(
+            `📊 [${colName}] 통계 요약`,
+            `합계: ${formattedSum}  |  평균: ${formattedAvg}\n최소: ${formattedMin}  |  최대: ${formattedMax}\n(수치 데이터: ${numCount.toLocaleString()}건 / 전체: ${totalRows.toLocaleString()}행)`,
+            '📈',
+            6000
+        );
+    } else {
+        showToast(
+            `📋 [${colName}] 컬럼 정보`,
+            `전체 행: ${totalRows.toLocaleString()}건  |  유효 데이터: ${(totalRows - emptyCount).toLocaleString()}건  |  빈값: ${emptyCount.toLocaleString()}건\n(텍스트/문자열 데이터 컬럼)`,
+            'ℹ️',
+            4000
+        );
     }
 }

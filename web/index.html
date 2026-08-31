@@ -284,6 +284,9 @@
                             <button class="mini-tool-btn primary" onclick="downloadFilteredCsv()" title="필터링된 CSV 파일 다운로드">
                                 <span>💾</span> CSV 다운로드
                             </button>
+                            <button class="mini-tool-btn success" onclick="exportCsvToExcel()" title="현재 테이블 데이터를 스타일링된 Excel(.xlsx) 파일로 내보내기">
+                                <span>📊</span> Excel 내보내기
+                            </button>
                         </div>
                     </div>
 
@@ -567,7 +570,7 @@
                         <div class="filter-item search-item">
                             <div class="redmine-search-box">
                                 <span class="search-icon">🔍</span>
-                                <input type="text" id="redmine-search-input" class="form-input" placeholder="일감 검색 (번호, 제목, 내용, 담당자)..." oninput="onRedmineFilterChange()">
+                                <input type="text" id="redmine-search-input" class="form-input" placeholder="일감 검색 (번호, 제목, 내용, 담당자)..." oninput="onRedmineSearchInput(this.value)">
                             </div>
                         </div>
                         <div class="filter-item checkbox-item">

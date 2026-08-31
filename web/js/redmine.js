@@ -1433,7 +1433,19 @@ function quickFilterByStat(type) {
     onRedmineFilterChange();
 }
 
+let redmineSearchDebounceTimer = null;
+
+function onRedmineSearchInput(val) {
+    clearTimeout(redmineSearchDebounceTimer);
+    redmineState.searchQuery = (val || '').trim();
+    redmineSearchDebounceTimer = setTimeout(() => {
+        onRedmineFilterChange();
+    }, 250);
+}
+
 function onRedmineFilterChange() {
+    clearTimeout(redmineSearchDebounceTimer);
+
     const projSelect = document.getElementById('redmine-project-filter');
     const statusSelect = document.getElementById('redmine-status-filter');
     const trackerSelect = document.getElementById('redmine-tracker-filter');

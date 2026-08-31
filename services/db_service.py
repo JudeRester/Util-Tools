@@ -474,6 +474,7 @@ def init_db():
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_thread_key ON emails(thread_key);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_date ON emails(date_str);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_created_at ON emails(created_at);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_sort ON emails(created_at DESC, date_str DESC);")
 
                 # 2. notes 테이블
                 conn.execute("""
@@ -491,6 +492,7 @@ def init_db():
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_created_at ON notes(created_at);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON notes(updated_at);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_pinned ON notes(is_pinned);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_sort ON notes(is_pinned DESC, updated_at DESC, created_at DESC);")
 
                 # 3. diagrams 테이블
                 conn.execute("""
@@ -644,6 +646,7 @@ def init_db():
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_issues_my ON redmine_issues(is_my_issue);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_issues_due ON redmine_issues(due_date);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_issues_updated ON redmine_issues(updated_on);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_issues_sort ON redmine_issues(updated_on DESC, id DESC);")
 
                 # 11. redmine_wikis 테이블 (프로젝트 위키 문서 로컬 캐시)
                 conn.execute("""
