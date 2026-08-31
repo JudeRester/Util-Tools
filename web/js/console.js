@@ -1,5 +1,7 @@
 /**
  * 콘솔 로그 출력 및 하단 스플리터(높이 조절기) 모듈
+ * - [📋 최근 실행 결과]: 가장 최근에 발생한 동작의 세부 데이터/결과 출력
+ * - [📜 시스템 로그]: 앱 실행 중 발생하는 모든 시스템 이벤트가 시간 순서대로 영구 누적 (지우기 버튼 클릭 시에만 초기화)
  */
 
 if (typeof window.escapeHtml !== 'function') {
@@ -14,24 +16,182 @@ if (typeof window.escapeHtml !== 'function') {
     };
 }
 
-function logToConsole(title, content) {
-    const consoleEl = document.getElementById('console-output');
-    if (!consoleEl) return;
-    const timestamp = new Date().toLocaleTimeString();
-    
-    let textContent = `[${timestamp}] ${title}\n`;
-    if (typeof content === 'object') {
-        textContent += JSON.stringify(content, null, 2);
+const consoleState = {
+    activeTab: 'result', // 'result' | 'logs'
+    lastResult: '기능 버튼을 클릭하면 여기에 최근 실행 결과가 표시됩니다.',
+    logs: [] // { id, time, title, content, level }
+};
+
+function switchConsoleTab(tab) {
+    consoleState.activeTab = tab;
+    const resultBtn = document.getElementById('console-tab-result-btn');
+    const logsBtn = document.getElementById('console-tab-logs-btn');
+    const resultView = document.getElementById('console-output');
+    const logsView = document.getElementById('console-logs-stream');
+
+    if (tab === 'result') {
+        if (resultBtn) resultBtn.classList.add('active');
+        if (logsBtn) logsBtn.classList.remove('active');
+        if (resultView) {
+            resultView.style.display = 'block';
+            resultView.classList.add('active');
+        }
+        if (logsView) {
+            logsView.style.display = 'none';
+            logsView.classList.remove('active');
+        }
     } else {
-        textContent += content;
+        if (resultBtn) resultBtn.classList.remove('active');
+        if (logsBtn) logsBtn.classList.add('active');
+        if (resultView) {
+            resultView.style.display = 'none';
+            resultView.classList.remove('active');
+        }
+        if (logsView) {
+            logsView.style.display = 'flex';
+            logsView.classList.add('active');
+            logsView.scrollTop = logsView.scrollHeight;
+        }
     }
-    
-    consoleEl.textContent = textContent;
-    consoleEl.scrollTop = 0;
+}
+
+function logToConsole(title, content, level = 'info') {
+    const timestamp = new Date().toLocaleTimeString();
+    const fullTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    let detailStr = '';
+    if (typeof content === 'object' && content !== null) {
+        try {
+            detailStr = JSON.stringify(content, null, 2);
+        } catch (e) {
+            detailStr = String(content);
+        }
+    } else {
+        detailStr = String(content !== undefined && content !== null ? content : '');
+    }
+
+    // 1. [최근 실행 결과] 뷰 업데이트
+    let textContent = `[${timestamp}] ${title}\n`;
+    if (detailStr) {
+        textContent += detailStr;
+    }
+    consoleState.lastResult = textContent;
+
+    const consoleEl = document.getElementById('console-output');
+    if (consoleEl) {
+        consoleEl.textContent = textContent;
+        consoleEl.scrollTop = 0;
+    }
+
+    // 2. [시스템 로그] 누적 스트림에 추가 (최대 1,000건까지 보존)
+    let logType = level;
+    const titleLower = (title || '').toLowerCase();
+    if (titleLower.includes('오류') || titleLower.includes('실패') || titleLower.includes('error') || titleLower.includes('fail')) {
+        logType = 'error';
+    } else if (titleLower.includes('경고') || titleLower.includes('warn') || titleLower.includes('주의')) {
+        logType = 'warn';
+    } else if (titleLower.includes('완료') || titleLower.includes('성공') || titleLower.includes('success')) {
+        logType = 'success';
+    }
+
+    const logItem = {
+        id: Date.now() + Math.random(),
+        time: fullTimeStr,
+        title: title || '실행',
+        content: detailStr,
+        level: logType
+    };
+
+    consoleState.logs.push(logItem);
+    if (consoleState.logs.length > 1000) {
+        consoleState.logs.shift();
+    }
+
+    // 뱃지 개수 갱신
+    const badge = document.getElementById('console-log-count-badge');
+    if (badge) {
+        badge.textContent = consoleState.logs.length.toLocaleString();
+    }
+
+    // 시스템 로그 스트림 DOM에 엘리먼트 추가
+    const logsStreamEl = document.getElementById('console-logs-stream');
+    if (logsStreamEl) {
+        const emptyMsg = logsStreamEl.querySelector('.console-log-empty');
+        if (emptyMsg) emptyMsg.remove();
+
+        const logRow = document.createElement('div');
+        logRow.className = `log-entry log-entry-${logType}`;
+        
+        let contentHtml = '';
+        if (detailStr) {
+            contentHtml = `<div class="log-entry-content">${escapeHtml(detailStr)}</div>`;
+        }
+
+        logRow.innerHTML = `
+            <div class="log-entry-header">
+                <span class="log-time">${escapeHtml(fullTimeStr)}</span>
+                <span class="log-title">${escapeHtml(title)}</span>
+            </div>
+            ${contentHtml}
+        `;
+
+        logsStreamEl.appendChild(logRow);
+
+        // 사용자가 로그 탭을 보고 있을 때 자동 최하단 스크롤
+        if (consoleState.activeTab === 'logs') {
+            logsStreamEl.scrollTop = logsStreamEl.scrollHeight;
+        }
+    }
 
     // 하단 로그창이 접혀있는 상태인 경우 우측 하단에 실시간 토스트 알림 팝업!
     if (isConsoleCollapsed) {
         showToast(title, content);
+    }
+}
+
+function clearConsole() {
+    if (consoleState.activeTab === 'result') {
+        consoleState.lastResult = '결과가 비워졌습니다.';
+        const consoleEl = document.getElementById('console-output');
+        if (consoleEl) {
+            consoleEl.textContent = '기능 버튼을 클릭하면 여기에 최근 실행 결과가 표시됩니다.';
+        }
+        showToast('실행 결과 초기화', '최근 실행 결과 창이 비워졌습니다.', '🧹', 2000);
+    } else {
+        consoleState.logs = [];
+        const logsStreamEl = document.getElementById('console-logs-stream');
+        if (logsStreamEl) {
+            logsStreamEl.innerHTML = '<div class="console-log-empty">시스템 로그가 비워졌습니다. 새로운 동작이 발생하면 계속 누적됩니다.</div>';
+        }
+        const badge = document.getElementById('console-log-count-badge');
+        if (badge) badge.textContent = '0';
+        showToast('시스템 로그 초기화', '누적된 시스템 로그가 모두 비워졌습니다.', '🧹', 2000);
+    }
+}
+
+async function copyConsoleOutput() {
+    let textToCopy = '';
+    if (consoleState.activeTab === 'result') {
+        const consoleEl = document.getElementById('console-output');
+        textToCopy = consoleEl ? consoleEl.textContent : '';
+    } else {
+        if (consoleState.logs.length === 0) {
+            showToast('복사 알림', '복사할 시스템 로그가 없습니다.', '⚠️');
+            return;
+        }
+        textToCopy = consoleState.logs.map(l => {
+            return `[${l.time}] ${l.title}${l.content ? '\n' + l.content : ''}`;
+        }).join('\n\n----------------------------------------\n\n');
+    }
+
+    if (textToCopy) {
+        try {
+            await navigator.clipboard.writeText(textToCopy);
+            const tabName = consoleState.activeTab === 'result' ? '최근 실행 결과' : '전체 시스템 로그';
+            showToast('복사 완료', `${tabName}가 클립보드에 복사되었습니다! 📋`, '✅');
+        } catch (e) {
+            showToast('복사 실패', String(e), '⚠️');
+        }
     }
 }
 
@@ -129,13 +289,6 @@ function removeToast(toast, immediate = false) {
 function showAppToast(message, type = 'info') {
     const title = type === 'success' ? '완료' : type === 'error' ? '오류' : type === 'warning' ? '경고' : '알림';
     showToast(title, message);
-}
-
-function clearConsole() {
-    const consoleEl = document.getElementById('console-output');
-    if (consoleEl) {
-        consoleEl.textContent = '로그가 초기화되었습니다.';
-    }
 }
 
 let isConsoleCollapsed = false;

@@ -647,6 +647,60 @@ body {
     font-weight: 600;
 }
 
+/* 콘솔 서브 탭 (실행 결과 / 시스템 로그) */
+.console-sub-tabs {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.console-sub-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.console-sub-tab:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.console-sub-tab.active {
+    color: #ffffff;
+    background: #4f46e5;
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(79, 70, 229, 0.35);
+}
+
+.console-count-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+}
+
+.console-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .console-toggle-btn {
     display: inline-flex;
     align-items: center;
@@ -675,11 +729,13 @@ body {
     padding: 2px 8px;
     border-radius: 4px;
     cursor: pointer;
+    transition: var(--transition);
 }
 
 .clear-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--text-primary);
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.4);
 }
 
 .console-body {
@@ -691,6 +747,76 @@ body {
     overflow-y: auto;
     white-space: pre-wrap;
     user-select: text;
+}
+
+/* 시스템 로그 누적 스트림 */
+.console-log-stream {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+    font-size: 0.82rem;
+}
+
+.console-log-empty {
+    color: var(--text-secondary);
+    font-style: italic;
+    font-size: 0.82rem;
+    padding: 8px 0;
+}
+
+.log-entry {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-left: 3px solid #6366f1;
+    border-radius: 4px;
+    padding: 6px 10px;
+    line-height: 1.4;
+    transition: background 0.15s ease;
+    flex-shrink: 0;
+}
+
+.log-entry:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.log-entry-warn {
+    border-left-color: #f59e0b;
+}
+
+.log-entry-error {
+    border-left-color: #ef4444;
+}
+
+.log-entry-success {
+    border-left-color: #10b981;
+}
+
+.log-entry-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.log-time {
+    color: var(--text-secondary);
+    font-size: 0.74rem;
+    font-weight: 500;
+}
+
+.log-title {
+    color: #e2e8f0;
+}
+
+.log-entry-content {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.06);
+    color: #9cdcfe;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 0.8rem;
 }
 
 /* Edit Shortcuts Button */

@@ -1165,18 +1165,38 @@
             <div class="resizer-handle"></div>
         </div>
 
-        <!-- 하단 결과 및 출력 콘솔 -->
+        <!-- 하단 결과 및 출력 콘솔 (실행 결과 / 시스템 로그 분리) -->
         <footer id="app-console" class="app-console">
             <div class="console-header">
                 <div class="console-title-group">
-                    <span>실행 결과 / 로그</span>
-                    <button id="console-toggle-btn" class="mini-tool-btn console-toggle-btn" onclick="toggleConsole()" title="로그창 접기/펼치기">
+                    <div class="console-sub-tabs">
+                        <button type="button" id="console-tab-result-btn" class="console-sub-tab active" onclick="switchConsoleTab('result')" title="최근 실행한 동작의 세부 결과 보기">
+                            <span>📋 최근 실행 결과</span>
+                        </button>
+                        <button type="button" id="console-tab-logs-btn" class="console-sub-tab" onclick="switchConsoleTab('logs')" title="시간 순서대로 누적되는 전체 시스템 로그 보기">
+                            <span>📜 시스템 로그</span>
+                            <span id="console-log-count-badge" class="console-count-badge">0</span>
+                        </button>
+                    </div>
+                    <button type="button" id="console-toggle-btn" class="mini-tool-btn console-toggle-btn" onclick="toggleConsole()" title="로그창 접기/펼치기">
                         <span id="console-toggle-icon">🔽</span> <span id="console-toggle-text">접기</span>
                     </button>
                 </div>
-                <button class="clear-btn" onclick="clearConsole()">지우기</button>
+                <div class="console-actions">
+                    <button type="button" class="mini-tool-btn" onclick="copyConsoleOutput()" title="현재 화면 내용 클립보드 복사">
+                        <span>📋</span> 복사
+                    </button>
+                    <button type="button" class="clear-btn" onclick="clearConsole()" title="현재 탭 내용 초기화/지우기">
+                        <span>🧹</span> 지우기
+                    </button>
+                </div>
             </div>
-            <pre id="console-output" class="console-body">기능 버튼을 클릭하면 여기에 결과가 표시됩니다.</pre>
+            <!-- 최근 실행 결과 뷰 -->
+            <pre id="console-output" class="console-body console-view active">기능 버튼을 클릭하면 여기에 최근 실행 결과가 표시됩니다.</pre>
+            <!-- 누적 시스템 로그 스트림 뷰 -->
+            <div id="console-logs-stream" class="console-body console-view console-log-stream" style="display: none;">
+                <div class="console-log-empty">시스템 로그가 여기에 시간 순서대로 누적됩니다. [지우기]를 누르기 전까지 유지됩니다.</div>
+            </div>
         </footer>
     </div>
 
