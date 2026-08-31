@@ -32,6 +32,7 @@ import services.markdown_service
 import services.email_service
 import services.mock_data_service
 import services.redmine_service
+import services.image_service
 
 # 3. 코어 트레이 관리자 모듈 로드
 from core.tray import TrayManager

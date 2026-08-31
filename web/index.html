@@ -91,6 +91,13 @@
                                 <span class="item-desc">EML 저장, 분류 & AI 검색</span>
                             </div>
                         </button>
+                        <button type="button" class="tab-dropdown-item" data-tab="slicer" onclick="selectDropdownTab('slicer', '✂️', '이미지 슬라이서', event)">
+                            <span class="item-icon">✂️</span>
+                            <div class="item-text">
+                                <span class="item-title">이미지 슬라이서</span>
+                                <span class="item-desc">경계선 분할, 다중 자르기 & ZIP 저장</span>
+                            </div>
+                        </button>
                     </div>
                 </div>
                 <button class="header-ai-btn" onclick="openAiSearchModal()" title="AI 문맥 검색 & 의미 유사도 비교 (단축키: Ctrl+K)">
@@ -1158,6 +1165,98 @@
                     </div>
                 </div>
             </section>
+
+            <!-- 14. 이미지 슬라이서 스튜디오 탭 -->
+            <section id="tab-slicer" class="tab-pane">
+                <div class="slicer-container">
+                    <!-- 상단 툴바 -->
+                    <div class="slicer-toolbar">
+                        <div class="slicer-toolbar-left">
+                            <button type="button" class="mini-tool-btn primary" onclick="openSlicerFileDialog()" title="로컬 이미지 파일 선택 열기">
+                                <span>📂</span> 파일 열기
+                            </button>
+                            <div class="slicer-tool-group">
+                                <button type="button" class="mini-tool-btn slicer-tool-btn active" data-mode="line_h" onclick="setSlicerToolMode('line_h')" title="가로 절단선 추가 모드 (클릭하여 수평 분할선 배치)">
+                                    <span>➕ 가로선</span>
+                                </button>
+                                <button type="button" class="mini-tool-btn slicer-tool-btn" data-mode="line_v" onclick="setSlicerToolMode('line_v')" title="세로 절단선 추가 모드 (클릭하여 수직 분할선 배치)">
+                                    <span>➕ 세로선</span>
+                                </button>
+                            </div>
+                            <div class="slicer-tool-group batch-group">
+                                <button type="button" class="mini-tool-btn" onclick="promptBatchLinesEveryPx()" title="지정한 px 간격으로 가로 절단선 일괄 자동 배치 (예: 매 500px)">
+                                    <span>📐</span> 고정 px 일괄
+                                </button>
+                                <button type="button" class="mini-tool-btn" onclick="promptEqualSplit()" title="이미지를 N등분으로 균등 분할">
+                                    <span>🔢</span> N등분 일괄
+                                </button>
+                                <button type="button" class="mini-tool-btn" onclick="promptGridSplit()" title="M행 x N열 바둑판 그리드 일괄 분할">
+                                    <span>🔲</span> 그리드 분할
+                                </button>
+                                <button type="button" class="mini-tool-btn" onclick="autoDetectSmartGaps()" title="콘텐츠 사이의 수평 단색 여백을 자동 감지하여 절단선 일괄 배치">
+                                    <span>🧠</span> 여백 감지
+                                </button>
+                            </div>
+                            <button type="button" class="mini-tool-btn danger" onclick="clearAllCutLines()" title="모든 절단선 삭제">
+                                <span>🧹</span> 선 초기화
+                            </button>
+                        </div>
+                        <div class="slicer-toolbar-right">
+                            <div class="slicer-zoom-group">
+                                <button type="button" class="mini-tool-btn icon-only" onclick="resetSlicerZoom()" title="100% 원본 배율로 복원">1:1</button>
+                                <button type="button" class="mini-tool-btn icon-only" onclick="fitSlicerZoomToContainer()" title="화면 크기에 맞춤">↔️</button>
+                                <span id="slicer-zoom-indicator" class="slicer-zoom-indicator">100%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 메인 작업 영역 (좌: 캔버스 뷰포트, 우: 조각 갤러리 & 내보내기) -->
+                    <div class="slicer-main-layout">
+                        <div class="slicer-canvas-area">
+                            <div id="slicer-canvas-wrapper" class="slicer-canvas-wrapper">
+                                <!-- 빈 상태 플레이스홀더 / 드롭존 -->
+                                <div id="slicer-drop-zone" class="slicer-drop-zone" onclick="openSlicerFileDialog()">
+                                    <div class="drop-icon">✂️</div>
+                                    <div class="drop-title">이미지를 여기로 드래그 앤 드롭하거나 클릭하여 선택하세요</div>
+                                    <div class="drop-desc">클립보드 이미지 붙여넣기(<b>Ctrl + V</b>)도 지원됩니다 (PNG, JPG, WebP, GIF)</div>
+                                </div>
+                                <!-- 메인 인터랙티브 캔버스 -->
+                                <canvas id="slicer-canvas" class="slicer-canvas" style="display: none;"></canvas>
+                            </div>
+                            <!-- 하단 상태 바 -->
+                            <div class="slicer-status-bar">
+                                <div id="slicer-image-info" class="slicer-image-info">
+                                    <span>✂️ 이미지를 불러와 분할선을 추가하세요</span>
+                                </div>
+                                <div class="slicer-status-help">
+                                    <span>💡 클릭: 선 추가 | 선 드래그: 위치 이동 | Del: 선택선 삭제 | 휠: 확대/축소 | 우클릭/스페이스바: 화면 이동</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 우측 조각 갤러리 & 내보내기 패널 -->
+                        <div class="slicer-sidebar-panel">
+                            <div class="slicer-sidebar-header">
+                                <div class="slicer-sidebar-title">
+                                    <span>🖼️ 분할된 조각</span>
+                                    <span id="slicer-slice-count-badge" class="slicer-count-badge">0개 조각</span>
+                                </div>
+                                <div class="slicer-export-btn-group">
+                                    <button type="button" class="mini-tool-btn" onclick="saveSlicesToFolder()" title="선택한 로컬 폴더에 모든 조각 일괄 파일 저장">
+                                        <span>📂</span> 폴더 저장
+                                    </button>
+                                    <button type="button" class="mini-tool-btn primary" onclick="exportSlicesAsZip()" title="모든 조각을 단일 ZIP 파일로 압축 다운로드">
+                                        <span>💾</span> ZIP 다운로드
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="slicer-gallery-grid" class="slicer-gallery-grid">
+                                <div class="slicer-empty-gallery">절단선을 추가하면 여기에 잘릴 조각 썸네일과 다운로드 버튼이 표시됩니다.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
 
         <!-- 콘솔 높이 드래그 조절 바 -->
@@ -1925,6 +2024,7 @@
     <script src="js/email_viewer.js"></script>
     <script src="js/redmine.js"></script>
     <script src="js/backup.js"></script>
+    <script src="js/image_slicer.js"></script>
     <script src="js/ai_search.js"></script>
     <script src="js/app.js"></script>
 </body>

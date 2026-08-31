@@ -123,6 +123,8 @@ function initTabOnDemand(tabName) {
         // 이미 로드된 탭으로 복귀 시 화면 재개(Resume)
         if (tabName === 'mermaid' && typeof resumeMermaidDiagram === 'function') {
             resumeMermaidDiagram();
+        } else if (tabName === 'slicer' && typeof renderSlicerCanvas === 'function') {
+            renderSlicerCanvas();
         }
         return;
     }
@@ -166,6 +168,9 @@ function initTabOnDemand(tabName) {
             break;
         case 'redmine':
             if (typeof initRedmineTab === 'function') initRedmineTab();
+            break;
+        case 'slicer':
+            if (typeof initImageSlicer === 'function') initImageSlicer();
             break;
     }
 }

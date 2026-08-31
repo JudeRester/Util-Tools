@@ -7647,6 +7647,365 @@ input[type="checkbox"] {
     color: #fca5a5;
 }
 
+/* ==========================================
+ * 15. 이미지 슬라이서 스튜디오 (Image Slicer Studio)
+ * ========================================== */
+
+.slicer-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    gap: 10px;
+    box-sizing: border-box;
+    padding: 2px 0;
+}
+
+.slicer-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 6px 12px;
+    gap: 10px;
+    flex-wrap: wrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.slicer-toolbar-left,
+.slicer-toolbar-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.slicer-tool-group {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 2px;
+    gap: 3px;
+}
+
+.slicer-tool-group.batch-group {
+    background: rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.25);
+}
+
+.slicer-tool-btn.active {
+    background: var(--accent-color) !important;
+    color: #ffffff !important;
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(79, 70, 229, 0.4);
+}
+
+.slicer-zoom-group {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 2px 6px;
+    gap: 4px;
+}
+
+.slicer-zoom-indicator {
+    font-size: 0.76rem;
+    font-family: monospace;
+    font-weight: 700;
+    color: #38bdf8;
+    min-width: 44px;
+    text-align: center;
+}
+
+.slicer-main-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 12px;
+    flex: 1;
+    min-height: 0;
+    height: calc(100% - 52px);
+}
+
+@media (max-width: 1024px) {
+    .slicer-main-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 220px;
+    }
+}
+
+/* 캔버스 뷰포트 영역 */
+.slicer-canvas-area {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    height: 100%;
+    min-height: 0;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.slicer-canvas-wrapper {
+    flex: 1;
+    position: relative;
+    background: #090d16;
+    background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 20px 20px;
+    overflow: hidden;
+    min-height: 0;
+    user-select: none;
+}
+
+.slicer-canvas-wrapper.drag-over {
+    background-color: rgba(99, 102, 241, 0.15);
+    outline: 2px dashed #6366f1;
+    outline-offset: -8px;
+}
+
+.slicer-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.slicer-drop-zone {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 36px 24px;
+    max-width: 500px;
+    width: 85%;
+    text-align: center;
+    background: rgba(15, 23, 42, 0.6);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.slicer-drop-zone:hover {
+    border-color: var(--accent-color);
+    background: rgba(99, 102, 241, 0.1);
+    transform: translate(-50%, -50%) scale(1.01);
+}
+
+.slicer-drop-zone .drop-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+}
+
+.slicer-drop-zone .drop-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.slicer-drop-zone .drop-desc {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.slicer-status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #0b0f19;
+    border-top: 1px solid var(--border-color);
+    padding: 6px 14px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.slicer-image-info {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.slicer-file-badge {
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+.slicer-res-badge {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    font-weight: 700;
+    font-family: monospace;
+}
+
+.slicer-status-help {
+    font-size: 0.74rem;
+    color: #94a3b8;
+}
+
+/* 우측 슬라이스 조각 갤러리 패널 */
+.slicer-sidebar-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    height: 100%;
+    min-height: 0;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.slicer-sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.02);
+    flex-shrink: 0;
+}
+
+.slicer-sidebar-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.slicer-count-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 10px;
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+}
+
+.slicer-export-btn-group {
+    display: inline-flex;
+    gap: 6px;
+}
+
+.slicer-gallery-grid {
+    flex: 1;
+    padding: 12px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+}
+
+.slicer-empty-gallery {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.5;
+    padding: 20px;
+    font-style: italic;
+}
+
+.slice-card {
+    display: flex;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 8px;
+    padding: 8px;
+    gap: 10px;
+    align-items: center;
+    transition: var(--transition);
+}
+
+.slice-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(99, 102, 241, 0.4);
+    transform: translateY(-1px);
+}
+
+.slice-card-thumb-wrap {
+    position: relative;
+    width: 80px;
+    height: 60px;
+    background: #020617;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.slice-thumb-canvas {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.slice-num-tag {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    background: rgba(15, 23, 42, 0.85);
+    color: #38bdf8;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.slice-card-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.slice-card-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.slice-card-res {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    font-family: monospace;
+}
+
+.slice-card-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+}
+
 
 
 
