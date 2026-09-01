@@ -28,14 +28,21 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 
 ---
 
-## 📖 상세 기술 문서 (Architecture & Technical Docs)
+## 📖 상세 기술 문서 (Architecture & Deep-Dive Technical Docs)
 
-프로젝트의 핵심 백엔드 아키텍처, 데이터베이스 스키마 및 대용량 처리 엔진에 대한 상세 기술 문서는 [`docs/`](docs/) 디렉토리에 분리되어 체계적으로 관리됩니다:
+각 기능별 핵심 백엔드 아키텍처, 알고리즘, 데이터베이스 스키마 및 세부 구현 명세는 [`docs/`](docs/) 디렉토리의 전용 기술 문서에서 체계적으로 관리됩니다:
 
-| 문서명 | 주요 다루는 내용 | 바로가기 링크 |
+| 문서명 | 주요 다루는 기술 영역 및 아키텍처 | 바로가기 링크 |
 | :--- | :--- | :--- |
 | **🗄️ Database Architecture & Schema** | • **중앙 SQLite DB(`data/app.db`) 13개 테이블 전체 ERD & 스키마 명세**<br>• WAL 모드 및 고성능 PRAGMA 최적화, 인덱스 커버리지, 파일 기반 JSON 설정 | [📖 `docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) |
+| **🦊 Redmine Integration** | • **Redmine REST API 연동, 일감/위키 대시보드, 0.01초 SQLite 오프라인 캐시**<br>• **주요 관심 프로젝트(⭐ 즐겨찾기) 우선순위 필터링**, 백그라운드 폴링 & 트레이 알림 | [📖 `docs/REDMINE_INTEGRATION.md`](docs/REDMINE_INTEGRATION.md) |
 | **📧 Email Archive System** | • **3,100+건 대용량 이메일 아카이브 & 대화별 스레드 타임라인 뷰어**<br>• 비파괴적 제목 정규화 알고리즘, 초경량 청크 페이징 & 지연 로딩 아키텍처 | [📖 `docs/EMAIL_ARCHIVE.md`](docs/EMAIL_ARCHIVE.md) |
+| **🧠 AI Semantic Search Engine** | • **로컬 딥러닝 임베딩 신경망(`intfloat/multilingual-e5-small` ONNX)**<br>• 코사인 유사도 연산, 크로스 도메인 증분 벡터 캐시, `Ctrl+K` 검색 & 문장 비교 도구 | [📖 `docs/AI_SEMANTIC_SEARCH.md`](docs/AI_SEMANTIC_SEARCH.md) |
+| **🎲 Mock Data Studio** | • **3-Pass 복합 가상 데이터 생성 파이프라인 (독립 ➔ 로마자/이메일 ➔ 종속 매핑)**<br>• 한국어 로마자 표기법 변환, 커스텀 서식 스키마 관리 및 엑셀(.xlsx)/CSV 고속 스트리밍 | [📖 `docs/MOCK_DATA_STUDIO.md`](docs/MOCK_DATA_STUDIO.md) |
+| **✂️ Image Slicer Studio** | • **Pillow 고속 이미지 분할 파이프라인 & 인터랙티브 HTML5 캔버스**<br>• 다중 절단선, 자유 경계 박스, 고정 px, 균등 N등분, 스마트 여백 자동 감지 & ZIP 패킹 | [📖 `docs/IMAGE_SLICER.md`](docs/IMAGE_SLICER.md) |
+| **📊 Data & Document Viewers** | • **CSV/TSV 스마트 뷰어** (인코딩/구분자 자동 감지, MD/JSON/SQL 변환)<br>• **Markdown Studio** (GitHub Alerts, 양방향 태스크 동기화, TOC) & **Mermaid 다이어그램** | [📖 `docs/DATA_VIEWERS.md`](docs/DATA_VIEWERS.md) |
+| **💾 Zero-Memory Backup & Restore** | • **Zero-Memory Python 디스크 직접 스트리밍 아키텍처** (브라우저 메모리 0MB 소모)<br>• 90% 압축 ZIP 포맷, 2대 복원 모드(Merge vs Replace) & SQLite 원자적 일괄 주입 | [📖 `docs/BACKUP_AND_RESTORE.md`](docs/BACKUP_AND_RESTORE.md) |
+| **🛠️ Core System & Utilities** | • **무창(Windowless) 런처(`run.pyw`), pystray 시스템 트레이, WorkingSet 메모리 자동 회수**<br>• Google Calendar/iCal 동기화, JS 샌드박스 런너, 빠른 실행 & 폴더 바로가기 | [📖 `docs/CORE_AND_UTILITIES.md`](docs/CORE_AND_UTILITIES.md) |
 
 ---
 
@@ -51,9 +58,16 @@ D:\python
 ├── requirements.txt            # 필수 Python 패키지 목록
 ├── utiltools.ico               # 애플리케이션 & 시스템 트레이 아이콘
 │
-├── docs/                       # [기술 문서] 아키텍처 및 상세 명세서
+├── docs/                       # [기술 문서] 9대 기능별 상세 아키텍처 및 구현 명세서
 │   ├── DATABASE_SCHEMA.md      # 중앙 SQLite DB(app.db) 13개 테이블 ERD 및 상세 스키마 명세
-│   └── EMAIL_ARCHIVE.md        # 대용량 이메일 아카이브 & 대화 스레드 타임라인 아키텍처
+│   ├── REDMINE_INTEGRATION.md  # Redmine REST API 연동, 일감/위키, 주요 프로젝트⭐ 우선순위
+│   ├── EMAIL_ARCHIVE.md        # 대용량 이메일 아카이브 & 대화 스레드 타임라인 아키텍처
+│   ├── AI_SEMANTIC_SEARCH.md   # 로컬 ONNX 신경망 임베딩 및 AI 시맨틱 검색 엔진
+│   ├── MOCK_DATA_STUDIO.md     # 3-Pass 복합 가상 데이터 생성기 & 엑셀/CSV 스트리밍
+│   ├── IMAGE_SLICER.md         # Pillow 이미지 슬라이서, 다중 절단선 & 스마트 여백 감지
+│   ├── DATA_VIEWERS.md         # CSV/TSV 스마트 뷰어, Markdown Studio & Mermaid 렌더러
+│   ├── BACKUP_AND_RESTORE.md   # Zero-Memory 백엔드 스트리밍 백업 & 원자적 복원 엔진
+│   └── CORE_AND_UTILITIES.md   # 시스템 트레이, 메모리 자동 회수, 캘린더 & JS 샌드박스
 │
 ├── data/                       # [사용자 데이터] SQLite 중앙 데이터베이스 (Git 제외)
 │   └── app.db                  # emails, notes, diagrams, redmine, quick_launch 등 13개 테이블
