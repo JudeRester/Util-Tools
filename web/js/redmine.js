@@ -11,6 +11,7 @@ const redmineState = {
     projectMembers: {},
     activeSubTab: 'issues', // 'issues' | 'wiki' | 'config'
     selectedProjectId: null,
+    filterFavoriteProjectsOnly: false,
     filterMyOnly: false,
     filterAssignee: '',
     filterStatusId: null,
@@ -286,25 +287,67 @@ function renderProjectDropdowns() {
     const wikiProjSelect = document.getElementById('redmine-wiki-project-filter');
     const modalProjSelect = document.getElementById('redmine-create-project');
 
-    const options = [
-        '<option value="">전체 프로젝트</option>',
-        ...redmineState.projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`)
-    ].join('');
+    const favProjects = redmineState.projects.filter(p => p.is_favorite == 1);
+    const otherProjects = redmineState.projects.filter(p => p.is_favorite != 1);
 
-    if (projSelect) projSelect.innerHTML = options;
+    // 1. 일감 필터 드롭다운 옵션 생성
+    let filterOptions = '<option value="">전체 프로젝트</option>';
+    if (favProjects.length > 0) {
+        filterOptions += `<optgroup label="⭐ 주요 관심 프로젝트 (${favProjects.length})">`;
+        filterOptions += favProjects.map(p => `<option value="${p.id}">⭐ ${escapeHtml(p.name)}</option>`).join('');
+        filterOptions += `</optgroup>`;
+        if (otherProjects.length > 0) {
+            filterOptions += `<optgroup label="📁 전체 프로젝트 (${otherProjects.length})">`;
+            filterOptions += otherProjects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+            filterOptions += `</optgroup>`;
+        }
+    } else {
+        filterOptions += redmineState.projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+    }
+
+    if (projSelect) {
+        const curVal = projSelect.value;
+        projSelect.innerHTML = filterOptions;
+        if (curVal) projSelect.value = curVal;
+    }
     
+    // 2. 위키 프로젝트 드롭다운 옵션 생성
     if (wikiProjSelect) {
-        const wikiOptions = redmineState.projects.map(p => 
-            `<option value="${p.identifier || p.id}">${escapeHtml(p.name)}</option>`
-        ).join('');
+        let wikiOptions = '';
+        if (favProjects.length > 0) {
+            wikiOptions += `<optgroup label="⭐ 주요 관심 프로젝트 (${favProjects.length})">`;
+            wikiOptions += favProjects.map(p => `<option value="${p.identifier || p.id}">⭐ ${escapeHtml(p.name)}</option>`).join('');
+            wikiOptions += `</optgroup>`;
+            if (otherProjects.length > 0) {
+                wikiOptions += `<optgroup label="📁 전체 프로젝트 (${otherProjects.length})">`;
+                wikiOptions += otherProjects.map(p => `<option value="${p.identifier || p.id}">${escapeHtml(p.name)}</option>`).join('');
+                wikiOptions += `</optgroup>`;
+            }
+        } else {
+            wikiOptions = redmineState.projects.map(p => 
+                `<option value="${p.identifier || p.id}">${escapeHtml(p.name)}</option>`
+            ).join('');
+        }
         wikiProjSelect.innerHTML = wikiOptions || '<option value="">등록된 프로젝트 없음</option>';
     }
 
+    // 3. 일감 등록 모달 드롭다운 옵션 생성
     if (modalProjSelect) {
-        modalProjSelect.innerHTML = [
-            '<option value="">프로젝트 선택...</option>',
-            ...redmineState.projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`)
-        ].join('');
+        let modalOptions = '<option value="">프로젝트 선택...</option>';
+        if (favProjects.length > 0) {
+            modalOptions += `<optgroup label="⭐ 주요 관심 프로젝트">`;
+            modalOptions += favProjects.map(p => `<option value="${p.id}">⭐ ${escapeHtml(p.name)}</option>`).join('');
+            modalOptions += `</optgroup>`;
+            if (otherProjects.length > 0) {
+                modalOptions += `<optgroup label="📁 전체 프로젝트">`;
+                modalOptions += otherProjects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+                modalOptions += `</optgroup>`;
+            }
+        } else {
+            modalOptions += redmineState.projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+        }
+
+        modalProjSelect.innerHTML = modalOptions;
 
         modalProjSelect.onchange = () => {
             const pId = modalProjSelect.value ? parseInt(modalProjSelect.value, 10) : null;
@@ -381,7 +424,8 @@ async function loadRedmineIssues() {
                 redmineState.filterPriorityId,
                 redmineState.searchQuery,
                 redmineState.filterAssignee,
-                !!redmineState.quickFilterDueToday
+                !!redmineState.quickFilterDueToday,
+                !!redmineState.filterFavoriteProjectsOnly
             )();
 
             if (res && res.status === 'success') {
@@ -497,6 +541,9 @@ function renderIssueCards(issues) {
             ? `<span class="issue-assignee unassigned" title="담당자가 지정되지 않은 일감입니다">❓ 미할당</span>`
             : `<span class="issue-assignee ${iss.is_my_issue ? 'my' : ''}">👤 ${escapeHtml(asgName)}</span>`;
 
+        const pObj = redmineState.projects.find(p => p.id === iss.project_id);
+        const isFav = pObj && pObj.is_favorite == 1;
+
         return `
             <div class="redmine-issue-card ${isSelected ? 'active' : ''}" onclick="selectRedmineIssue(${iss.id})">
                 <div class="issue-card-header">
@@ -508,7 +555,12 @@ function renderIssueCards(issues) {
                 </div>
                 <div class="issue-card-title">${escapeHtml(iss.subject)}</div>
                 <div class="issue-card-meta">
-                    <span class="issue-project">📁 ${escapeHtml(iss.project_name || '')}</span>
+                    <span class="issue-project" title="프로젝트: ${escapeHtml(iss.project_name || '')}">
+                        📁 ${escapeHtml(iss.project_name || '')}
+                        <button type="button" class="issue-proj-star-btn ${isFav ? 'favorited' : ''}" data-project-id="${iss.project_id || ''}" onclick="toggleProjectFavoriteInline(${iss.project_id}, event)" title="${isFav ? '주요 관심 프로젝트에서 해제' : '주요 관심 프로젝트(⭐)로 등록'}">
+                            ${isFav ? '⭐' : '☆'}
+                        </button>
+                    </span>
                     ${assigneeBadge}
                 </div>
                 <div class="issue-card-progress-bar">
@@ -721,12 +773,22 @@ function renderIssueDetail(iss) {
         ? `<div class="detail-description-body">${formatRedmineContent(iss.description)}</div>`
         : `<div class="detail-description-body empty">설명이 등록되지 않았습니다.</div>`;
 
+    const pObj = redmineState.projects.find(p => p.id === projectId);
+    const isFav = pObj && pObj.is_favorite == 1;
+
     container.innerHTML = `
         <div class="issue-detail-header">
             <div class="detail-top-row">
                 <span class="detail-issue-id">#${iss.id}</span>
                 <span class="detail-tracker">${escapeHtml(trackerName)}</span>
-                <span class="detail-project">📁 ${escapeHtml(projectName)}</span>
+                <span class="detail-project">
+                    📁 ${escapeHtml(projectName)}
+                    ${projectId ? `
+                        <button type="button" id="detail-proj-star-btn" class="detail-proj-star-btn ${isFav ? 'favorited' : ''}" data-project-id="${projectId}" onclick="toggleProjectFavoriteInline(${projectId}, event)" title="${isFav ? '주요 관심 프로젝트에서 해제' : '주요 관심 프로젝트(⭐)로 등록'}">
+                            ${isFav ? '<span>⭐</span> 주요 프로젝트' : '<span>☆</span> 주요 프로젝트 등록'}
+                        </button>
+                    ` : ''}
+                </span>
                 ${webUrl ? `<a href="${escapeHtml(webUrl)}" target="_blank" class="redmine-web-link" title="Redmine 웹페이지에서 열기">🔗 Redmine 웹 ↗</a>` : ''}
             </div>
             <h2 class="detail-subject">${escapeHtml(iss.subject)}</h2>
@@ -1468,4 +1530,178 @@ function onRedmineFilterChange() {
     }
 
     loadRedmineIssues();
+}
+
+// ==========================================
+// 8. 주요 관심 프로젝트 (⭐ 즐겨찾기) 관리 & 우선 필터링
+// ==========================================
+
+let favModalSearchQuery = '';
+let tempFavProjectIds = new Set();
+
+function toggleRedmineFavoriteProjectsFilter() {
+    const favProjects = redmineState.projects.filter(p => p.is_favorite == 1);
+    const favBtn = document.getElementById('redmine-filter-fav-btn');
+
+    if (!redmineState.filterFavoriteProjectsOnly) {
+        if (favProjects.length === 0) {
+            showToast('주요 프로젝트 설정 필요', '아직 지정된 주요 관심 프로젝트가 없습니다. 관리 창에서 ⭐를 선택해 주세요.', '⭐', 3500);
+            openRedmineFavoriteProjectsModal();
+            return;
+        }
+        redmineState.filterFavoriteProjectsOnly = true;
+        if (favBtn) favBtn.classList.add('active');
+        
+        // 특정 단일 프로젝트가 선택되어 있었다면 '전체 프로젝트'로 리셋하여 주요 프로젝트 전체 모아보기
+        const projSelect = document.getElementById('redmine-project-filter');
+        if (projSelect && projSelect.value) {
+            projSelect.value = '';
+            redmineState.selectedProjectId = null;
+        }
+        showToast('주요 프로젝트 필터링', `⭐ 주요 관심 프로젝트 (${favProjects.length}개) 일감을 우선 조회합니다.`, '⭐', 2500);
+    } else {
+        redmineState.filterFavoriteProjectsOnly = false;
+        if (favBtn) favBtn.classList.remove('active');
+    }
+
+    onRedmineFilterChange();
+}
+
+function openRedmineFavoriteProjectsModal() {
+    tempFavProjectIds = new Set(redmineState.projects.filter(p => p.is_favorite == 1).map(p => p.id));
+    favModalSearchQuery = '';
+    const searchInput = document.getElementById('redmine-fav-proj-search');
+    if (searchInput) searchInput.value = '';
+    renderFavProjectsModalList();
+    const modal = document.getElementById('redmine-fav-projects-modal');
+    if (modal) modal.classList.add('show');
+}
+
+function closeRedmineFavoriteProjectsModal() {
+    const modal = document.getElementById('redmine-fav-projects-modal');
+    if (modal) modal.classList.remove('show');
+}
+
+function onRedmineFavProjSearchInput(query) {
+    favModalSearchQuery = (query || '').toLowerCase().trim();
+    renderFavProjectsModalList();
+}
+
+function renderFavProjectsModalList() {
+    const listContainer = document.getElementById('redmine-fav-projects-list');
+    const badgeEl = document.getElementById('fav-projects-count-badge');
+    if (!listContainer) return;
+
+    const filtered = redmineState.projects.filter(p => {
+        if (!favModalSearchQuery) return true;
+        const name = (p.name || '').toLowerCase();
+        const ident = (p.identifier || '').toLowerCase();
+        return name.includes(favModalSearchQuery) || ident.includes(favModalSearchQuery);
+    });
+
+    if (badgeEl) {
+        badgeEl.textContent = `총 ${tempFavProjectIds.size}개 프로젝트 선택됨`;
+    }
+
+    if (filtered.length === 0) {
+        listContainer.innerHTML = `<div class="fav-proj-empty" style="grid-column: 1/-1; text-align: center; padding: 20px; color: #94a3b8;">일치하는 프로젝트가 없습니다.</div>`;
+        return;
+    }
+
+    listContainer.innerHTML = filtered.map(p => {
+        const isChecked = tempFavProjectIds.has(p.id);
+        return `
+            <div class="fav-proj-card ${isChecked ? 'selected' : ''}" onclick="toggleFavProjectModalItem(${p.id})">
+                <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleFavProjectModalItem(${p.id})">
+                <span class="fav-star-icon">${isChecked ? '⭐' : '☆'}</span>
+                <div class="fav-proj-info">
+                    <span class="fav-proj-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</span>
+                    <span class="fav-proj-sub">${escapeHtml(p.identifier || '')}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function toggleFavProjectModalItem(id) {
+    if (tempFavProjectIds.has(id)) {
+        tempFavProjectIds.delete(id);
+    } else {
+        tempFavProjectIds.add(id);
+    }
+    renderFavProjectsModalList();
+}
+
+function batchSelectAllFavProjects(selectAll) {
+    if (selectAll) {
+        tempFavProjectIds = new Set(redmineState.projects.map(p => p.id));
+    } else {
+        tempFavProjectIds.clear();
+    }
+    renderFavProjectsModalList();
+}
+
+async function saveRedmineFavoriteProjectsFromModal() {
+    try {
+        const ids = Array.from(tempFavProjectIds);
+        if (window.eel && typeof eel.set_redmine_favorite_projects === 'function') {
+            await eel.set_redmine_favorite_projects(ids)();
+        }
+        // 로컬 상태 동기화
+        redmineState.projects.forEach(p => {
+            p.is_favorite = tempFavProjectIds.has(p.id) ? 1 : 0;
+        });
+        // 즐겨찾기 기준 정렬
+        redmineState.projects.sort((a, b) => (b.is_favorite || 0) - (a.is_favorite || 0) || a.name.localeCompare(b.name));
+        
+        renderProjectDropdowns();
+        closeRedmineFavoriteProjectsModal();
+        showToast('저장 완료', `주요 관심 프로젝트 ${ids.length}개가 등록되었습니다! ⭐`, '✅');
+        
+        if (redmineState.filterFavoriteProjectsOnly) {
+            loadRedmineIssues();
+        }
+    } catch (e) {
+        console.error("즐겨찾기 저장 실패:", e);
+        showToast('저장 실패', formatErrorMessage(e), '⚠️');
+    }
+}
+
+async function toggleProjectFavoriteInline(projectId, event) {
+    if (event) event.stopPropagation();
+    if (!projectId) return;
+
+    try {
+        if (window.eel && typeof eel.toggle_redmine_project_favorite === 'function') {
+            const res = await eel.toggle_redmine_project_favorite(projectId)();
+            if (res && res.status === 'success') {
+                const target = redmineState.projects.find(p => p.id === projectId);
+                if (target) {
+                    target.is_favorite = res.is_favorite;
+                }
+                // 재정렬
+                redmineState.projects.sort((a, b) => (b.is_favorite || 0) - (a.is_favorite || 0) || a.name.localeCompare(b.name));
+                renderProjectDropdowns();
+                showToast('주요 프로젝트', res.message, '⭐', 2500);
+
+                if (redmineState.filterFavoriteProjectsOnly) {
+                    loadRedmineIssues();
+                } else {
+                    // 현재 렌더링된 카드 및 상세 헤더 별표 즉시 갱신
+                    document.querySelectorAll(`.issue-proj-star-btn[data-project-id="${projectId}"]`).forEach(btn => {
+                        btn.className = `issue-proj-star-btn ${res.is_favorite ? 'favorited' : ''}`;
+                        btn.textContent = res.is_favorite ? '⭐' : '☆';
+                        btn.title = res.is_favorite ? '주요 관심 프로젝트에서 해제' : '주요 관심 프로젝트(⭐)로 등록';
+                    });
+                    const detailBtn = document.getElementById('detail-proj-star-btn');
+                    if (detailBtn && detailBtn.getAttribute('data-project-id') == projectId) {
+                        detailBtn.className = `detail-proj-star-btn ${res.is_favorite ? 'favorited' : ''}`;
+                        detailBtn.innerHTML = res.is_favorite ? '<span>⭐</span> 주요 프로젝트' : '<span>☆</span> 주요 프로젝트 등록';
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error("인라인 즐겨찾기 토글 실패:", e);
+    }
 }

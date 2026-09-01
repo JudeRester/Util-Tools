@@ -6929,6 +6929,113 @@ input[type="checkbox"] {
     max-width: 180px;
 }
 
+.filter-item-project {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.redmine-fav-manage-btn {
+    background: rgba(234, 179, 8, 0.12);
+    border: 1px solid rgba(234, 179, 8, 0.35);
+    color: #facc15;
+    border-radius: 6px;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.redmine-fav-manage-btn:hover {
+    background: rgba(234, 179, 8, 0.25);
+    border-color: #facc15;
+    transform: scale(1.05);
+}
+
+.redmine-fav-filter-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    height: 30px;
+    padding: 0 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.redmine-fav-filter-btn:hover {
+    background: rgba(234, 179, 8, 0.12);
+    border-color: rgba(234, 179, 8, 0.5);
+    color: #fef08a;
+}
+
+.redmine-fav-filter-btn.active {
+    background: rgba(234, 179, 8, 0.22);
+    border-color: #eab308;
+    color: #fef08a;
+    box-shadow: 0 0 10px rgba(234, 179, 8, 0.35);
+}
+
+.issue-proj-star-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 0.8rem;
+    color: #64748b;
+    transition: transform 0.15s ease, color 0.15s ease;
+    line-height: 1;
+    margin-left: 2px;
+}
+
+.issue-proj-star-btn:hover {
+    color: #facc15;
+    transform: scale(1.2);
+}
+
+.issue-proj-star-btn.favorited {
+    color: #facc15;
+}
+
+.detail-proj-star-btn {
+    background: rgba(234, 179, 8, 0.1);
+    border: 1px solid rgba(234, 179, 8, 0.25);
+    color: #cbd5e1;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    margin-left: 6px;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.detail-proj-star-btn:hover {
+    background: rgba(234, 179, 8, 0.2);
+    border-color: #facc15;
+    color: #fef08a;
+}
+
+.detail-proj-star-btn.favorited {
+    background: rgba(234, 179, 8, 0.18);
+    border-color: #eab308;
+    color: #fef08a;
+    font-weight: 600;
+}
+
 .redmine-search-box {
     display: flex;
     align-items: center;
@@ -7718,6 +7825,123 @@ input[type="checkbox"] {
 
 .redmine-error {
     color: #fca5a5;
+}
+
+/* 10. 주요 관심 프로젝트 (즐겨찾기) 모달 */
+.fav-proj-guide {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    line-height: 1.45;
+    background: rgba(234, 179, 8, 0.08);
+    border: 1px solid rgba(234, 179, 8, 0.25);
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+.fav-proj-guide b {
+    color: #fef08a;
+}
+
+.fav-proj-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.fav-proj-search-box {
+    display: flex;
+    align-items: center;
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 4px 8px;
+    flex: 1;
+    gap: 6px;
+}
+
+.fav-proj-search-box input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #fff;
+    width: 100%;
+    font-size: 0.84rem;
+}
+
+.fav-proj-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.fav-projects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 8px;
+    max-height: 380px;
+    overflow-y: auto;
+    padding: 2px;
+}
+
+.fav-proj-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.fav-proj-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.fav-proj-card.selected {
+    background: rgba(234, 179, 8, 0.12);
+    border-color: rgba(234, 179, 8, 0.5);
+}
+
+.fav-proj-card .fav-star-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.fav-proj-card.selected .fav-star-icon {
+    color: #facc15;
+}
+
+.fav-proj-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.fav-proj-name {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #f1f5f9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fav-proj-sub {
+    font-size: 0.72rem;
+    color: #94a3b8;
+}
+
+.fav-count-badge {
+    font-size: 0.82rem;
+    color: #facc15;
+    font-weight: 600;
 }
 
 /* ==========================================

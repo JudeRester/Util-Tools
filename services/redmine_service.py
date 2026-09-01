@@ -303,15 +303,24 @@ def fetch_redmine_projects():
             if offset >= total_count or len(page_projects) < limit:
                 break
 
+        # 기존 즐겨찾기(is_favorite) 상태 보존
+        fav_map = {}
+        try:
+            for r in conn.execute("SELECT id, is_favorite, favorite_order FROM redmine_projects").fetchall():
+                fav_map[r['id']] = (r['is_favorite'] or 0, r['favorite_order'] or 0)
+        except Exception:
+            pass
+
         records = [
-            (p.get('id'), p.get('name'), p.get('identifier'), p.get('description', ''), p.get('status', 1))
+            (p.get('id'), p.get('name'), p.get('identifier'), p.get('description', ''), p.get('status', 1),
+             fav_map.get(p.get('id'), (0, 0))[0], fav_map.get(p.get('id'), (0, 0))[1])
             for p in projects
         ]
         with conn:
             conn.execute("DELETE FROM redmine_projects")
             conn.executemany("""
-                INSERT OR REPLACE INTO redmine_projects (id, name, identifier, description, status)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO redmine_projects (id, name, identifier, description, status, is_favorite, favorite_order)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """, records)
 
         return {"status": "success", "count": len(projects), "projects": projects}
@@ -323,16 +332,62 @@ def fetch_redmine_projects():
 
 @eel.expose
 def get_redmine_projects():
-    """캐시된 프로젝트 목록 조회"""
+    """캐시된 프로젝트 목록 조회 (즐겨찾기/주요 프로젝트 최우선 정렬)"""
     conn = get_db_connection()
     try:
-        rows = conn.execute("SELECT * FROM redmine_projects ORDER BY name ASC").fetchall()
+        rows = conn.execute("SELECT * FROM redmine_projects ORDER BY is_favorite DESC, favorite_order ASC, name ASC").fetchall()
         projects = [dict(r) for r in rows]
         if not projects:
             res = fetch_redmine_projects()
             if res.get("status") == "success":
                 return res
         return {"status": "success", "projects": projects}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+
+
+@eel.expose
+def toggle_redmine_project_favorite(project_id: int, is_favorite=None):
+    """특정 프로젝트의 즐겨찾기(주요 관심 프로젝트) 상태 토글"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        row = cur.execute("SELECT is_favorite FROM redmine_projects WHERE id = ?", (project_id,)).fetchone()
+        if not row:
+            return {"status": "error", "message": "프로젝트를 찾을 수 없습니다."}
+        
+        current_val = row['is_favorite'] or 0
+        new_val = (1 - current_val) if is_favorite is None else (1 if is_favorite else 0)
+        
+        with conn:
+            conn.execute("UPDATE redmine_projects SET is_favorite = ? WHERE id = ?", (new_val, project_id))
+            
+        return {
+            "status": "success",
+            "project_id": project_id,
+            "is_favorite": new_val,
+            "message": "주요 프로젝트로 등록되었습니다. ⭐" if new_val else "주요 프로젝트에서 해제되었습니다."
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+
+
+@eel.expose
+def set_redmine_favorite_projects(project_ids: list):
+    """주요 관심 프로젝트 ID 목록 일괄 설정"""
+    conn = get_db_connection()
+    try:
+        int_ids = [int(p) for p in project_ids if str(p).isdigit()]
+        with conn:
+            conn.execute("UPDATE redmine_projects SET is_favorite = 0")
+            if int_ids:
+                placeholders = ','.join('?' * len(int_ids))
+                conn.execute(f"UPDATE redmine_projects SET is_favorite = 1 WHERE id IN ({placeholders})", int_ids)
+        return {"status": "success", "favorite_ids": int_ids}
     except Exception as e:
         return {"status": "error", "message": str(e)}
     finally:
@@ -495,9 +550,11 @@ def sync_redmine_issues(project_id: int = None, limit: int = None, scope: str = 
 @eel.expose
 def get_redmine_issues(filter_my: bool = False, project_id=None, status_id=None, 
                        tracker_id=None, priority_id=None, search_query: str = None,
-                       assignee: str = None, due_today: bool = False, *args, **kwargs):
+                       assignee: str = None, due_today: bool = False, fav_projects_only: bool = False,
+                       *args, **kwargs):
     """
     SQLite 로컬 캐시에서 일감 목록 고속 조회 (0.01초)
+    - fav_projects_only: 사용자가 지정한 주요/즐겨찾기 프로젝트의 일감만 우선 필터링
     - stats: 전체(또는 선택된 프로젝트) 기준 불변 요약 통계
     - issues: 사용자의 현재 세부 필터 조건에 부합하는 일감 리스트
     """
@@ -516,6 +573,7 @@ def get_redmine_issues(filter_my: bool = False, project_id=None, status_id=None,
     priority_id = _safe_int(priority_id)
     filter_my = bool(filter_my)
     due_today = bool(due_today)
+    fav_projects_only = bool(fav_projects_only) or kwargs.get("fav_projects_only", False)
     search_query = str(search_query).strip() if search_query else ""
     assignee = str(assignee).strip() if assignee else ""
 
@@ -527,6 +585,9 @@ def get_redmine_issues(filter_my: bool = False, project_id=None, status_id=None,
         if project_id:
             stat_clauses.append("project_id = ?")
             stat_params.append(project_id)
+        elif fav_projects_only:
+            stat_clauses.append("project_id IN (SELECT id FROM redmine_projects WHERE is_favorite = 1)")
+
         if filter_my or assignee == 'me':
             stat_clauses.append("is_my_issue = 1")
 
@@ -575,6 +636,9 @@ def get_redmine_issues(filter_my: bool = False, project_id=None, status_id=None,
         if project_id:
             clauses.append("project_id = ?")
             params.append(project_id)
+        elif fav_projects_only:
+            clauses.append("project_id IN (SELECT id FROM redmine_projects WHERE is_favorite = 1)")
+
         if status_id:
             clauses.append("status_id = ?")
             params.append(status_id)

@@ -667,16 +667,32 @@ def init_db():
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_wikis_project ON redmine_wikis(project_id);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_wikis_title ON redmine_wikis(title);")
 
-                # 12. redmine_projects 테이블 (프로젝트 목록 캐시)
+                # 12. redmine_projects 테이블 (프로젝트 목록 캐시 및 즐겨찾기/주요 프로젝트)
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS redmine_projects (
                         id INTEGER PRIMARY KEY,
                         name TEXT,
                         identifier TEXT,
                         description TEXT,
-                        status INTEGER DEFAULT 1
+                        status INTEGER DEFAULT 1,
+                        is_favorite INTEGER DEFAULT 0,
+                        favorite_order INTEGER DEFAULT 0
                     );
                 """)
+
+                try:
+                    conn.execute("ALTER TABLE redmine_projects ADD COLUMN is_favorite INTEGER DEFAULT 0;")
+                except Exception:
+                    pass
+                try:
+                    conn.execute("ALTER TABLE redmine_projects ADD COLUMN favorite_order INTEGER DEFAULT 0;")
+                except Exception:
+                    pass
+
+                try:
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_redmine_projects_fav ON redmine_projects(is_favorite, favorite_order);")
+                except Exception:
+                    pass
 
                 # 13. redmine_meta 테이블 (상태, 트래커, 우선순위 메타데이터 캐시)
                 conn.execute("""
