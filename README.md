@@ -1,7 +1,7 @@
 # 🛠️ Utility Toolkit (유틸리티 도구 모음)
 
 Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스크톱 유틸리티 도구 모음입니다.  
-중앙 **SQLite DB(`data/app.db`)** 기반 초고속 데이터 영속화와 경량 **로컬 AI 시맨틱 검색 엔진(Multilingual-E5 ONNX)**을 내장하고 있으며, 검은색 CMD 콘솔 창 없이 백그라운드 시스템 트레이에 상주하여 다양한 개발 및 업무 도구를 0.1초 만에 실행할 수 있습니다.
+중앙 **SQLite DB(`data/app.db`)** 기반 데이터 영속화와 **로컬 AI 시맨틱 검색 엔진(Multilingual-E5 ONNX)**을 내장하고 있으며, 백그라운드 시스템 트레이에 상주하여 다양한 개발 및 업무 도구를 간편하게 실행할 수 있습니다.
 
 ---
 
@@ -9,22 +9,22 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 
 | 카테고리 | 주요 제공 기능 |
 | :--- | :--- |
-| **🦊 Redmine 연동** | • **내 일감(Issues) 실시간 대시보드 & 프로젝트 위키(Wiki) 뷰어/에디터**<br>• 상태/진척도(%) 원클릭 변경, 코멘트(Notes) 등록, 새 일감 생성<br>• 프로젝트 위키 실시간 목차 조회, 마크다운 렌더링 & 직접 편집/저장<br>• SQLite 0.01초 오프라인 캐싱, **백그라운드 일감 업데이트 트레이 알림** 및 AI 시맨틱 검색 통합 |
-| **📧 이메일 아카이브** | • **3,100+건 .eml / .msg 대용량 이메일 로컬 보관소 & 실시간 타임라인 뷰어**<br>• **비파괴적 대화별 스레드 묶기 (Thread View)**: Re:/Fwd: 정규화 및 시간순 아코디언 타임라인<br>• **초경량 청크 페이징 & 온디맨드 지연 로딩**: 메모리 점유율 90% 절감 (40MB 수준 유지)<br>• **AI 시맨틱 검색(`Ctrl+K`) 연동**, 6대 카테고리 자동 분류, 첨부파일 추출/일괄 저장 및 Outlook 원본 연동 |
-| **🧠 AI 시맨틱 검색** | • **로컬 딥러닝 신경망(`intfloat/multilingual-e5-small` ONNX)** 기반 의미론적 문맥 검색<br>• 키워드가 정확히 일치하지 않아도 의미와 문맥으로 전체 데이터(이메일, 메모, 다이어그램 등)를 0.05초 만에 탐색<br>• 문장 간 유사도 정밀 비교 및 스마트 증분 벡터 캐싱 지원 |
+| **🦊 Redmine 연동** | • **내 일감(Issues) 실시간 대시보드 & 프로젝트 위키(Wiki) 뷰어/에디터**<br>• 상태/진척도(%) 원클릭 변경, 코멘트(Notes) 등록, 새 일감 생성<br>• 프로젝트 위키 실시간 목차 조회, 마크다운 렌더링 & 직접 편집/저장<br>• SQLite 오프라인 캐싱, **백그라운드 일감 업데이트 트레이 알림** 및 AI 시맨틱 검색 통합 |
+| **📧 이메일 아카이브** | • **3,100+건 .eml / .msg 대용량 이메일 로컬 보관소 & 실시간 타임라인 뷰어**<br>• **비파괴적 대화별 스레드 묶기 (Thread View)**: Re:/Fwd: 정규화 및 시간순 아코디언 타임라인<br>• **청크 페이징 & 온디맨드 지연 로딩**: 메모리 점유율 절감 (40MB 수준 유지)<br>• **AI 시맨틱 검색(`Ctrl+K`) 연동**, 6대 카테고리 자동 분류, 첨부파일 추출/일괄 저장 및 Outlook 원본 연동 |
+| **🧠 AI 시맨틱 검색** | • **로컬 딥러닝 신경망(`intfloat/multilingual-e5-small` ONNX)** 기반 의미론적 문맥 검색<br>• 키워드가 정확히 일치하지 않아도 의미와 문맥으로 전체 데이터(이메일, 메모, 다이어그램 등)를 탐색<br>• 문장 간 유사도 정밀 비교 및 증분 벡터 캐싱 지원 |
 | **🎲 모의 데이터 스튜디오** | • **3-Pass 복합 가상 데이터 생성기 & 엑셀(.xlsx) / CSV 내보내기 엔진**<br>• 순번(Sequence), 한국인 이름/이메일 지능형 영문 로마자 변환, 선택(Choice) 및 키-값(Key-Value) 연계 매핑<br>• 커스텀 컬럼 양식 생성, 수정, 삭제 및 SQLite 영구 동기화 |
-| **📋 CSV / TSV 뷰어** | • **대용량 CSV / TSV 테이블 데이터 초고속 렌더링 & 스마트 변환기**<br>• 인코딩(UTF-8, CP949/EUC-KR) 및 구분자(쉼표, 탭, 세미콜론, 파이프) 자동 감지<br>• 드래그 앤 드롭 파일 로드, 클립보드 표 데이터 즉시 붙여넣기, 전역 실시간 검색 & 정렬<br>• **Markdown 표, JSON 배열, SQL INSERT 문, 필터된 CSV** 원클릭 변환/다운로드 |
+| **📋 CSV / TSV 뷰어** | • **대용량 CSV / TSV 테이블 데이터 렌더링 & 변환기**<br>• 인코딩(UTF-8, CP949/EUC-KR) 및 구분자(쉼표, 탭, 세미콜론, 파이프) 자동 감지<br>• 드래그 앤 드롭 파일 로드, 클립보드 표 데이터 즉시 붙여넣기, 전역 실시간 검색 & 정렬<br>• **Markdown 표, JSON 배열, SQL INSERT 문, 필터된 CSV** 원클릭 변환/다운로드 |
 | **📝 Markdown 뷰어** | • **GFM(GitHub Flavored Markdown) 실시간 뷰어 & 에디터 (Markdown Studio)**<br>• **GitHub Alert 콜아웃**(`[!NOTE]`, `[!TIP]`, `[!WARNING]` 등 5종) 및 **Mermaid 다이어그램** 자동 시각화<br>• GFM 표, **인터랙티브 태스크 체크박스(클릭 시 소스 동기화)**, 코드 블록 구문 강조 및 복사<br>• Split(반반) / Editor / Preview 모드, 동기화 스크롤, **목차(TOC) 생성**, 실시간 통계 지원 |
 | **📊 다이어그램 스튜디오** | • **Mermaid 다이어그램 비주얼 스튜디오** (Flowchart, Sequence, Mindmap 등 16종 프리셋)<br>• 마우스 휠 줌 & 드래그 패닝, SVG/PNG 고해상도 이미지 다운로드 및 클립보드 복사 |
 | **⚡ 빠른 실행** | • 자주 쓰는 앱/실행 파일(`.exe`, `.bat`), **SSH 터미널 접속**, **웹 URL**, **PowerShell 명령** 원클릭 실행<br>• **[⚙️ 편집]** 팝업을 통한 항목 추가, 인라인 수정(`✏️`), 삭제, 탐색기 파일 선택 및 드래그 앤 드롭 순서 변경 |
 | **📁 파일 / 폴더** | • 프로젝트 작업 디렉토리 바로가기 카드 목록<br>• 상단 우측 인라인 드롭다운을 통해 **원하는 폴더 위치에서 PowerShell / CMD 즉시 실행** |
-| **🔢 커스텀 생성기** | • 사용자가 직접 JavaScript 스크립트로 **새로운 생성기 추가/수정/순서 변경** 가능<br>• 기본 내장: 국세청 사업자번호, UUID v4, 16자리 강력 비밀번호, 한국인 가상 더미, 타임스탬프 등 |
-| **🧪 JS 실행기** | • JSFiddle / RunJS 스타일의 **JavaScript 코드 샌드박스** (비동기 `async/await` 완벽 지원)<br>• `console.log/warn/error` 출력 캡처, 실행 시간 측정, `Ctrl + Enter` 실행, 코드 자동 영구 보존 |
-| **📝 빠른 메모** | • 자원 소모가 전혀 없는 **초경량 스크래치패드 / 메모장**<br>• 다중 메모 생성, 실시간 자동 저장(Autosave), 고정(Pin) 기능, 마우스 드래그블 스플리터 제공 |
+| **🔢 커스텀 생성기** | • 사용자가 직접 JavaScript 스크립트로 **새로운 생성기 추가/수정/순서 변경** 가능<br>• 기본 내장: 국세청 사업자번호, UUID v4, 16자리 난수 비밀번호, 한국인 가상 더미, 타임스탬프 등 |
+| **🧪 JS 실행기** | • JSFiddle / RunJS 스타일의 **JavaScript 코드 샌드박스** (비동기 `async/await` 지원)<br>• `console.log/warn/error` 출력 캡처, 실행 시간 측정, `Ctrl + Enter` 실행, 코드 자동 영구 보존 |
+| **📝 빠른 메모** | • **경량 스크래치패드 / 메모장**<br>• 다중 메모 생성, 실시간 자동 저장(Autosave), 고정(Pin) 기능, 마우스 드래그블 스플리터 제공 |
 | **📅 달력 & 일정** | • **구글 캘린더(Google Calendar) 및 iCal(ICS) 비공개 주소 실시간 구독 및 동기화**<br>• 다크 테마 월간 캘린더, 날짜별 일정 뱃지, 오늘의 일정(Today's Agenda) 상세 뷰 |
-| **✂️ 이미지 슬라이서** | • **경계선 분할 & 다중 절단선 일괄 분할 스튜디오 (Pillow 고속 엔진)**<br>• 클립보드 붙여넣기(`Ctrl+V`), **고정 px 간격 일괄 생성**, **균등 N등분**, **스마트 여백 자동 감지** 및 **ZIP 일괄 다운로드 / 폴더 저장** |
-| **💾 통합 백업 / 복원** | • **Zero-Memory Python 백엔드 스트리밍 아키텍처** (브라우저 메모리 0MB 소모)<br>• 중앙 SQLite DB 및 설정을 **단일 JSON 및 90% 압축 ZIP 포맷으로 초고속(2.5초) 일괄/선택적 내보내기 & 복원(Merge/Replace)** |
-| **🛠️ 시스템 트레이** | • 검은색 콘솔 창 없는 순수 GUI 구동 및 Windows 시스템 트레이 상주 (`utiltools.ico` 연동)<br>• V8 힙 128MB 제한 및 Windows WorkingSet 유휴 RAM 자동 회수 엔진 탑재 |
+| **✂️ 이미지 슬라이서** | • **경계선 분할 & 다중 절단선 일괄 분할 스튜디오 (Pillow 엔진)**<br>• 클립보드 붙여넣기(`Ctrl+V`), **고정 px 간격 일괄 생성**, **균등 N등분**, **스마트 여백 자동 감지** 및 **ZIP 일괄 다운로드 / 폴더 저장** |
+| **💾 통합 백업 / 복원** | • **Zero-Memory Python 백엔드 스트리밍 아키텍처** (브라우저 메모리 소모 최소화)<br>• 중앙 SQLite DB 및 설정을 **단일 JSON 및 90% 압축 ZIP 포맷으로 일괄/선택적 내보내기 & 복원(Merge/Replace)** |
+| **🛠️ 시스템 트레이** | • 검은색 콘솔 창 없는 GUI 구동 및 Windows 시스템 트레이 상주 (`utiltools.ico` 연동)<br>• V8 힙 128MB 제한 및 Windows WorkingSet 유휴 RAM 자동 회수 엔진 탑재 |
 
 ---
 
@@ -35,13 +35,13 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 | 문서명 | 주요 다루는 기술 영역 및 아키텍처 | 바로가기 링크 |
 | :--- | :--- | :--- |
 | **🗄️ Database Architecture & Schema** | • **중앙 SQLite DB(`data/app.db`) 13개 테이블 전체 ERD & 스키마 명세**<br>• WAL 모드 및 고성능 PRAGMA 최적화, 인덱스 커버리지, 파일 기반 JSON 설정 | [📖 `docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) |
-| **🦊 Redmine Integration** | • **Redmine REST API 연동, 일감/위키 대시보드, 0.01초 SQLite 오프라인 캐시**<br>• **주요 관심 프로젝트(⭐ 즐겨찾기) 우선순위 필터링**, 백그라운드 폴링 & 트레이 알림 | [📖 `docs/REDMINE_INTEGRATION.md`](docs/REDMINE_INTEGRATION.md) |
-| **📧 Email Archive System** | • **3,100+건 대용량 이메일 아카이브 & 대화별 스레드 타임라인 뷰어**<br>• 비파괴적 제목 정규화 알고리즘, 초경량 청크 페이징 & 지연 로딩 아키텍처 | [📖 `docs/EMAIL_ARCHIVE.md`](docs/EMAIL_ARCHIVE.md) |
+| **🦊 Redmine Integration** | • **Redmine REST API 연동, 일감/위키 대시보드, SQLite 오프라인 캐시**<br>• **주요 관심 프로젝트(⭐ 즐겨찾기) 우선순위 필터링**, 백그라운드 폴링 & 트레이 알림 | [📖 `docs/REDMINE_INTEGRATION.md`](docs/REDMINE_INTEGRATION.md) |
+| **📧 Email Archive System** | • **3,100+건 대용량 이메일 아카이브 & 대화별 스레드 타임라인 뷰어**<br>• 비파괴적 제목 정규화 알고리즘, 청크 페이징 & 지연 로딩 아키텍처 | [📖 `docs/EMAIL_ARCHIVE.md`](docs/EMAIL_ARCHIVE.md) |
 | **🧠 AI Semantic Search Engine** | • **로컬 딥러닝 임베딩 신경망(`intfloat/multilingual-e5-small` ONNX)**<br>• 코사인 유사도 연산, 크로스 도메인 증분 벡터 캐시, `Ctrl+K` 검색 & 문장 비교 도구 | [📖 `docs/AI_SEMANTIC_SEARCH.md`](docs/AI_SEMANTIC_SEARCH.md) |
-| **🎲 Mock Data Studio** | • **3-Pass 복합 가상 데이터 생성 파이프라인 (독립 ➔ 로마자/이메일 ➔ 종속 매핑)**<br>• 한국어 로마자 표기법 변환, 커스텀 서식 스키마 관리 및 엑셀(.xlsx)/CSV 고속 스트리밍 | [📖 `docs/MOCK_DATA_STUDIO.md`](docs/MOCK_DATA_STUDIO.md) |
-| **✂️ Image Slicer Studio** | • **Pillow 고속 이미지 분할 파이프라인 & 인터랙티브 HTML5 캔버스**<br>• 다중 절단선, 자유 경계 박스, 고정 px, 균등 N등분, 스마트 여백 자동 감지 & ZIP 패킹 | [📖 `docs/IMAGE_SLICER.md`](docs/IMAGE_SLICER.md) |
+| **🎲 Mock Data Studio** | • **3-Pass 복합 가상 데이터 생성 파이프라인 (독립 ➔ 로마자/이메일 ➔ 종속 매핑)**<br>• 한국어 로마자 표기법 변환, 커스텀 서식 스키마 관리 및 엑셀(.xlsx)/CSV 스트리밍 | [📖 `docs/MOCK_DATA_STUDIO.md`](docs/MOCK_DATA_STUDIO.md) |
+| **✂️ Image Slicer Studio** | • **Pillow 이미지 분할 파이프라인 & 인터랙티브 HTML5 캔버스**<br>• 다중 절단선, 자유 경계 박스, 고정 px, 균등 N등분, 스마트 여백 자동 감지 & ZIP 패킹 | [📖 `docs/IMAGE_SLICER.md`](docs/IMAGE_SLICER.md) |
 | **📊 Data & Document Viewers** | • **CSV/TSV 스마트 뷰어** (인코딩/구분자 자동 감지, MD/JSON/SQL 변환)<br>• **Markdown Studio** (GitHub Alerts, 양방향 태스크 동기화, TOC) & **Mermaid 다이어그램** | [📖 `docs/DATA_VIEWERS.md`](docs/DATA_VIEWERS.md) |
-| **💾 Zero-Memory Backup & Restore** | • **Zero-Memory Python 디스크 직접 스트리밍 아키텍처** (브라우저 메모리 0MB 소모)<br>• 90% 압축 ZIP 포맷, 2대 복원 모드(Merge vs Replace) & SQLite 원자적 일괄 주입 | [📖 `docs/BACKUP_AND_RESTORE.md`](docs/BACKUP_AND_RESTORE.md) |
+| **💾 Zero-Memory Backup & Restore** | • **Zero-Memory Python 디스크 직접 스트리밍 아키텍처** (브라우저 메모리 소모 최소화)<br>• 90% 압축 ZIP 포맷, 2대 복원 모드(Merge vs Replace) & SQLite 원자적 일괄 복원 | [📖 `docs/BACKUP_AND_RESTORE.md`](docs/BACKUP_AND_RESTORE.md) |
 | **🛠️ Core System & Utilities** | • **무창(Windowless) 런처(`run.pyw`), pystray 시스템 트레이, WorkingSet 메모리 자동 회수**<br>• Google Calendar/iCal 동기화, JS 샌드박스 런너, 빠른 실행 & 폴더 바로가기 | [📖 `docs/CORE_AND_UTILITIES.md`](docs/CORE_AND_UTILITIES.md) |
 
 ---

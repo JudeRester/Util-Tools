@@ -41,14 +41,14 @@ stateDiagram-v2
 
 ## 2. ⚡ 메모리 최적화 및 유휴 자원 자동 회수 엔진
 
-상시 실행되는 데스크톱 앱의 특성상 메모리 누수 방지와 저사양 PC 배려가 최우선 과제입니다:
+백그라운드 상주 프로그램으로서 메모리 누수 방지와 자원 효율성을 유지합니다:
 
 1. **V8 힙 메모리 엄격 제한**:
-   - Eel(Chrome/Edge) 프로세스 구동 시 `--js-flags=--max-old-space-size=128` 파라미터를 강제하여 브라우저 엔진의 불필요한 캐시 팽창을 원천 억제.
+   - Eel(Chrome/Edge) 프로세스 구동 시 `--js-flags=--max-old-space-size=128` 파라미터를 적용하여 브라우저 엔진의 불필요한 메모리 확장을 제한.
 2. **Windows WorkingSet 유휴 메모리 자동 회수**:
-   - 창이 최소화되거나 트레이로 숨겨질 때 Windows API `psapi.EmptyWorkingSet(handle)`을 호출하여 사용하지 않는 페이지를 OS로 즉각 반환 (RAM 점유율을 30MB 수준으로 압축).
-3. **유휴 시 0% CPU**:
-   - 주기적 폴링 타이머 외에는 모든 스레드가 대기(Sleep/Wait) 상태를 유지하여 노트북 배터리 소모가 없습니다.
+   - 창이 최소화되거나 트레이로 숨겨질 때 Windows API `psapi.EmptyWorkingSet(handle)`을 호출하여 사용하지 않는 페이지를 OS로 반환.
+3. **유휴 시 CPU 사용 최소화**:
+   - 주기적 폴링 타이머 외에는 스레드가 대기 상태를 유지하여 배터리 소모를 줄입니다.
 
 ---
 
@@ -74,7 +74,7 @@ stateDiagram-v2
 ## 5. 🧪 자바스크립트 샌드박스 플레이그라운드 (`web/js/js_runner.js`)
 
 - RunJS / JSFiddle 스타일의 경량 코드 샌드박스.
-- `AsyncFunction` 런타임 격리를 통해 최신 비동기 문법(`await fetch()`, `Promise` 등) 완벽 지원.
+- `AsyncFunction` 런타임 격리를 통해 최신 비동기 문법(`await fetch()`, `Promise` 등) 지원.
 - `console.log`, `console.warn`, `console.error` 출력을 실시간 캡처하여 하단 인터랙티브 콘솔에 포맷팅 렌더링.
 - `Ctrl + Enter` 즉시 실행 및 코드 자동 영구 저장.
 
@@ -82,5 +82,5 @@ stateDiagram-v2
 
 ## 6. 🔢 커스텀 데이터 생성기 스튜디오 (`generators`)
 
-- 사용자가 직접 JavaScript 스크립트를 작성하여 새로운 고유 번호, 테스트 코드, 식별자 생성기를 무제한 확장.
+- 사용자가 직접 JavaScript 스크립트를 작성하여 새로운 고유 번호, 테스트 코드, 식별자 생성기를 확장 가능.
 - **동적 변수 바인딩 (`variables_json`)**: 사용자 입력 폼(텍스트, 숫자, 선택)을 생성기 카드 상단에 동적으로 렌더링하고 스크립트 실행 컨텍스트에 파라미터로 주입.

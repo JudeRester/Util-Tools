@@ -1,6 +1,6 @@
 # 🦊 Redmine 연동 시스템 및 일감/위키 관리 아키텍처 (Redmine Integration Architecture)
 
-Util-Tools는 로컬 환경에서 사내 또는 외부 Redmine 서버와 연동하여 **내 일감(Issues) 실시간 모니터링**, **프로젝트 위키(Wiki) 뷰어 및 에디터**, **원클릭 일감 속성 변경**, **주요 관심 프로젝트(⭐ 즐겨찾기) 우선순위 필터링**을 제공하는 강력한 생산성 통합 모듈을 탑재하고 있습니다.
+Util-Tools는 로컬 환경에서 사내 또는 외부 Redmine 서버와 연동하여 **내 일감(Issues) 실시간 모니터링**, **프로젝트 위키(Wiki) 뷰어 및 에디터**, **원클릭 일감 속성 변경**, **주요 관심 프로젝트(⭐ 즐겨찾기) 우선순위 필터링**을 제공하는 생산성 통합 모듈을 탑재하고 있습니다.
 
 ---
 
@@ -41,17 +41,17 @@ flowchart TD
 ## 2. 🌟 핵심 기능 및 기술적 특징
 
 ### 2-1. ⭐ 주요 관심 프로젝트 (즐겨찾기) 우선순위 필터링
-- **문제점 해결**: 수십~수백 개의 프로젝트가 존재하는 사내 환경에서 주로 담당하는 1~5개 프로젝트를 매번 검색하거나 목록에서 찾는 번거로움을 완전히 해결했습니다.
+- **문제점 해결**: 여러 프로젝트가 존재하는 환경에서 주로 담당하는 1~5개 프로젝트를 매번 검색하거나 목록에서 찾는 번거로움을 해결했습니다.
 - **`<optgroup>` 최상단 고정**: 일감 필터, 위키 프로젝트, 새 일감 등록 모달 드롭다운 최상단에 `⭐ 주요 관심 프로젝트` 그룹이 우선 노출됩니다.
 - **원클릭 `[⭐ 주요 프로젝트만]` 필터**: 클릭 한 번으로 등록된 주요 관심 프로젝트의 일감만 즉시 조회 및 통계 계산.
 - **인라인 원클릭 별표 토글**: 일감 카드 및 상세 뷰어에서 별표(`⭐`/`☆`)를 클릭하면 모달을 열지 않고도 즉시 주요 프로젝트로 등록/해제.
 
-### 2-2. ⚡ 0.01초 오프라인 캐싱 & 델타 동기화
-- 네트워크 지연 없이 즉각적인 UI 응답성을 보장하기 위해 모든 일감, 위키, 프로젝트 메타데이터를 SQLite DB(`redmine_*`)에 캐싱합니다.
+### 2-2. ⚡ 로컬 오프라인 캐싱 & 델타 동기화
+- 네트워크 지연을 줄이고 UI 응답성을 유지하기 위해 모든 일감, 위키, 프로젝트 메타데이터를 SQLite DB(`redmine_*`)에 캐싱합니다.
 - 백그라운드 주기적 동기화(1~60분)를 통해 서버의 변경 사항을 자동으로 감지하여 동기화합니다.
 
 ### 2-3. 🔔 백그라운드 트레이 알림 시스템
-- 백그라운드 폴링 중 내게 새롭게 할당된 일감이나 상태가 변경된 일감이 감지되면 Windows 시스템 트레이를 통해 즉시 알림을 띄웁니다.
+- 백그라운드 폴링 중 내게 새롭게 할당된 일감이나 상태가 변경된 일감이 감지되면 Windows 시스템 트레이를 통해 알림을 띄웁니다.
 
 ### 2-4. 💬 진행 히스토리(Journals) 및 인라인 코멘트 등록
 - 일감의 상태 변경 이력, 담당자 변경, 필드 수정 내역을 타임라인 칩으로 시각화.
@@ -59,7 +59,7 @@ flowchart TD
 
 ### 2-5. 📝 프로젝트 위키(Wiki) 실시간 뷰어 & 에디터
 - 프로젝트별 위키 목차를 사이드바 트리로 렌더링.
-- Textile 및 Markdown 서식을 자동으로 변환하여 미려한 다크 테마로 렌더링.
+- Textile 및 Markdown 서식을 자동으로 변환하여 다크 테마로 렌더링.
 - 위키 내용을 애플리케이션 내에서 즉시 수정하고 서버로 직접 저장할 수 있는 통합 에디터 제공.
 
 ---
@@ -77,7 +77,7 @@ flowchart TD
 | `toggle_redmine_project_favorite(project_id, is_fav=None)` | `project_id` (int), `is_favorite` (bool) | `{"status": "success", "is_favorite": 1/0}` | 특정 프로젝트의 주요 프로젝트(⭐) 상태 토글 |
 | `set_redmine_favorite_projects(project_ids)` | `project_ids` (list of int) | `{"status": "success", "favorite_ids": [...]}` | 주요 프로젝트 즐겨찾기 목록 일괄 저장 |
 | `fetch_redmine_issues(force_all=False)` | `force_all` (bool) | `{"status": "success", "synced_count": N}` | 서버에서 최신 일감 가져오기 및 트레이 알림 |
-| `get_redmine_issues(...)` | `my_only`, `project_id`, `status_id`, `tracker_id`, `priority_id`, `search_query`, `assignee`, `due_today`, `fav_projects_only` | `{"status": "success", "issues": [...], "stats": {...}}` | 다중 필터 및 통계 실시간 고속 SQLite 쿼리 |
+| `get_redmine_issues(...)` | `my_only`, `project_id`, `status_id`, `tracker_id`, `priority_id`, `search_query`, `assignee`, `due_today`, `fav_projects_only` | `{"status": "success", "issues": [...], "stats": {...}}` | 다중 필터 및 통계 SQLite 쿼리 |
 | `update_redmine_issue_property(issue_id, field, value)` | `issue_id` (int), `field` (str), `value` | `{"status": "success", "issue": {...}}` | 상태, 진척도, 우선순위, 담당자 실시간 단일 필드 갱신 |
 | `add_redmine_issue_comment(issue_id, notes)` | `issue_id` (int), `notes` (str) | `{"status": "success"}` | 일감 코멘트(댓글) 등록 |
 | `create_redmine_issue(issue_data)` | `issue_data` (dict) | `{"status": "success", "issue": {...}}` | 신규 일감 등록 |
