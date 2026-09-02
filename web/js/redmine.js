@@ -6,7 +6,7 @@ const redmineState = {
     configured: false,
     config: null,
     projects: [],
-    metadata: { statuses: [], trackers: [], priorities: [] },
+    metadata: { statuses: [], trackers: [], priorities: [], tracker_status_map: {} },
     assignees: [],
     projectMembers: {},
     activeSubTab: 'issues', // 'issues' | 'wiki' | 'config'
@@ -358,24 +358,90 @@ function renderProjectDropdowns() {
     }
 }
 
-function renderFilterDropdowns() {
+/**
+ * 선택된 유형(Tracker)에 따라 사용 가능한 상태(Status) 목록 필터링 반환
+ */
+function getAvailableStatusesForTracker(trackerId) {
+    if (!redmineState.metadata || !redmineState.metadata.statuses) return [];
+    if (!trackerId) {
+        return redmineState.metadata.statuses || [];
+    }
+    const tId = parseInt(trackerId, 10);
+    const map = (redmineState.metadata && redmineState.metadata.tracker_status_map) || {};
+    const allowedIds = map[tId] || map[String(tId)];
+    if (allowedIds && Array.isArray(allowedIds) && allowedIds.length > 0) {
+        return redmineState.metadata.statuses.filter(s => allowedIds.includes(s.id));
+    }
+    // 기본 대체: 트래커 default_status가 설정되어 있는 경우
+    const tracker = (redmineState.metadata.trackers || []).find(t => t.id === tId);
+    if (tracker && tracker.default_status && tracker.default_status.id) {
+        const defStatus = redmineState.metadata.statuses.filter(s => s.id === tracker.default_status.id);
+        if (defStatus.length > 0) return defStatus;
+    }
+    return redmineState.metadata.statuses || [];
+}
+
+/**
+ * 메인 필터 바의 상태(Status) 셀렉트박스 옵션을 선택된 유형(Tracker)에 맞게 갱신
+ */
+function updateStatusFilterOptions(selectedTrackerId) {
     const statusSelect = document.getElementById('redmine-status-filter');
+    if (!statusSelect || !redmineState.metadata || !redmineState.metadata.statuses) return;
+
+    const prevValue = statusSelect.value;
+    const availableStatuses = getAvailableStatusesForTracker(selectedTrackerId);
+
+    let defaultOptionText = '전체 상태';
+    if (selectedTrackerId) {
+        const trackerObj = (redmineState.metadata.trackers || []).find(t => t.id === parseInt(selectedTrackerId, 10));
+        if (trackerObj) {
+            defaultOptionText = `전체 상태 (${trackerObj.name})`;
+        }
+    }
+
+    statusSelect.innerHTML = [
+        `<option value="">${escapeHtml(defaultOptionText)}</option>`,
+        ...availableStatuses.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`)
+    ].join('');
+
+    // 이전에 선택된 상태가 필터링된 사용 가능 상태에 남아있으면 유지, 없으면 전체 상태로 리셋
+    if (prevValue && availableStatuses.some(s => String(s.id) === String(prevValue))) {
+        statusSelect.value = prevValue;
+        redmineState.filterStatusId = parseInt(prevValue, 10);
+    } else {
+        statusSelect.value = '';
+        redmineState.filterStatusId = null;
+    }
+}
+
+/**
+ * 상단 유형(Tracker) 필터 셀렉트박스 변경 핸들러
+ */
+function onRedmineTrackerFilterChange() {
+    const trackerSelect = document.getElementById('redmine-tracker-filter');
+    const selectedTrackerId = trackerSelect && trackerSelect.value ? parseInt(trackerSelect.value, 10) : null;
+    redmineState.filterTrackerId = selectedTrackerId;
+    updateStatusFilterOptions(selectedTrackerId);
+    onRedmineFilterChange();
+}
+
+function renderFilterDropdowns() {
     const trackerSelect = document.getElementById('redmine-tracker-filter');
     const prioritySelect = document.getElementById('redmine-priority-filter');
 
-    if (statusSelect && redmineState.metadata.statuses) {
-        statusSelect.innerHTML = [
-            '<option value="">전체 상태</option>',
-            ...redmineState.metadata.statuses.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`)
+    if (trackerSelect && redmineState.metadata.trackers) {
+        const currentTrackerVal = redmineState.filterTrackerId || '';
+        trackerSelect.innerHTML = [
+            '<option value="">전체 유형 (Tracker)</option>',
+            ...redmineState.metadata.trackers.map(t => {
+                const sel = (String(t.id) === String(currentTrackerVal)) ? 'selected' : '';
+                return `<option value="${t.id}" ${sel}>${escapeHtml(t.name)}</option>`;
+            })
         ].join('');
     }
 
-    if (trackerSelect && redmineState.metadata.trackers) {
-        trackerSelect.innerHTML = [
-            '<option value="">전체 유형 (Tracker)</option>',
-            ...redmineState.metadata.trackers.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`)
-        ].join('');
-    }
+    // 상태 필터는 현재 선택된 Tracker에 맞게 렌더링
+    updateStatusFilterOptions(redmineState.filterTrackerId);
 
     if (prioritySelect && redmineState.metadata.priorities) {
         prioritySelect.innerHTML = [
@@ -656,8 +722,15 @@ function renderIssueDetail(iss) {
     const currentTrackerId = (iss.tracker && iss.tracker.id) || iss.tracker_id;
     const currentAssigneeId = (iss.assigned_to && iss.assigned_to.id) || iss.assigned_to_id || '';
 
-    // 1. 상태 옵션
-    const statusOptions = (redmineState.metadata.statuses || []).map(s => {
+    // 1. 상태 옵션 (해당 일감 유형에서 사용 가능한 상태로 필터링)
+    const availableStatuses = getAvailableStatusesForTracker(currentTrackerId);
+    let issueStatuses = [...availableStatuses];
+    // 만약 현재 일감의 상태가 매핑 목록에 누락되어 있다면 데이터 무결성을 위해 포함
+    if (currentStatusId && !issueStatuses.some(s => s.id === currentStatusId)) {
+        const currObj = (redmineState.metadata.statuses || []).find(s => s.id === currentStatusId) || { id: currentStatusId, name: statusName };
+        issueStatuses.unshift(currObj);
+    }
+    const statusOptions = issueStatuses.map(s => {
         const sel = (s.id === currentStatusId || s.name === statusName) ? 'selected' : '';
         return `<option value="${s.id}" ${sel}>${escapeHtml(s.name)}</option>`;
     }).join('');
@@ -827,7 +900,7 @@ function renderIssueDetail(iss) {
                 </div>
                 <div class="action-group">
                     <label>유형:</label>
-                    <select id="quick-issue-tracker-select" class="form-select" onchange="onQuickPropertyChange(${iss.id}, 'tracker_id', this.value)">
+                    <select id="quick-issue-tracker-select" class="form-select" onchange="onQuickTrackerSelectChange(${iss.id}, this.value)">
                         ${trackerOptions}
                     </select>
                 </div>
@@ -899,6 +972,25 @@ async function loadProjectMembersForIssue(projectId, currentAssigneeId, selectEl
     });
 
     select.innerHTML = baseOptions.join('');
+}
+
+function onQuickTrackerSelectChange(issueId, newTrackerId) {
+    const statusSelect = document.getElementById('quick-issue-status-select');
+    if (statusSelect) {
+        const currentStatusVal = statusSelect.value ? parseInt(statusSelect.value, 10) : null;
+        const availableStatuses = getAvailableStatusesForTracker(newTrackerId);
+        let issueStatuses = [...availableStatuses];
+        // 만약 현재 선택된 상태가 있다면 목록에 보존
+        if (currentStatusVal && !issueStatuses.some(s => s.id === currentStatusVal)) {
+            const currObj = (redmineState.metadata.statuses || []).find(s => s.id === currentStatusVal);
+            if (currObj) issueStatuses.unshift(currObj);
+        }
+        statusSelect.innerHTML = issueStatuses.map(s => {
+            const sel = (s.id === currentStatusVal) ? 'selected' : '';
+            return `<option value="${s.id}" ${sel}>${escapeHtml(s.name)}</option>`;
+        }).join('');
+    }
+    onQuickPropertyChange(issueId, 'tracker_id', newTrackerId);
 }
 
 async function onQuickPropertyChange(issueId, fieldName, value) {
@@ -1462,28 +1554,53 @@ function quickFilterByStat(type) {
         redmineState.quickFilterDueToday = false;
     } else if (type === 'progress') {
         redmineState.quickFilterDueToday = false;
-        // 메타데이터 상태 중 '진행' 또는 'progress' 매칭
-        const progStatus = (redmineState.metadata.statuses || []).find(s => 
+        let progStatus = getAvailableStatusesForTracker(redmineState.filterTrackerId).find(s => 
             s.name.includes('진행') || s.name.toLowerCase().includes('progress')
         );
+        // 만약 현재 선택된 유형에서 해당 상태를 지원하지 않는다면 전체 유형으로 리셋하여 정상 조회
+        if (!progStatus && redmineState.filterTrackerId) {
+            const trackerSelect = document.getElementById('redmine-tracker-filter');
+            if (trackerSelect) trackerSelect.value = '';
+            redmineState.filterTrackerId = null;
+            updateStatusFilterOptions(null);
+            progStatus = (redmineState.metadata.statuses || []).find(s => 
+                s.name.includes('진행') || s.name.toLowerCase().includes('progress')
+            );
+        }
         if (statusSelect && progStatus) {
             statusSelect.value = progStatus.id;
         }
     } else if (type === 'new') {
         redmineState.quickFilterDueToday = false;
-        // 메타데이터 상태 중 '신규' 또는 'new' 매칭
-        const newStatus = (redmineState.metadata.statuses || []).find(s => 
+        let newStatus = getAvailableStatusesForTracker(redmineState.filterTrackerId).find(s => 
             s.name.includes('신규') || s.name.toLowerCase().includes('new') || s.name.includes('접수')
         );
+        if (!newStatus && redmineState.filterTrackerId) {
+            const trackerSelect = document.getElementById('redmine-tracker-filter');
+            if (trackerSelect) trackerSelect.value = '';
+            redmineState.filterTrackerId = null;
+            updateStatusFilterOptions(null);
+            newStatus = (redmineState.metadata.statuses || []).find(s => 
+                s.name.includes('신규') || s.name.toLowerCase().includes('new') || s.name.includes('접수')
+            );
+        }
         if (statusSelect && newStatus) {
             statusSelect.value = newStatus.id;
         }
     } else if (type === 'resolved') {
         redmineState.quickFilterDueToday = false;
-        // 메타데이터 상태 중 '해결', '피드백', '완료' 매칭
-        const resStatus = (redmineState.metadata.statuses || []).find(s => 
+        let resStatus = getAvailableStatusesForTracker(redmineState.filterTrackerId).find(s => 
             s.name.includes('해결') || s.name.includes('피드백') || s.name.includes('완료') || s.name.toLowerCase().includes('resolved')
         );
+        if (!resStatus && redmineState.filterTrackerId) {
+            const trackerSelect = document.getElementById('redmine-tracker-filter');
+            if (trackerSelect) trackerSelect.value = '';
+            redmineState.filterTrackerId = null;
+            updateStatusFilterOptions(null);
+            resStatus = (redmineState.metadata.statuses || []).find(s => 
+                s.name.includes('해결') || s.name.includes('피드백') || s.name.includes('완료') || s.name.toLowerCase().includes('resolved')
+            );
+        }
         if (statusSelect && resStatus) {
             statusSelect.value = resStatus.id;
         }
@@ -1516,9 +1633,16 @@ function onRedmineFilterChange() {
     const assigneeSelect = document.getElementById('redmine-assignee-filter');
     const myCheckbox = document.getElementById('redmine-filter-my-checkbox');
 
+    const selectedTrackerId = trackerSelect && trackerSelect.value ? parseInt(trackerSelect.value, 10) : null;
+    // 만약 선택된 Tracker가 이전 상태와 달라졌다면 상태 필터 옵션 동기화
+    if (redmineState.filterTrackerId !== selectedTrackerId) {
+        redmineState.filterTrackerId = selectedTrackerId;
+        updateStatusFilterOptions(selectedTrackerId);
+    }
+
     redmineState.selectedProjectId = projSelect && projSelect.value ? parseInt(projSelect.value, 10) : null;
     redmineState.filterStatusId = statusSelect && statusSelect.value ? parseInt(statusSelect.value, 10) : null;
-    redmineState.filterTrackerId = trackerSelect && trackerSelect.value ? parseInt(trackerSelect.value, 10) : null;
+    redmineState.filterTrackerId = selectedTrackerId;
     redmineState.filterPriorityId = prioritySelect && prioritySelect.value ? parseInt(prioritySelect.value, 10) : null;
     redmineState.searchQuery = searchInput ? searchInput.value.trim() : '';
     redmineState.filterAssignee = assigneeSelect ? assigneeSelect.value : '';

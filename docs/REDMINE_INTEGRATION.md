@@ -62,6 +62,11 @@ flowchart TD
 - Textile 및 Markdown 서식을 자동으로 변환하여 다크 테마로 렌더링.
 - 위키 내용을 애플리케이션 내에서 즉시 수정하고 서버로 직접 저장할 수 있는 통합 에디터 제공.
 
+### 2-6. 🎯 유형(Tracker)별 사용 가능한 상태(Status) 동적 필터링
+- **지능형 워크플로 매핑**: 일감 캐시 DB와 트래커 기본 설정으로부터 `유형 ↔ 사용 가능 상태` 매핑(`tracker_status_map`)을 자동 구성.
+- **메인 필터 바 연동**: 상단 유형 필터(`redmine-tracker-filter`) 선택 시, 상태 필터(`redmine-status-filter`) 옵션이 해당 유형에서 실제로 사용 가능한 상태 목록으로 실시간 재구성(선택된 상태 유효성 검증 및 리셋 지원).
+- **상세 뷰어 빠른 속성 바 연동**: 일감 상세 뷰어의 상태 셀렉트박스(`quick-issue-status-select`)도 해당 일감의 유형에 맞는 상태만 제공하며, 유형 변경 시 상태 목록이 즉시 동기화.
+
 ---
 
 ## 3. 🛠️ 백엔드 서비스 API 명세 (`services/redmine_service.py`)
@@ -72,6 +77,9 @@ flowchart TD
 | :--- | :--- | :--- | :--- |
 | `save_redmine_config(...)` | `server_url`, `api_key`, `auto_sync`, `interval_min`, `scope`, `limit`, `project_id` | `{"status": "success", "user": {...}}` | Redmine 서버 연결 설정 검증 및 저장 |
 | `get_redmine_config()` | 없음 | `{"status": "success", "config": {...}}` | 저장된 Redmine 연동 환경설정 반환 |
+| `fetch_redmine_metadata()` | 없음 | `{"status": "success", "metadata": {...}}` | 트래커, 상태, 우선순위 및 유형별 상태 매핑 서버 동기화 |
+| `get_redmine_metadata()` | 없음 | `{"status": "success", "metadata": {...}}` | 캐시된 메타데이터 및 유형별 상태 매핑(`tracker_status_map`) 반환 |
+| `get_redmine_tracker_status_map()` | 없음 | `{"status": "success", "tracker_status_map": {...}}` | 유형(Tracker)별 사용 가능한 상태 ID 매핑 사전 반환 |
 | `fetch_redmine_projects()` | 없음 | `{"status": "success", "projects": [...]}` | 서버로부터 전체 프로젝트 목록 동기화 (즐겨찾기 유지) |
 | `get_redmine_projects()` | 없음 | `{"status": "success", "projects": [...]}` | SQLite 캐시에서 `is_favorite DESC` 순으로 프로젝트 조회 |
 | `toggle_redmine_project_favorite(project_id, is_fav=None)` | `project_id` (int), `is_favorite` (bool) | `{"status": "success", "is_favorite": 1/0}` | 특정 프로젝트의 주요 프로젝트(⭐) 상태 토글 |

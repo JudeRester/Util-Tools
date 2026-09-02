@@ -43,6 +43,8 @@ emails/
 *.xlsx
 *.csv
 utility-toolkit-backup-*.json
+redmine_*_issues.*
+redmine_*_cache.*
 
 # SQLite Database & Storage
 data/

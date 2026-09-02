@@ -214,6 +214,45 @@ def save_redmine_config(server_url: str, api_key: str, auto_sync: bool = True, s
 # 2. 프로젝트 & 메타데이터 동기화
 # ==========================================
 
+def _build_tracker_status_map(conn, trackers=None):
+    """
+    SQLite 일감 캐시 및 트래커 메타데이터로부터 유형(Tracker)별 사용 가능한 상태(Status) ID 목록 매핑을 구성
+    """
+    mapping = {}
+    try:
+        # 1. 일감 캐시에서 실제로 존재하는 tracker_id -> status_id 수집
+        rows = conn.execute("""
+            SELECT tracker_id, status_id 
+            FROM redmine_issues 
+            WHERE tracker_id IS NOT NULL AND status_id IS NOT NULL
+            GROUP BY tracker_id, status_id
+        """).fetchall()
+        for r in rows:
+            if r['tracker_id'] is not None and r['status_id'] is not None:
+                t_id = int(r['tracker_id'])
+                s_id = int(r['status_id'])
+                if t_id not in mapping:
+                    mapping[t_id] = []
+                if s_id not in mapping[t_id]:
+                    mapping[t_id].append(s_id)
+    except Exception as e:
+        _safe_log(f"[Redmine Service] tracker_status_map 집계 실패: {e}")
+
+    # 2. 메타데이터 trackers의 default_status 기본 포함
+    if trackers:
+        for t in trackers:
+            t_id = t.get('id')
+            def_status = t.get('default_status', {}).get('id')
+            if t_id and def_status:
+                t_id = int(t_id)
+                def_status = int(def_status)
+                if t_id not in mapping:
+                    mapping[t_id] = []
+                if def_status not in mapping[t_id]:
+                    mapping[t_id].append(def_status)
+    return mapping
+
+
 @eel.expose
 def fetch_redmine_metadata():
     """트래커, 일감 상태, 우선순위 등 메타데이터 서버 동기화"""
@@ -237,10 +276,14 @@ def fetch_redmine_metadata():
         p_res = _request_redmine_api(server_url, api_key, "enumerations/issue_priorities.json")
         priorities = p_res.get("data", {}).get("issue_priorities", []) if p_res.get("status") == "success" else []
 
+        # 4. Tracker -> Available Statuses Mapping
+        tracker_status_map = _build_tracker_status_map(conn, trackers)
+
         meta_data = {
             "trackers": trackers,
             "statuses": statuses,
             "priorities": priorities,
+            "tracker_status_map": tracker_status_map,
             "updated_at": datetime.now().isoformat()
         }
 
@@ -259,15 +302,33 @@ def fetch_redmine_metadata():
 
 @eel.expose
 def get_redmine_metadata():
-    """캐시된 메타데이터 조회 (트래커, 상태, 우선순위)"""
+    """캐시된 메타데이터 조회 (트래커, 상태, 우선순위, 유형별 상태 매핑)"""
     conn = get_db_connection()
     try:
         row = conn.execute("SELECT data_json FROM redmine_meta WHERE key = 'metadata'").fetchone()
         if row and row['data_json']:
-            return {"status": "success", "metadata": json.loads(row['data_json'])}
+            meta_data = json.loads(row['data_json'])
+            # 최신 캐시 상태를 반영하여 tracker_status_map 항상 갱신
+            meta_data["tracker_status_map"] = _build_tracker_status_map(conn, meta_data.get('trackers'))
+            return {"status": "success", "metadata": meta_data}
         return fetch_redmine_metadata()
     except Exception as e:
         return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+
+
+@eel.expose
+def get_redmine_tracker_status_map():
+    """유형(Tracker)별 사용 가능한 상태(Status) ID 목록 매핑 조회"""
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT data_json FROM redmine_meta WHERE key = 'metadata'").fetchone()
+        trackers = json.loads(row['data_json']).get('trackers', []) if row and row['data_json'] else []
+        mapping = _build_tracker_status_map(conn, trackers)
+        return {"status": "success", "tracker_status_map": mapping}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "tracker_status_map": {}}
     finally:
         conn.close()
 
