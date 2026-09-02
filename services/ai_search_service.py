@@ -1,11 +1,11 @@
 """
-초경량 고성능 AI 딥러닝 시맨틱(의미론적) 임베딩 & 문맥 검색 엔진
+AI 딥러닝 시맨틱(의미론적) 임베딩 & 문맥 검색 엔진
 - 모델: intfloat/multilingual-e5-small ONNX (Quantized)
 - 최적화:
-  1. 동적 패딩 (Dynamic Padding): 실제 텍스트 길이에 맞춰 필요한 만큼만 초고속 행렬 연산
-  2. 디스크 벡터 DB 캐시 (embeddings_cache.json): 계산된 의미 좌표를 디스크에 영구 보관
-  3. 스마트 증분 갱신 (Incremental Caching): 변경되거나 새로 추가된 문서만 쏙쏙 골라 0.02초 만에 부분 갱신
-  4. 인메모리 행렬 연산: 검색 시 검색어 1개만 추론(5~10ms) 후 RAM에서 0.1ms 만에 즉시 매칭
+  1. 동적 패딩 (Dynamic Padding): 실제 텍스트 길이에 맞춰 필요한 만큼만 행렬 연산
+  2. 디스크 벡터 DB 캐시 (SQLite ai_embeddings): 계산된 의미 좌표를 영구 보관
+  3. 해시 기반 증분 갱신 (Incremental Caching): 변경되거나 새로 추가된 문서만 식별하여 부분 갱신
+  4. 인메모리 행렬 연산: 검색 시 검색어 1개만 추론(5~10ms) 후 RAM에서 즉시 코사인 유사도 연산
 """
 import os
 import sys
@@ -65,7 +65,7 @@ def _safe_log(msg):
 
 
 def _load_disk_cache():
-    """SQLite(ai_embeddings 테이블)에서 기저장된 바이너리 벡터 캐시 초고속 복원 (< 5ms)"""
+    """SQLite(ai_embeddings 테이블)에서 기저장된 바이너리 벡터 캐시 복원"""
     global _vector_db_cache
     _vector_db_cache = {}
     from services.db_service import get_db_connection
@@ -244,7 +244,7 @@ def _get_neural_embeddings(texts, is_query=False, batch_size=16):
     """
     multilingual-e5-small 신경망 임베딩 벡터 추출
     - 미니배치 분할(Mini-batch Chunking): 대량 문서도 메모리 고갈(OOM 39GB) 없이 안전하게 분할 계산
-    - 동적 패딩(Dynamic Padding): 배치 내 길이에 맞춰 최소 텐서로 초고속 계산
+    - 동적 패딩(Dynamic Padding): 배치 내 길이에 맞춰 최소 텐서로 연산
     """
     if not _init_ai_engine() or _onnx_session is None or _tokenizer is None:
         return None
@@ -271,8 +271,8 @@ def _get_neural_embeddings(texts, is_query=False, batch_size=16):
 
 def _sync_document_embeddings(all_items):
     """
-    스마트 증분 갱신 (Incremental Caching):
-    - 캐시에 이미 있고 해시가 같은 문서는 SKIP (0초)
+    해시 기반 증분 갱신 (Incremental Caching):
+    - 캐시에 이미 있고 해시가 같은 문서는 생략
     - 새로 추가되거나 수정된 문서만 한 번에 미니 배치로 계산하여 SQLite에 저장
     """
     _init_ai_engine()
@@ -560,10 +560,10 @@ def _get_all_system_items(filter_category=None):
 @eel.expose
 def ai_semantic_search(query, filter_category=None):
     """
-    multilingual-e5-small 딥러닝 기반 초경량 시맨틱 AI 문맥 검색
-    - 검색어 1개만 동적 패딩으로 초고속 추론(5~10ms)
-    - RAM 벡터 행렬 상에서 0.1ms 만에 즉시 코사인 유사도 매칭
-    - 상위 최적 50건만 슬라이싱하여 IPC 패킷 및 브라우저 DOM 렌더링 메모리 95% 절감
+    multilingual-e5-small 딥러닝 기반 시맨틱 AI 문맥 검색
+    - 검색어 1개 동적 패딩 추론
+    - RAM 벡터 행렬 상에서 코사인 유사도 연산
+    - 상위 50건 슬라이싱 반환
     """
     if not query or not query.strip():
         return {"status": "success", "data": [], "query": query, "latency_ms": 0}
@@ -575,7 +575,7 @@ def ai_semantic_search(query, filter_category=None):
     if not all_items:
         return {"status": "success", "data": [], "query": query, "latency_ms": 0}
 
-    # 1. 문서 벡터 스마트 증분 갱신 (캐시 히트 시 0ms)
+    # 1. 문서 벡터 증분 갱신
     _sync_document_embeddings(all_items)
 
     # 2. 검색어 1개만 AI 동적 패딩 추론 (5~10ms)
@@ -594,7 +594,7 @@ def ai_semantic_search(query, filter_category=None):
 
         if doc_embs_list:
             doc_matrix = np.vstack(doc_embs_list)  # (N, 384)
-            # RAM 상에서 초고속 코사인 유사도 내적 계산 (0.1ms)
+            # RAM 상에서 코사인 유사도 내적 연산
             scores = np.dot(doc_matrix, q_emb)
 
             for idx, item in enumerate(valid_items):
@@ -676,7 +676,7 @@ def ai_compare_similarity(text1, text2):
 
 @eel.expose
 def warmup_ai_engine_async():
-    """AI 스마트 검색 모달 진입 시 백그라운드에서 조용히 엔진 준비"""
+    """AI 시맨틱 검색 모달 진입 시 백그라운드에서 엔진 준비"""
     def _warmup():
         try:
             _init_ai_engine()

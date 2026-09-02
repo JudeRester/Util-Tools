@@ -166,7 +166,7 @@ async function testRedmineConnectionAction() {
         return;
     }
 
-    // URL 지능형 정규화 및 입력창 갱신
+    // URL 정규화 및 입력창 갱신
     url = normalizeRedmineUrl(url);
     if (urlInput) urlInput.value = url;
 
@@ -220,7 +220,7 @@ async function saveRedmineConfigAction() {
         return;
     }
 
-    // URL 지능형 정규화 및 입력창 갱신
+    // URL 정규화 및 입력창 갱신
     url = normalizeRedmineUrl(url);
     if (urlInput) urlInput.value = url;
 
@@ -1307,7 +1307,7 @@ function renderWikiReader(projKey, wiki) {
     redmineState.currentWikiProject = projKey;
     redmineState.currentWikiTitle = title;
 
-    // 지능형 포맷터 (HTML / Markdown / Textile 자동 감지)
+    // 포맷 자동 판별 렌더링 (HTML / Markdown / Textile)
     const renderedHtml = formatRedmineContent(rawText);
 
     container.innerHTML = `

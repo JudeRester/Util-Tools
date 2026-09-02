@@ -34,7 +34,7 @@ async function initEmailViewer() {
 async function loadAllEmails() {
     try {
         if (window.eel && typeof eel.get_emails_chunk === 'function') {
-            // 1단계: 첫 번째 청크(300건) 초고속 로드 (< 20ms)
+            // 1단계: 첫 번째 청크(300건) 로드
             const firstChunk = await eel.get_emails_chunk(0, 300)();
             if (firstChunk && firstChunk.status === 'success') {
                 emailState.emails = firstChunk.items || [];

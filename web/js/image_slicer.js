@@ -1,7 +1,7 @@
 /**
  * 인터랙티브 이미지 슬라이서 스튜디오 (web/js/image_slicer.js)
  * - 클립보드(Ctrl+V), 드래그&드롭, 파일 선택 대화상자 이미지 로드
- * - 다중 절단선 일괄 생성: 고정 px 간격 분할, 균등 N등분, 스마트 여백 자동 감지, 연속 클릭 추가
+ * - 다중 절단선 일괄 생성: 고정 px 간격 분할, 균등 N등분, 여백 자동 감지, 연속 클릭 추가
  * - 줌 & 패닝, 절단선 드래그 이동/삭제, 실시간 조각 계산
  * - ZIP 압축 일괄 다운로드, 대상 폴더 일괄 파일 저장, 조각별 클립보드 복사
  */
@@ -332,14 +332,14 @@ async function promptGridSplit() {
     showToast('그리드 생성 완료', `${rows}행 × ${cols}열 (총 ${rows * cols}개 조각) 분할선이 생성되었습니다! 🔲`, '✅');
 }
 
-// 3-4. 스마트 여백 자동 감지 (Smart Gap Detection)
+// 3-4. 여백 자동 감지 (Gap Detection)
 async function autoDetectSmartGaps() {
     if (!slicerState.image || !slicerState.dataUrl) {
         showToast('알림', '먼저 이미지를 불러와주세요.', '⚠️');
         return;
     }
 
-    showToast('여백 분석 중', '이미지 내의 수평 단색 여백을 정밀 스캔하고 있습니다... 🧠', '⏳', 1500);
+    showToast('여백 분석 중', '이미지 내의 수평 단색 여백을 스캔하고 있습니다... ⏳', '⏳', 1500);
 
     if (window.eel && typeof eel.detect_image_gaps === 'function') {
         try {
@@ -358,7 +358,7 @@ async function autoDetectSmartGaps() {
 
                 recalculateSlices();
                 renderSlicerCanvas();
-                showToast('스마트 여백 감지 완료', `콘텐츠 사이의 여백에 ${added}개의 절단선이 자동 배치되었습니다! 💡`, '✅', 4000);
+                showToast('여백 감지 완료', `콘텐츠 사이의 여백에 ${added}개의 절단선이 자동 배치되었습니다! 💡`, '✅', 4000);
             } else {
                 showToast('감지 실패', (res && res.message) || '여백 감지에 실패했습니다.', '⚠️');
             }
@@ -366,7 +366,7 @@ async function autoDetectSmartGaps() {
             showToast('오류 발생', String(e), '⚠️');
         }
     } else {
-        showToast('지원 불가', '스마트 여백 감지 백엔드 API가 준비되지 않았습니다.', '⚠️');
+        showToast('지원 불가', '여백 감지 백엔드 API가 준비되지 않았습니다.', '⚠️');
     }
 }
 

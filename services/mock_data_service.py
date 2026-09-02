@@ -117,7 +117,7 @@ def hangul_to_roman_syllables(text):
 
 
 def romanize_korean_name_smart(text):
-    """한글 이름 또는 문자열을 스마트한 영문 ID로 변환 (예: '홍길동' -> 'hong.gildong', 'EMP-1001' -> 'emp-1001')"""
+    """한글 이름 또는 문자열을 영문 ID로 변환 (예: '홍길동' -> 'hong.gildong', 'EMP-1001' -> 'emp-1001')"""
     text = str(text or '').strip()
     if not text:
         return ""
@@ -395,7 +395,7 @@ def generate_mock_rows(schema, count=50):
             # 지정된 참조 컬럼 값 탐색
             src_val = _find_referenced_value(row, schema, src_col)
 
-            # 참조 컬럼이 지정되지 않았거나 비어있는 경우 스마트 자동 탐색
+            # 참조 컬럼이 지정되지 않았거나 비어있는 경우 대상 컬럼 자동 탐색
             if not src_val:
                 if opts.get("id_source") == "column":
                     # 사번/ID(sequence), 이름(name) 순서로 자동 탐색

@@ -223,7 +223,7 @@ function loadSampleMarkdownData() {
 ## 📋 2. 인터랙티브 작업 목록 (Task List)
 
 - [x] Python Eel 백엔드 서비스 아키텍처 구축
-- [x] CSV / TSV 초고속 데이터 뷰어 완성
+- [x] CSV / TSV 테이블 데이터 뷰어 완성
 - [x] Mermaid 다이어그램 스튜디오 연동
 - [x] Markdown 실시간 뷰어 및 에디터 개발
 - [ ] Electron 패키징 및 단독 실행 배포

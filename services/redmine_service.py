@@ -28,7 +28,7 @@ _SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
 def _normalize_url(url: str) -> str:
     """
-    서버 URL 지능형 정규화
+    서버 URL 정규화 및 하위 경로 제거
     - 끝부분 슬래시(/) 제거
     - 브라우저 주소창에서 복사한 하위 경로(/projects/..., /issues/..., /my/page, /wiki/... 등)
       자동 감지 및 Redmine Base Server URL로 정제
@@ -548,7 +548,7 @@ def sync_redmine_issues(project_id: int = None, limit: int = None, scope: str = 
 
         all_fetched = list(all_fetched_map.values())
 
-        # SQLite에 Bulk Upsert로 초고속 갱신
+        # SQLite에 Bulk Upsert로 일괄 갱신
         records = []
         for iss in all_fetched:
             p = iss.get('project') or {}

@@ -1,9 +1,9 @@
 """
 확장 가능한 통합 데이터 백업 & 복원 (Export / Import) 서비스 모듈 (services/backup_service.py)
 - Python 백엔드 디스크 직접 파일 I/O 기반의 Zero-Memory 백업 & 복원 아키텍처
-- 브라우저 V8 힙 메모리 적재 없이 수만 건의 레코드를 SQLite DB로 초고속 배치(Batch) 복원
-- JSON 및 ZIP 압축 백업 포맷 완벽 지원
-- 타 PC 및 버전 간 이동성/호환성 100% 보장
+- 브라우저 V8 힙 메모리 적재 없이 대량의 레코드를 SQLite DB로 배치(Batch) 복원
+- JSON 및 ZIP 압축 백업 포맷 지원
+- 타 PC 및 버전 간 이동성/호환성 지원
 """
 import os
 import io

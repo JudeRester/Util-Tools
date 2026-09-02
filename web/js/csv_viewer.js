@@ -1,6 +1,6 @@
 /**
  * CSV / TSV / 테이블 데이터 뷰어 (CSV Data Viewer) 모듈
- * - 초고속 대용량 테이블 렌더링, 인코딩/구분자 자동 감지
+ * - 대용량 테이블 렌더링, 인코딩/구분자 자동 감지
  * - 정렬(Sort), 전역 검색/필터링(Search), 페이지네이션
  * - Markdown / JSON / SQL Insert / CSV 변환 및 내보내기
  */

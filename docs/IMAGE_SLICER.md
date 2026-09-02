@@ -1,6 +1,6 @@
 # ✂️ 이미지 슬라이서 스튜디오 아키텍처 (Image Slicer Studio Architecture)
 
-Util-Tools의 **이미지 슬라이서 스튜디오(Image Slicer Studio)**는 웹툰, 긴 웹페이지 캡처, 디자인 시안, 카드 뉴스 등의 이미지를 **자유 경계선**, **다중 절단선**, **균등 N등분**, **고정 픽셀 간격**, **스마트 여백 자동 감지** 방식으로 분할하고 ZIP 압축 또는 폴더로 일괄 내보내는 그래픽 유틸리티입니다.
+Util-Tools의 **이미지 슬라이서 스튜디오(Image Slicer Studio)**는 웹툰, 긴 웹페이지 캡처, 디자인 시안, 카드 뉴스 등의 이미지를 **자유 경계선**, **다중 절단선**, **균등 N등분**, **고정 픽셀 간격**, **여백 자동 감지** 방식으로 분할하고 ZIP 압축 또는 폴더로 일괄 내보내는 그래픽 유틸리티입니다.
 
 ---
 
@@ -20,12 +20,12 @@ flowchart TD
         Mode2["다중 절단선 드로잉 (Horizontal/Vertical Cutlines)"]
         Mode3["고정 픽셀(px) 간격 일괄 생성 (예: 1200px 분할)"]
         Mode4["균등 N등분 분할 (예: 5등분 분할)"]
-        Mode5["스마트 여백 자동 감지 (Smart Margin Trim)"]
+        Mode5["여백 자동 감지 (Margin Trim)"]
     end
 
     subgraph PillowBackend ["3. Python Pillow 절단 엔진 (services/image_slicer_service.py)"]
         Crop["Pillow 무손실 크롭 (crop, RGBA/RGB 자동 판별)"]
-        Naming["지능형 넘버링 명명 규칙 ({filename}_{index}.png)"]
+        Naming["순번 기반 파일 명명 ({filename}_{index}.png)"]
         Zip["in-memory ZIP 압축 패킹 (Deflated 스트리밍)"]
         Disk["지정 폴더 물리 파일 직접 일괄 저장"]
     end
@@ -50,7 +50,7 @@ flowchart TD
    - 상세페이지나 웹툰 컷 분할 시 작업 편의 제공.
 4. **🔢 균등 N등분(Equal Parts) 분할**:
    - 3등분, 4등분, 9등분 등 지정한 개수로 균등 분할.
-5. **🎯 스마트 여백 자동 감지 (Auto Margin Trim)**:
+5. **🎯 여백 자동 감지 (Auto Margin Trim)**:
    - 이미지 외곽의 단색(흰색, 검은색, 투명 배경)을 역치(Threshold) 알고리즘으로 스캔하여 불필요한 공백을 자동으로 잘라내고 본문 영역만 검출.
 
 ---

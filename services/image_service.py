@@ -2,7 +2,7 @@
 이미지 슬라이서 및 분할 처리 백엔드 서비스 모듈 (services/image_service.py)
 - PIL(Pillow) 기반 무손실 고품질 이미지 자르기 (Crop & Slice)
 - 지정 폴더 일괄 파일 저장 및 ZIP 압축 내보내기
-- 수평 단색 여백(Whitespace Gap) 지능형 자동 감지
+- 수평 단색 여백(Whitespace Gap) 자동 감지
 - 탐색기 파일/폴더 선택 대화상자 지원
 """
 import os
@@ -164,7 +164,7 @@ def detect_image_gaps(image_data_base64: str, min_gap_height: int = 15, variance
                 if 5 < mid_y < height - 5:
                     gaps.append(mid_y)
 
-        core.logger.log_info("Image Slicer", f"스마트 여백 감지 완료: {len(gaps)}개의 절단선 자동 추천 (이미지 높이: {height}px)")
+        core.logger.log_info("Image Slicer", f"여백 자동 감지 완료: {len(gaps)}개의 절단선 자동 추천 (이미지 높이: {height}px)")
         return {
             'status': 'success',
             'cut_lines_y': gaps,
@@ -172,7 +172,7 @@ def detect_image_gaps(image_data_base64: str, min_gap_height: int = 15, variance
             'image_height': height
         }
     except Exception as e:
-        core.logger.log_error("Image Slicer", f"스마트 여백 감지 실패: {e}", exc=e)
+        core.logger.log_error("Image Slicer", f"여백 자동 감지 실패: {e}", exc=e)
         return {'status': 'error', 'message': f'여백 감지 실패: {str(e)}'}
 
 

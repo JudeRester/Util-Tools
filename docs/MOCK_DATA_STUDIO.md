@@ -18,7 +18,7 @@ flowchart TD
     end
 
     subgraph Pass2 ["Pass 2: 문맥 연계 데이터 생성 (Contextual Pass)"]
-        P2_1["지능형 한글 ➔ 로마자 변환 (Romanization Engine)\n'홍길동' ➔ 'gildong.hong' / 'minjun.kim'"]
+        P2_1["한글 ➔ 로마자 표기법 변환 (Romanization Engine)\n'홍길동' ➔ 'gildong.hong' / 'minjun.kim'"]
         P2_2["문맥 일치 이메일 생성\n이름 로마자 + 회사 도메인 = 'gildong.hong@company.com'"]
     end
 
@@ -51,7 +51,7 @@ flowchart TD
   - `uuid`: 고유 UUID v4
   - `choice`: 쉼표로 구분된 사용자 정의 목록 중 무작위 선택
 
-### 2-2. Pass 2: 지능형 한글 ➔ 영문 로마자 변환 및 이메일 연계
+### 2-2. Pass 2: 한글 ➔ 영문 로마자 표기법 변환 및 이메일 연계
 - 한국어 음절 분해(초성, 중성, 종성) 및 국어의 로마자 표기법 알고리즘 탑재.
 - 생성된 한글 성명(`홍길동`)을 즉시 분석하여 `gildong.hong` 또는 `gdhong` 형태의 현실적인 영문 표기를 도출.
 - 회사 도메인(`@company.kr`, `@test.com` 등)과 결합하여 일치하는 업무용 이메일 자동 도출.
