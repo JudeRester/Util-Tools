@@ -174,19 +174,31 @@
                             <p>전체 설정 및 데이터 내보내기/가져오기 (Export / Import)</p>
                         </div>
                     </button>
+                </div>
 
-                    <!-- Antigravity CLI (agy) 연동 설정 (선택적 활성화) -->
-                    <div class="tool-btn" id="agy-setting-card" style="cursor: default;">
-                        <div class="btn-icon">🤖</div>
-                        <div class="btn-text" style="width: 100%;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                                <h3 style="margin: 0;">Antigravity CLI (agy) 연동</h3>
-                                <span class="badge" id="agy-env-badge" style="display: none; font-size: 0.7rem; padding: 2px 6px; background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 4px;">감지됨</span>
+                <!-- 외부 도구 및 확장 연동 설정 영역 -->
+                <div class="settings-group-container" style="margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border-color);">
+                    <div class="pane-toolbar-header" style="margin-bottom: 12px;">
+                        <div class="group-title-inline">
+                            <span class="title-icon">⚙️</span> 외부 도구 및 확장 연동 설정
+                        </div>
+                    </div>
+                    <div class="settings-panel-row" id="agy-setting-card">
+                        <div class="settings-panel-left">
+                            <div class="settings-icon">🤖</div>
+                            <div class="settings-text">
+                                <div class="settings-title-row">
+                                    <span class="settings-title">Antigravity CLI (agy) 연동</span>
+                                    <span class="badge badge-success" id="agy-env-badge" style="display: none;">감지됨</span>
+                                </div>
+                                <div class="settings-desc">로컬 agy CLI 세션 목록을 조회하고 작업 폴더에서 즉시 대화형 터미널을 이어 실행합니다.</div>
                             </div>
-                            <p style="margin: 4px 0 8px 0; font-size: 0.78rem; color: var(--text-secondary);">로컬 agy CLI 세션 목록을 조회하고 작업 폴더에서 즉시 터미널을 이어 실행합니다.</p>
-                            <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                                <input type="checkbox" id="agy-enable-toggle" onchange="onToggleAgyIntegration(this.checked)" style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent-color);">
-                                <span id="agy-toggle-label" style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">비활성화됨</span>
+                        </div>
+                        <div class="settings-panel-right">
+                            <label class="toggle-switch-wrapper">
+                                <input type="checkbox" id="agy-enable-toggle" onchange="onToggleAgyIntegration(this.checked)">
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-label" id="agy-toggle-label">비활성화됨</span>
                             </label>
                         </div>
                     </div>
@@ -237,22 +249,42 @@
                     <!-- JavaScript로 실시간 동적 렌더링 -->
                 </div>
 
-                <!-- 3) Antigravity CLI 세션 바로가기 섹션 (선택적 활성화) -->
-                <div id="agy-launch-section" style="display: none; margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border-color);">
-                    <div class="pane-toolbar-header">
+                <!-- 3) Antigravity CLI 세션 바로가기 섹션 (선택적 활성화 - 테이블 뷰) -->
+                <div id="agy-launch-section" style="display: none; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+                    <div class="pane-toolbar-header agy-toolbar-header" style="flex-wrap: wrap; gap: 10px;">
                         <div class="group-title-inline">
                             <span class="title-icon">🤖</span> Antigravity CLI 세션
-                            <div class="filter-btn-group" style="margin-left: 12px; display: inline-flex; gap: 4px;">
-                                <button class="compact-btn active" id="agy-filter-current-btn" onclick="filterAgySessions('current')">현재 프로젝트</button>
-                                <button class="compact-btn" id="agy-filter-all-btn" onclick="filterAgySessions('all')">전체 세션</button>
+                            <span class="badge" id="agy-session-count-badge" style="margin-left: 8px; font-size: 0.74rem; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 2px 8px;">0개</span>
+                            <div class="filter-btn-group" style="margin-left: 14px; display: inline-flex; gap: 4px;">
+                                <button class="compact-btn active" id="agy-filter-current-btn" onclick="filterAgySessions('current')">📍 현재 프로젝트</button>
+                                <button class="compact-btn" id="agy-filter-all-btn" onclick="filterAgySessions('all')">🌐 전체 세션</button>
                             </div>
                         </div>
-                        <button class="edit-shortcuts-btn" onclick="refreshAgySessions()" title="세션 목록 새로고침">
-                            🔄 새로고침
-                        </button>
+                        <div class="agy-toolbar-right" style="display: flex; align-items: center; gap: 8px;">
+                            <input type="text" id="agy-search-input" class="compact-search-input" placeholder="🔍 제목, 프로젝트, 세션ID 검색..." oninput="onAgySearchInput(this.value)">
+                            <button class="edit-shortcuts-btn" onclick="refreshAgySessions()" title="세션 목록 새로고침">
+                                🔄 새로고침
+                            </button>
+                        </div>
                     </div>
-                    <div class="button-grid" id="agy-sessions-grid">
-                        <!-- JavaScript 동적 렌더링 -->
+
+                    <!-- 세션 목록 테이블 뷰 -->
+                    <div class="agy-table-wrapper">
+                        <table class="agy-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 36%;">세션 제목</th>
+                                    <th style="width: 24%;">프로젝트 / 워크스페이스</th>
+                                    <th style="width: 12%;">세션 ID</th>
+                                    <th style="width: 8%; text-align: center;">스텝</th>
+                                    <th style="width: 11%; text-align: center;">마지막 작업</th>
+                                    <th style="width: 9%; text-align: center;">실행</th>
+                                </tr>
+                            </thead>
+                            <tbody id="agy-sessions-tbody">
+                                <!-- JavaScript 동적 렌더링 -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </section>
