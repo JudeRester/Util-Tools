@@ -59,6 +59,7 @@ hidden_imports = [
     'services.mock_data_service',
     'services.redmine_service',
     'services.image_service',
+    'services.agy_service',
 ] + onnx_hidden + tok_hidden
 
 a = Analysis(

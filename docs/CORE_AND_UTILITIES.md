@@ -69,6 +69,10 @@ stateDiagram-v2
 - **하단 섹션: 프로그램 & 도구 빠른 실행 (`quick_launch`)**:
   - 개발 서버 구동 스크립트(`.bat`), 데스크톱 실행 파일(`.exe`), 웹 관리자 페이지(URL), SSH 접속 명령어를 원클릭으로 실행.
   - 전용 [⚙️ 편집] 모달을 통한 실시간 추가/수정/삭제 및 마우스 드래그 앤 드롭 카드 순서 변경 (`order_index`).
+- **선택적 확장 섹션: Antigravity CLI(`agy`) 세션 연동 (`services/agy_service.py`)**:
+  - `app_settings.json`의 `enable_agy_integration` 옵션이 활성화되었을 때 노출되는 개발자 도구.
+  - 로컬 `conversation_summaries.db`를 안전한 Read-Only 모드로 조회하여 세션 목록 및 진행 스텝 수 제공.
+  - `[현재 프로젝트]`/`[전체 세션]` 필터링 및 클릭 시 해당 세션의 원래 작업 디렉토리(`workspace_uris`)에서 즉시 대화형 터미널(`agy --conversation <id>`) 실행.
 
 ---
 

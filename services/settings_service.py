@@ -9,7 +9,8 @@ DEFAULT_SETTINGS = {
     "console_collapsed": False,
     "calendar_month_width": None,
     "notes_sidebar_width": None,
-    "js_editor_width": None
+    "js_editor_width": None,
+    "enable_agy_integration": False
 }
 
 def load_settings_from_file():
