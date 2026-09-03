@@ -2140,14 +2140,68 @@
         </div>
     </div>
 
-    <!-- 공통 인레이어 팝업 다이얼로그 (Alert / Confirm) -->
+    <!-- Antigravity CLI 실시간 세션 인스펙터 모달 -->
+    <div id="agy-live-inspector-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card agy-inspector-card">
+            <div class="modal-header">
+                <div class="agy-inspector-header-info">
+                    <div class="agy-inspector-title">
+                        <span class="agy-inspector-icon">🤖</span>
+                        <span id="agy-inspector-title-text" class="agy-inspector-title-text">세션 모니터</span>
+                    </div>
+                    <div class="agy-inspector-meta">
+                        <code id="agy-inspector-id" class="agy-inspector-id">#00000000</code>
+                        <span id="agy-inspector-step-badge" class="agy-inspector-badge badge-step">0 스텝</span>
+                        <span id="agy-inspector-status-badge" class="agy-inspector-badge badge-idle">대기 중</span>
+                    </div>
+                </div>
+                <button type="button" class="modal-close" onclick="closeAgyLiveInspector()">&times;</button>
+            </div>
+            <div class="modal-body agy-inspector-body">
+                <div id="agy-inspector-perm-alert" class="agy-inspector-perm-alert" style="display: none;">
+                    <div class="agy-perm-alert-icon">🔐</div>
+                    <div class="agy-perm-alert-content">
+                        <strong>터미널 권한 승인 대기 중</strong>
+                        <p id="agy-inspector-perm-desc">명령어 실행 승인 대기</p>
+                    </div>
+                    <button type="button" class="form-btn add-btn btn-sm" onclick="launchAgyInspectorTerminal()">
+                        <span>⚡</span> 터미널로 이동
+                    </button>
+                </div>
+                <div id="agy-inspector-stream" class="agy-inspector-stream">
+                    <!-- 스텝 카드 실시간 렌더링 -->
+                </div>
+            </div>
+            <div class="modal-footer agy-inspector-footer">
+                <div class="agy-inspector-footer-left">
+                    <label class="agy-inspector-auto-label">
+                        <input type="checkbox" id="agy-inspector-auto-toggle" onchange="toggleAgyInspectorAutoRefresh(this.checked)">
+                        <span>실시간 자동 갱신 (3초)</span>
+                    </label>
+                </div>
+                <div class="modal-footer-right">
+                    <button type="button" class="form-btn close-btn" onclick="refreshAgyLiveInspector()">
+                        <span>🔄</span> 새로고침
+                    </button>
+                    <button type="button" class="form-btn add-btn" onclick="launchAgyInspectorTerminal()">
+                        <span>⚡</span> 터미널 창 전환 / 열기
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 공통 인레이어 팝업 다이얼로그 (Alert / Confirm / Prompt) -->
     <div id="app-dialog-modal" class="modal-overlay dialog-modal-overlay">
         <div class="modal-card dialog-card">
             <div class="dialog-header">
                 <div class="dialog-icon" id="dialog-icon">ℹ️</div>
                 <h3 class="dialog-title" id="dialog-title">알림</h3>
             </div>
-            <div class="dialog-body" id="dialog-message"></div>
+            <div class="dialog-body">
+                <div id="dialog-message"></div>
+                <input type="text" id="dialog-input" class="form-input" style="display: none; margin-top: 12px; width: 100%; box-sizing: border-box;" autocomplete="off">
+            </div>
             <div class="dialog-footer" id="dialog-footer">
                 <button id="dialog-cancel-btn" class="form-btn close-btn">취소</button>
                 <button id="dialog-confirm-btn" class="form-btn add-btn">확인</button>

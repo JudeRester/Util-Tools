@@ -147,8 +147,8 @@ async function pasteCsvFromClipboard() {
         }
         loadCsvFromText(text, '클립보드 붙여넣기');
     } catch (e) {
-        // 브라우저 권한 에러 시 프롬프트 대체
-        const manualText = prompt('붙여넣을 CSV / TSV 텍스트를 입력해주세요:');
+        // 브라우저 권한 에러 시 인레이어 프롬프트 대체
+        const manualText = await showAppPrompt('붙여넣을 CSV / TSV 텍스트를 입력해주세요:', '', { title: '데이터 직접 입력', icon: '📋' });
         if (manualText && manualText.trim()) {
             loadCsvFromText(manualText, '직접 입력 데이터');
         }
@@ -772,7 +772,9 @@ async function copyCsvAsSqlInsert() {
     }
 
     const defaultTable = csvState.fileName.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_]/g, "_") || "my_table";
-    const tableName = prompt("생성할 SQL 테이블명을 입력하세요:", defaultTable) || defaultTable;
+    const inputTable = await showAppPrompt("생성할 SQL 테이블명을 입력하세요:", defaultTable, { title: 'SQL 테이블명 입력', icon: '💾' });
+    if (inputTable === null) return;
+    const tableName = inputTable || defaultTable;
 
     const rowsToExport = csvState.filteredRows;
     const headers = csvState.headers.map(h => `\`${h.replace(/`/g, '')}\``).join(', ');

@@ -171,7 +171,7 @@ async function pasteMarkdownFromClipboard() {
         }
         applyLoadedMarkdown(text, '클립보드 텍스트');
     } catch (e) {
-        const manual = prompt('붙여넣을 Markdown 텍스트를 입력하세요:');
+        const manual = await showAppPrompt('붙여넣을 Markdown 텍스트를 입력하세요:', '', { title: 'Markdown 직접 입력', icon: '📝' });
         if (manual && manual.trim()) {
             applyLoadedMarkdown(manual, '직접 입력 텍스트');
         }

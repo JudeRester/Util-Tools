@@ -73,3 +73,37 @@ $env:PYTHONIOENCODING="utf-8"; python -c "import services.db_service as d, servi
 Get-ChildItem web/js/*.js | ForEach-Object { node -c $_.FullName }; echo "All Frontend JS Syntax OK"
 ```
 
+---
+
+## 4. 직관적·기술적 용어 사용 및 과장 표현 지양 원칙 (Objective Technical Phrasing)
+
+코드베이스, 주석, 기술 문서, 기획서, Git 커밋 메시지 및 사용자 커뮤니케이션 작성 시 아래의 **직관적 기술 용어 표준화 원칙**을 엄격히 준수합니다:
+
+1. **마케팅 버즈워드 배제**:
+   - `원클릭`, `마법 같은`, `혁신적인` 등 실제 동작 과정을 모호하게 만들거나 상업적인 느낌을 주는 미사여구를 일체 배제합니다.
+2. **주관적·과장된 수식어 금지**:
+   - `초고속`, `빛의 속도로`, `극강의`, `완벽한`, `압도적인` 등 실측 근거 없는 과장된 표현의 사용을 엄격히 금지합니다.
+3. **엔지니어링 팩트 및 정량 지표 기반 기술**:
+   - 미사여구 대신 실제 동작 원리, 프로토콜, 정량적 수치로 담백하게 서술합니다.
+   - 예시:
+     - ❌ `0.005초 초고속 세션 락 감지` ➔ ⭕ `5ms 이내 논블로킹 세션 락 감지`
+     - ❌ `원클릭 터미널 실행` ➔ ⭕ `터미널 세션 직접 실행`
+     - ❌ `완벽한 싱글턴 보장` ➔ ⭕ `Windows 명명된 세마포어 기반 단일 인스턴스 보장`
+
+---
+
+## 5. 비차단 인레이어 UI 원칙 (Non-blocking In-layer UI Mandate)
+
+프론트엔드 자바스크립트 코드 작성 시 아래의 **비차단 인레이어 UI 원칙**을 엄격히 준수합니다:
+
+1. **블로킹 네이티브 다이얼로그 전면 금지**:
+   - `alert()`, `confirm()`, `prompt()` 등 브라우저의 이벤트 루프 및 자바스크립트 실행 스레드를 블로킹(동기 중단)하는 브라우저 네이티브 팝업의 사용을 **전면 금지**합니다.
+2. **비동기 인레이어 모달 표준 사용**:
+   - 확인(`confirm` 대체): `await showAppConfirm(message, options)`
+   - 입력(`prompt` 대체): `await showAppPrompt(message, defaultValue, options)`
+   - 단순 알림(`alert` 대체): `await showAppAlert(message, title, icon)` 또는 `showToast(title, message, icon)`
+3. **Promise 기반 비동기 흐름 제어**:
+   - 모든 사용자 입력 확인 로직은 `async/await` 비동기 흐름으로 처리하여 UI 렌더링 지연 및 이벤트 루프 중단을 완벽히 방지합니다.
+
+
+

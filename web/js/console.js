@@ -528,6 +528,7 @@ function showAppAlert(message, title = '알림', icon = 'ℹ️') {
         const iconEl = document.getElementById('dialog-icon');
         const titleEl = document.getElementById('dialog-title');
         const msgEl = document.getElementById('dialog-message');
+        const inputEl = document.getElementById('dialog-input');
         const cancelBtn = document.getElementById('dialog-cancel-btn');
         const confirmBtn = document.getElementById('dialog-confirm-btn');
         if (!modal) {
@@ -538,6 +539,7 @@ function showAppAlert(message, title = '알림', icon = 'ℹ️') {
         iconEl.textContent = icon;
         titleEl.textContent = title;
         msgEl.textContent = message;
+        if (inputEl) inputEl.style.display = 'none';
         cancelBtn.style.display = 'none';
         confirmBtn.className = 'form-btn add-btn';
         confirmBtn.textContent = '확인';
@@ -581,6 +583,7 @@ function showAppConfirm(message, options = {}) {
         const iconEl = document.getElementById('dialog-icon');
         const titleEl = document.getElementById('dialog-title');
         const msgEl = document.getElementById('dialog-message');
+        const inputEl = document.getElementById('dialog-input');
         const cancelBtn = document.getElementById('dialog-cancel-btn');
         const confirmBtn = document.getElementById('dialog-confirm-btn');
         if (!modal) return resolve(false);
@@ -588,6 +591,7 @@ function showAppConfirm(message, options = {}) {
         iconEl.textContent = icon;
         titleEl.textContent = title;
         msgEl.textContent = message;
+        if (inputEl) inputEl.style.display = 'none';
         cancelBtn.style.display = 'inline-block';
         cancelBtn.textContent = cancelText;
         confirmBtn.className = isDanger ? 'form-btn danger-btn' : 'form-btn add-btn';
@@ -623,6 +627,84 @@ function showAppConfirm(message, options = {}) {
         document.addEventListener('keydown', onKeyDown);
         modal.classList.add('show');
         confirmBtn.focus();
+    });
+}
+
+/**
+ * 브라우저를 블로킹하지 않는 모던 인레이어 Prompt 다이얼로그
+ * @param {string} message 질문 메시지
+ * @param {string} defaultValue 기본 입력값
+ * @param {object} options 커스텀 옵션 (title, icon, confirmText, cancelText)
+ * @returns {Promise<string|null>} 입력값 (취소 시 null)
+ */
+function showAppPrompt(message, defaultValue = '', options = {}) {
+    const opts = typeof options === 'string' ? { title: options } : options;
+    const {
+        title = '입력',
+        icon = '✏️',
+        confirmText = '확인',
+        cancelText = '취소'
+    } = opts;
+
+    return new Promise((resolve) => {
+        const modal = document.getElementById('app-dialog-modal');
+        const iconEl = document.getElementById('dialog-icon');
+        const titleEl = document.getElementById('dialog-title');
+        const msgEl = document.getElementById('dialog-message');
+        const inputEl = document.getElementById('dialog-input');
+        const cancelBtn = document.getElementById('dialog-cancel-btn');
+        const confirmBtn = document.getElementById('dialog-confirm-btn');
+        if (!modal) return resolve(null);
+
+        iconEl.textContent = icon;
+        titleEl.textContent = title;
+        msgEl.textContent = message;
+        if (inputEl) {
+            inputEl.style.display = 'block';
+            inputEl.value = defaultValue || '';
+        }
+        cancelBtn.style.display = 'inline-block';
+        cancelBtn.textContent = cancelText;
+        confirmBtn.className = 'form-btn add-btn';
+        confirmBtn.textContent = confirmText;
+
+        const cleanup = () => {
+            modal.classList.remove('show');
+            if (inputEl) inputEl.style.display = 'none';
+            document.removeEventListener('keydown', onKeyDown);
+        };
+
+        const onConfirm = () => {
+            const val = inputEl ? inputEl.value : '';
+            cleanup();
+            resolve(val);
+        };
+
+        const onCancel = () => {
+            cleanup();
+            resolve(null);
+        };
+
+        const onKeyDown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                onConfirm();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                onCancel();
+            }
+        };
+
+        confirmBtn.onclick = onConfirm;
+        cancelBtn.onclick = onCancel;
+        document.addEventListener('keydown', onKeyDown);
+        modal.classList.add('show');
+        if (inputEl) {
+            inputEl.focus();
+            inputEl.select();
+        } else {
+            confirmBtn.focus();
+        }
     });
 }
 

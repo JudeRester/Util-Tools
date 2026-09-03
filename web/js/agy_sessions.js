@@ -695,12 +695,16 @@ function renderAgySessionsUI() {
             rowWatchedClass = 'row-watched-persistent';
         }
 
+        const isCliActive = !!s.is_cli_active;
+        const activeTagHtml = isCliActive ? '<span class="agy-active-pulse" title="현재 다른 터미널 CLI에서 활성 실행 중">🟢 실행 중</span>' : '';
+
         return `
-            <tr class="agy-table-row ${rowWatchedClass}">
-                <td class="agy-cell-title" title="${title}">
+            <tr class="agy-table-row ${rowWatchedClass} ${isCliActive ? 'row-cli-active' : ''}">
+                <td class="agy-cell-title" title="${title} (클릭하여 실시간 세션 모니터 열기)" style="cursor: pointer;" onclick="openAgyLiveInspector('${fullId}', '${encodeURIComponent(workspacePath)}')">
                     <div class="agy-title-wrapper">
                         <span class="agy-row-icon">🤖</span>
                         <span class="agy-title-text">${title}</span>
+                        ${activeTagHtml}
                     </div>
                 </td>
                 <td class="agy-cell-project">
@@ -713,10 +717,11 @@ function renderAgySessionsUI() {
                 </td>
                 <td class="agy-cell-id">
                     <button class="agy-copy-id-btn" onclick="copySessionId('${fullId}', event)" title="클릭하여 전체 세션 UUID 복사">
-                        <code>#${shortId}</code> <span class="copy-icon">📋</span>
+                        <code>#${shortId}</code>
+                        <span class="agy-copy-icon">📋</span>
                     </button>
                 </td>
-                <td class="agy-cell-step" style="text-align: center;">
+                <td class="agy-cell-steps" style="text-align: center;">
                     <span class="agy-step-badge">${stepCount} 스텝</span>
                 </td>
                 <td class="agy-cell-time" style="text-align: center;">
@@ -728,9 +733,14 @@ function renderAgySessionsUI() {
                     </button>
                 </td>
                 <td class="agy-cell-action" style="text-align: center;">
-                    <button class="compact-btn powershell agy-run-btn" onclick="launchAgyTerminal('${fullId}', '${encodeURIComponent(workspacePath)}')" title="이 작업 디렉토리에서 터미널 열기">
-                        <span>⚡</span> 실행
-                    </button>
+                    <div class="agy-action-btn-group">
+                        <button class="compact-btn secondary agy-view-btn" onclick="openAgyLiveInspector('${fullId}', '${encodeURIComponent(workspacePath)}')" title="실시간 세션 모니터 열기">
+                            <span>👁️</span> 보기
+                        </button>
+                        <button class="compact-btn powershell agy-run-btn" onclick="launchAgyTerminal('${fullId}', '${encodeURIComponent(workspacePath)}')" title="터미널 창 전환 또는 새로 열기">
+                            <span>⚡</span> 실행
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -764,21 +774,30 @@ function getBaseName(pathStr) {
 }
 
 /**
- * 세션 터미널 실행
+ * 세션 터미널 실행 또는 기존 창 화면 맨 앞으로 전환
  */
-async function launchAgyTerminal(conversationId, encodedWorkspacePath) {
+async function launchAgyTerminal(conversationId, encodedWorkspacePath, force = false) {
     if (!conversationId) return;
     const workspacePath = decodeURIComponent(encodedWorkspacePath || '');
 
     try {
         if (window.eel && eel.launch_agy_session) {
-            const res = await eel.launch_agy_session(conversationId, workspacePath)();
+            const res = await eel.launch_agy_session(conversationId, workspacePath, force)();
             if (res && res.status === 'success') {
+                const toastType = res.activated ? 'info' : 'success';
                 if (typeof showToast === 'function') {
-                    showToast(res.message || 'Antigravity CLI 터미널을 실행했습니다.', 'success');
+                    showToast(res.message || 'Antigravity CLI 터미널을 실행했습니다.', toastType);
                 }
                 if (typeof logToConsole === 'function') {
                     logToConsole('Antigravity CLI 실행', res.message);
+                }
+            } else if (res && res.status === 'warning' && res.already_active) {
+                const confirmed = await showAppConfirm(
+                    `${res.message}\n\n그래도 새 터미널 창을 강제로 실행하시겠습니까?`,
+                    { title: '세션 실행 확인', icon: '⚠️', confirmText: '강제 실행', cancelText: '취소' }
+                );
+                if (confirmed) {
+                    await launchAgyTerminal(conversationId, encodedWorkspacePath, true);
                 }
             } else {
                 if (typeof showToast === 'function') {
@@ -792,4 +811,229 @@ async function launchAgyTerminal(conversationId, encodedWorkspacePath) {
             showToast('터미널 실행 중 오류가 발생했습니다.', 'error');
         }
     }
+}
+
+// ==============================================================================
+// Antigravity CLI 실시간 세션 인스펙터 (Live Inspector)
+// ==============================================================================
+let agyInspectorActiveId = null;
+let agyInspectorActiveWorkspace = '';
+let agyInspectorTimer = null;
+
+/**
+ * 실시간 세션 모니터 모달 열기
+ */
+async function openAgyLiveInspector(conversationId, encodedWorkspacePath) {
+    if (!conversationId) return;
+    agyInspectorActiveId = conversationId;
+    agyInspectorActiveWorkspace = decodeURIComponent(encodedWorkspacePath || '');
+
+    const modal = document.getElementById('agy-live-inspector-modal');
+    if (modal) modal.style.display = 'flex';
+
+    // 기본 로딩 뷰 표시
+    const streamEl = document.getElementById('agy-inspector-stream');
+    if (streamEl) {
+        streamEl.innerHTML = `
+            <div class="agy-inspector-loading">
+                <span class="agy-spin">⏳</span>
+                <span>세션 [${conversationId.slice(0, 8)}] 실시간 스트림을 분석하는 중...</span>
+            </div>
+        `;
+    }
+
+    const autoToggle = document.getElementById('agy-inspector-auto-toggle');
+    if (autoToggle) {
+        // 기본값: 자동 갱신 ON
+        autoToggle.checked = true;
+    }
+
+    await refreshAgyLiveInspector();
+
+    // 3초 주기 자동 갱신 시작
+    startAgyInspectorTimer();
+}
+
+/**
+ * 실시간 세션 모니터 모달 닫기
+ */
+function closeAgyLiveInspector() {
+    stopAgyInspectorTimer();
+    agyInspectorActiveId = null;
+    const modal = document.getElementById('agy-live-inspector-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+/**
+ * 자동 갱신 토글
+ */
+function toggleAgyInspectorAutoRefresh(enabled) {
+    if (enabled) {
+        startAgyInspectorTimer();
+    } else {
+        stopAgyInspectorTimer();
+    }
+}
+
+function startAgyInspectorTimer() {
+    stopAgyInspectorTimer();
+    agyInspectorTimer = setInterval(() => {
+        const modal = document.getElementById('agy-live-inspector-modal');
+        if (agyInspectorActiveId && modal && modal.style.display !== 'none') {
+            refreshAgyLiveInspector(true);
+        } else {
+            stopAgyInspectorTimer();
+        }
+    }, 3000);
+}
+
+function stopAgyInspectorTimer() {
+    if (agyInspectorTimer) {
+        clearInterval(agyInspectorTimer);
+        agyInspectorTimer = null;
+    }
+}
+
+/**
+ * 최신 transcript.jsonl 실시간 데이터 폴링 및 렌더링
+ */
+async function refreshAgyLiveInspector(isSilent = false) {
+    if (!agyInspectorActiveId) return;
+    const cid = agyInspectorActiveId;
+
+    try {
+        if (window.eel && eel.get_agy_session_live_tail) {
+            const res = await eel.get_agy_session_live_tail(cid, 20)();
+            if (res && res.status === 'success') {
+                renderAgyLiveInspectorData(res);
+            } else if (!isSilent) {
+                const streamEl = document.getElementById('agy-inspector-stream');
+                if (streamEl) {
+                    streamEl.innerHTML = `<div class="agy-stream-empty">⚠️ ${res ? res.message : '데이터를 가져올 수 없습니다.'}</div>`;
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[agy_sessions] 인스펙터 새로고침 오류:', e);
+    }
+}
+
+/**
+ * 인스펙터 데이터 화면 렌더링
+ */
+function renderAgyLiveInspectorData(data) {
+    const titleText = document.getElementById('agy-inspector-title-text');
+    const idBadge = document.getElementById('agy-inspector-id');
+    const stepBadge = document.getElementById('agy-inspector-step-badge');
+    const statusBadge = document.getElementById('agy-inspector-status-badge');
+    const permAlert = document.getElementById('agy-inspector-perm-alert');
+    const permDesc = document.getElementById('agy-inspector-perm-desc');
+    const streamEl = document.getElementById('agy-inspector-stream');
+
+    if (titleText) titleText.textContent = data.title || `세션 ${data.conversation_id.slice(0, 8)}`;
+    if (idBadge) idBadge.textContent = `#${data.conversation_id.slice(0, 8)}`;
+    if (stepBadge) stepBadge.textContent = `${data.total_steps || 0} 스텝`;
+
+    // 권한 대기 알림 바
+    if (data.is_permission_waiting) {
+        if (statusBadge) {
+            statusBadge.className = 'agy-inspector-badge badge-perm';
+            statusBadge.textContent = '🔐 권한 승인 대기';
+        }
+        if (permAlert) {
+            permAlert.style.display = 'flex';
+            if (permDesc) permDesc.textContent = data.permission_desc || '터미널에서 명령어 실행 승인을 대기 중입니다.';
+        }
+    } else {
+        if (statusBadge) {
+            statusBadge.className = 'agy-inspector-badge badge-idle';
+            statusBadge.textContent = '대기 / 준비';
+        }
+        if (permAlert) permAlert.style.display = 'none';
+    }
+
+    if (!streamEl) return;
+
+    const steps = data.steps || [];
+    if (steps.length === 0) {
+        streamEl.innerHTML = `
+            <div class="agy-stream-empty">
+                <span>📭 아직 기록된 대화/작업 이벤트가 없습니다.</span>
+            </div>
+        `;
+        return;
+    }
+
+    const html = steps.map(step => {
+        const isUser = step.type === 'USER_INPUT' || step.source === 'USER_EXPLICIT';
+        const isPlanner = step.type === 'PLANNER_RESPONSE';
+        const stepNum = step.step_index !== undefined ? step.step_index : '';
+        const timeStr = step.created_at ? new Date(step.created_at).toLocaleTimeString() : '';
+
+        // 도구 호출 블록 렌더링
+        let toolCallsHtml = '';
+        if (step.tool_calls && step.tool_calls.length > 0) {
+            toolCallsHtml = step.tool_calls.map(tc => {
+                const isBypass = tc.args && (tc.args.BypassSandbox === true || tc.args.BypassSandbox === 'true');
+                const cmd = tc.args && tc.args.CommandLine ? tc.args.CommandLine : '';
+                return `
+                    <div class="agy-stream-tool-call ${isBypass ? 'perm-call' : ''}">
+                        <div class="agy-stream-tool-header">
+                            <span class="agy-tool-tag">${isBypass ? '🔐' : '🔧'} ${escapeHtml(tc.name)}</span>
+                            <span class="agy-tool-summary">${escapeHtml(tc.summary || tc.action || '')}</span>
+                        </div>
+                        ${cmd ? `<pre class="agy-stream-code"><code>${escapeHtml(cmd)}</code></pre>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 생각(Thinking) 블록
+        let thinkingHtml = '';
+        if (step.thinking) {
+            thinkingHtml = `
+                <details class="agy-stream-thinking">
+                    <summary>💭 모델 생각 과정 (Thinking)</summary>
+                    <div class="agy-stream-thinking-content">${escapeHtml(step.thinking)}</div>
+                </details>
+            `;
+        }
+
+        // 본문 내용 블록
+        let contentHtml = '';
+        if (step.content) {
+            contentHtml = `<div class="agy-stream-content">${escapeHtml(step.content)}</div>`;
+        }
+
+        const cardTypeClass = isUser ? 'card-user' : (isPlanner ? 'card-planner' : 'card-generic');
+        const senderLabel = isUser ? '👤 사용자' : (isPlanner ? '🤖 에이전트' : '⚙️ 시스템');
+
+        return `
+            <div class="agy-stream-card ${cardTypeClass}">
+                <div class="agy-stream-card-header">
+                    <span class="agy-stream-sender">${senderLabel}</span>
+                    <span class="agy-stream-step-tag">Step ${stepNum}</span>
+                    <span class="agy-stream-time">${timeStr}</span>
+                </div>
+                ${thinkingHtml}
+                ${toolCallsHtml}
+                ${contentHtml}
+            </div>
+        `;
+    }).join('');
+
+    // 이전 스크롤 위치 유지 또는 최하단 스크롤
+    const isAtBottom = streamEl.scrollHeight - streamEl.scrollTop <= streamEl.clientHeight + 80;
+    streamEl.innerHTML = html;
+    if (isAtBottom) {
+        streamEl.scrollTop = streamEl.scrollHeight;
+    }
+}
+
+/**
+ * 인스펙터 모달 내부에서 터미널 전환/실행
+ */
+async function launchAgyInspectorTerminal() {
+    if (!agyInspectorActiveId) return;
+    await launchAgyTerminal(agyInspectorActiveId, encodeURIComponent(agyInspectorActiveWorkspace || ''));
 }

@@ -251,7 +251,11 @@ async function promptBatchLinesEveryPx() {
     }
 
     const defaultPx = Math.min(800, Math.round(slicerState.imgHeight / 3) || 500);
-    const input = prompt(`[고정 픽셀(px) 간격 일괄 분할]\n몇 px 간격으로 가로 절단선을 생성하시겠습니까?\n(이미지 전체 높이: ${slicerState.imgHeight}px)`, defaultPx);
+    const input = await showAppPrompt(
+        `몇 px 간격으로 가로 절단선을 생성하시겠습니까?\n(이미지 전체 높이: ${slicerState.imgHeight}px)`,
+        String(defaultPx),
+        { title: '고정 픽셀(px) 간격 일괄 분할', icon: '📏' }
+    );
     if (!input) return;
 
     const interval = parseInt(input.trim(), 10);
@@ -277,7 +281,11 @@ async function promptEqualSplit() {
         return;
     }
 
-    const input = prompt(`[균등 N등분 일괄 분할]\n가로 몇 등분으로 균등 분할하시겠습니까? (2 ~ 50)`, '4');
+    const input = await showAppPrompt(
+        `가로 몇 등분으로 균등 분할하시겠습니까? (2 ~ 50)`,
+        '4',
+        { title: '균등 N등분 일괄 분할', icon: '🔢' }
+    );
     if (!input) return;
 
     const count = parseInt(input.trim(), 10);
@@ -305,9 +313,17 @@ async function promptGridSplit() {
         return;
     }
 
-    const rowsInput = prompt(`[바둑판 그리드 분할]\n가로 행(Rows) 개수를 입력하세요 (1 ~ 20):`, '3');
+    const rowsInput = await showAppPrompt(
+        `가로 행(Rows) 개수를 입력하세요 (1 ~ 20):`,
+        '3',
+        { title: '바둑판 그리드 행(Rows) 설정', icon: '▦' }
+    );
     if (!rowsInput) return;
-    const colsInput = prompt(`[바둑판 그리드 분할]\n세로 열(Columns) 개수를 입력하세요 (1 ~ 20):`, '3');
+    const colsInput = await showAppPrompt(
+        `세로 열(Columns) 개수를 입력하세요 (1 ~ 20):`,
+        '3',
+        { title: '바둑판 그리드 열(Columns) 설정', icon: '▦' }
+    );
     if (!colsInput) return;
 
     const rows = parseInt(rowsInput.trim(), 10) || 1;

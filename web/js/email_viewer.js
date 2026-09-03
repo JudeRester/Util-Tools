@@ -985,7 +985,7 @@ async function changeEmailCategory(emailId, newCategory) {
 }
 
 async function promptAddEmailCategory() {
-    const newCat = prompt("새로운 메일 카테고리 이름을 입력하세요 (예: 거래처, 세미나, 개발/QA):");
+    const newCat = await showAppPrompt("새로운 메일 카테고리 이름을 입력하세요 (예: 거래처, 세미나, 개발/QA):", "", { title: '새 카테고리 추가', icon: '🏷️' });
     if (!newCat || !newCat.trim()) return;
     const catName = newCat.trim();
     if (!emailState.categories.includes(catName)) {

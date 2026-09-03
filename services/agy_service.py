@@ -4,6 +4,9 @@ Antigravity CLI (agy) 세션 목록 조회 및 대화형 터미널 연동 서비
 선택한 세션의 작업 디렉토리에서 터미널을 즉시 이어 실행합니다.
 """
 import os
+import sys
+import ctypes
+from ctypes import wintypes
 import re
 import json
 import time
@@ -393,6 +396,11 @@ def get_agy_sessions(limit: int = 30, workspace_filter: str = "current"):
             sessions.sort(key=lambda s: s["sort_timestamp"], reverse=True)
             sessions = sessions[:limit]
 
+            # 현재 이 머신의 다른 CLI 터미널에서 활성 실행 중인 세션 실시간 태깅
+            active_cids = _get_active_cli_cids()
+            for s in sessions:
+                s["is_cli_active"] = (s["conversation_id"] in active_cids)
+
         finally:
             conn.close()
 
@@ -412,15 +420,279 @@ def get_agy_sessions(limit: int = 30, workspace_filter: str = "current"):
         }
 
 
-@eel.expose
-def launch_agy_session(conversation_id: str, workspace_path: str = ""):
+def _get_active_cli_cids() -> set:
     """
-    지정한 세션의 작업 폴더에서 새 터미널 창을 열어 agy 대화형 세션 이어하기 실행
+    ~/.gemini/antigravity-cli/presence/*.lock 파일의 독점 락을 검사하여
+    현재 이 머신의 다른 CLI(터미널) 프로세스에서 활발하게 실행 중인 세션 ID 목록을 반환합니다.
+    (소요 시간: 0.005초 미만)
+    """
+    if sys.platform != "win32":
+        return set()
+    import msvcrt
+    active_cids = set()
+    presence_dir = os.path.expanduser(r"~/.gemini/antigravity-cli/presence")
+    if os.path.exists(presence_dir):
+        try:
+            for f in os.listdir(presence_dir):
+                if f.endswith(".lock"):
+                    fp = os.path.join(presence_dir, f)
+                    try:
+                        fd = os.open(fp, os.O_RDWR)
+                        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                        os.close(fd)
+                    except OSError:
+                        # 락 획득 실패 = 다른 프로세스(agy.exe)가 이미 파일을 열고 락을 쥐고 있음
+                        active_cids.add(f[:-5])
+        except Exception:
+            pass
+    return active_cids
+
+
+def _bring_window_to_front(target_hwnd: int) -> bool:
+    """Windows API를 호출하여 지정한 HWND를 최소화 해제하고 화면 최상단으로 포커스 전환"""
+    try:
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+
+        SW_RESTORE = 9
+        user32.ShowWindow(target_hwnd, SW_RESTORE)
+
+        foreground_hwnd = user32.GetForegroundWindow()
+        cur_thread = kernel32.GetCurrentThreadId()
+        fg_thread = user32.GetWindowThreadProcessId(foreground_hwnd, None)
+        if fg_thread and cur_thread != fg_thread:
+            user32.AttachThreadInput(cur_thread, fg_thread, True)
+            user32.SetForegroundWindow(target_hwnd)
+            user32.BringWindowToTop(target_hwnd)
+            user32.AttachThreadInput(cur_thread, fg_thread, False)
+        else:
+            user32.SetForegroundWindow(target_hwnd)
+            user32.BringWindowToTop(target_hwnd)
+        return True
+    except Exception as e:
+        core.logger.log_event("warn", "agy", f"창 전면 전환 실패: {e}")
+        return False
+
+
+def _get_visible_desktop_windows():
+    """사용자의 활성 데스크톱 상의 모든 보이는 창(HWND, PID, Title)을 듀얼 모드로 안전하게 수집"""
+    user32 = ctypes.windll.user32
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+
+    windows = []
+    def enum_proc(hwnd, lParam):
+        if user32.IsWindowVisible(hwnd):
+            length = user32.GetWindowTextLengthW(hwnd)
+            if length > 0:
+                buff = ctypes.create_unicode_buffer(length + 1)
+                user32.GetWindowTextW(hwnd, buff, length + 1)
+                pid = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                windows.append((hwnd, pid.value, buff.value))
+        return True
+
+    WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    user32.EnumWindows(WNDENUMPROC(enum_proc), 0)
+
+    # 백그라운드 세션 또는 데스크톱 분리 환경 대비 OpenInputDesktop fallback
+    if not windows:
+        hDesk = user32.OpenInputDesktop(0, False, 0x01FF)
+        if hDesk:
+            try:
+                user32.EnumDesktopWindows(hDesk, WNDENUMPROC(enum_proc), 0)
+            finally:
+                user32.CloseDesktop(hDesk)
+
+    return windows
+
+
+def _get_pids_locking_file(file_path: str):
+    """Windows Restart Manager(rstrtmgr.dll)를 이용해 특정 파일을 잠그고 있는 프로세스 PID 목록 반환"""
+    try:
+        rstrtmgr = ctypes.windll.rstrtmgr
+        CCH_RM_SESSION_KEY = 32
+        CCH_RM_MAX_APP_NAME = 255
+        CCH_RM_MAX_SVC_NAME = 63
+
+        class RM_UNIQUE_PROCESS(ctypes.Structure):
+            _fields_ = [('dwProcessId', wintypes.DWORD), ('ProcessStartTime', wintypes.FILETIME)]
+
+        class RM_PROCESS_INFO(ctypes.Structure):
+            _fields_ = [
+                ('Process', RM_UNIQUE_PROCESS),
+                ('strAppName', wintypes.WCHAR * (CCH_RM_MAX_APP_NAME + 1)),
+                ('strServiceShortName', wintypes.WCHAR * (CCH_RM_MAX_SVC_NAME + 1)),
+                ('ApplicationType', wintypes.DWORD),
+                ('AppStatus', wintypes.ULONG),
+                ('TSSessionId', wintypes.DWORD),
+                ('bRestartable', wintypes.BOOL)
+            ]
+
+        session_handle = wintypes.DWORD()
+        session_key = (wintypes.WCHAR * (CCH_RM_SESSION_KEY + 1))()
+        if rstrtmgr.RmStartSession(ctypes.byref(session_handle), 0, session_key) != 0:
+            return []
+        try:
+            file_paths = (wintypes.LPCWSTR * 1)(file_path)
+            if rstrtmgr.RmRegisterResources(session_handle, 1, file_paths, 0, None, 0, None) != 0:
+                return []
+            needed = wintypes.UINT(0)
+            n_proc = wintypes.UINT(0)
+            reboot = wintypes.DWORD()
+            res = rstrtmgr.RmGetList(session_handle, ctypes.byref(needed), ctypes.byref(n_proc), None, ctypes.byref(reboot))
+            if res == 234:  # ERROR_MORE_DATA
+                proc_info = (RM_PROCESS_INFO * needed.value)()
+                n_proc.value = needed.value
+                if rstrtmgr.RmGetList(session_handle, ctypes.byref(needed), ctypes.byref(n_proc), proc_info, ctypes.byref(reboot)) == 0:
+                    return [p.Process.dwProcessId for p in proc_info[:n_proc.value]]
+        finally:
+            rstrtmgr.RmEndSession(session_handle)
+    except Exception:
+        pass
+    return []
+
+
+def _get_process_map():
+    """Toolhelp32 API를 사용해 실행 중인 프로세스의 부모/이름 맵 구성"""
+    try:
+        kernel32 = ctypes.windll.kernel32
+        TH32CS_SNAPPROCESS = 0x00000002
+
+        class PROCESSENTRY32W(ctypes.Structure):
+            _fields_ = [
+                ('dwSize', wintypes.DWORD),
+                ('cntUsage', wintypes.DWORD),
+                ('th32ProcessID', wintypes.DWORD),
+                ('th32DefaultHeapID', ctypes.c_void_p),
+                ('th32ModuleID', wintypes.DWORD),
+                ('cntThreads', wintypes.DWORD),
+                ('th32ParentProcessID', wintypes.DWORD),
+                ('pcPriClassBase', ctypes.c_long),
+                ('dwFlags', wintypes.DWORD),
+                ('szExeFile', wintypes.WCHAR * 260)
+            ]
+
+        hSnapshot = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+        if hSnapshot == -1:
+            return {}
+        proc_map = {}
+        try:
+            pe = PROCESSENTRY32W()
+            pe.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+            if kernel32.Process32FirstW(hSnapshot, ctypes.byref(pe)):
+                while True:
+                    proc_map[pe.th32ProcessID] = {
+                        'parent': pe.th32ParentProcessID,
+                        'name': pe.szExeFile.lower()
+                    }
+                    if not kernel32.Process32NextW(hSnapshot, ctypes.byref(pe)):
+                        break
+        finally:
+            kernel32.CloseHandle(hSnapshot)
+        return proc_map
+    except Exception:
+        return {}
+
+
+def activate_session_terminal_window(conversation_id: str) -> bool:
+    """
+    이미 실행 중인 해당 세션의 터미널 윈도우(CMD, PowerShell, Windows Terminal 등)를 찾아
+    화면 맨 앞으로 복원 및 활성화합니다.
+    (1단계: 세션 타이틀 직접 매칭 -> 2단계: 파일 락 프로세스 PID 및 콘솔 호스트 역추적 매칭)
+    :return: True (기존 창 발견 및 활성화 성공), False (창 없음)
+    """
+    if sys.platform != "win32" or not conversation_id:
+        return False
+
+    short_id = conversation_id[:8].lower()
+    full_id = conversation_id.lower()
+
+    try:
+        windows = _get_visible_desktop_windows()
+
+        # [1단계] 창 제목에 세션 ID가 포함되어 있는 경우 (Util-Tools에서 열었던 터미널)
+        for hwnd, pid, title in windows:
+            t_lower = title.lower()
+            if short_id in t_lower or full_id in t_lower:
+                if _bring_window_to_front(hwnd):
+                    core.logger.log_event("info", "agy", f"세션 타이틀 기반 터미널 창 활성화 성공: #{short_id} ({title})")
+                    return True
+
+        # [2단계] 외부 쉘(PowerShell, VS Code, Windows Terminal)에서 열린 세션: 세션 락 PID 역추적
+        lock_file = os.path.join(os.path.expanduser(r"~/.gemini/antigravity-cli/presence"), f"{conversation_id}.lock")
+        if os.path.exists(lock_file):
+            locking_pids = _get_pids_locking_file(lock_file)
+            if locking_pids:
+                proc_map = _get_process_map()
+                target_pids = set(locking_pids)
+                for p in locking_pids:
+                    curr = p
+                    depth = 0
+                    while curr in proc_map and proc_map[curr]['parent'] > 0 and depth < 6:
+                        parent = proc_map[curr]['parent']
+                        target_pids.add(parent)
+                        curr = parent
+                        depth += 1
+
+                # 콘솔 호스트 프로세스들도 탐색 대상에 포함
+                terminal_names = ('windowsterminal.exe', 'powershell.exe', 'pwsh.exe', 'cmd.exe', 'conhost.exe', 'code.exe')
+                for pid, info in proc_map.items():
+                    if info['name'] in terminal_names:
+                        target_pids.add(pid)
+
+                # 일치하는 창 검색 (터미널 관련 창 우선 정렬)
+                matched_windows = []
+                for hwnd, pid, title in windows:
+                    if pid in target_pids:
+                        t_lower = title.lower()
+                        is_term = any(k in t_lower for k in ('powershell', 'terminal', 'cmd', 'agy', 'visual studio code', 'code'))
+                        matched_windows.append((is_term, hwnd, title))
+
+                if matched_windows:
+                    matched_windows.sort(key=lambda x: x[0], reverse=True)
+                    best_hwnd = matched_windows[0][1]
+                    best_title = matched_windows[0][2]
+                    if _bring_window_to_front(best_hwnd):
+                        core.logger.log_event("info", "agy", f"PID 역추적 기반 터미널 창 활성화 성공: #{short_id} -> {best_title}")
+                        return True
+
+    except Exception as e:
+        core.logger.log_event("warn", "agy", f"기존 터미널 창 활성화 탐색 예외: {e}")
+
+    return False
+
+
+@eel.expose
+def launch_agy_session(conversation_id: str, workspace_path: str = "", force: bool = False):
+    """
+    지정한 세션의 작업 폴더에서 터미널 창을 실행하거나, 이미 열려 있는 경우 화면 맨 앞으로 활성화
+    :param force: 이미 다른 CLI에서 실행 중이더라도 강제로 새 터미널을 띄울지 여부
     """
     if not conversation_id:
         return {"status": "error", "message": "세션 ID가 지정되지 않았습니다."}
 
-    # 작업 디렉토리 결정
+    short_id = conversation_id[:8]
+
+    # 1. 이미 해당 세션 터미널 창이 켜져 있는 경우 -> 화면 맨 앞으로 전환
+    if activate_session_terminal_window(conversation_id):
+        return {
+            "status": "success",
+            "activated": True,
+            "message": f"이미 열려 있는 세션 [#{short_id}] 터미널 창을 화면 맨 앞으로 전환했습니다."
+        }
+
+    # 2. 윈도우 타이틀은 못 찾았으나 이미 다른 CLI 인스턴스에서 세션 락을 쥐고 있는 경우
+    active_cids = _get_active_cli_cids()
+    if conversation_id in active_cids and not force:
+        return {
+            "status": "warning",
+            "already_active": True,
+            "message": f"세션 [#{short_id}]은(는) 이미 이 머신의 다른 터미널 CLI에서 실행 중입니다.\n두 터미널에서 동시에 메시지를 보내면 세션 충돌이 발생할 수 있습니다.\n\n[실시간 보기 👁️]로 안전하게 모니터링하시거나, 기존 터미널을 이용해 주세요."
+        }
+
+    # 3. 열린 창이 없는 경우 -> 작업 디렉토리 결정 후 신규 터미널 실행
     target_dir = workspace_path
     if not target_dir or not os.path.isdir(target_dir):
         # DB에서 다시 조회 시도
@@ -448,21 +720,29 @@ def launch_agy_session(conversation_id: str, workspace_path: str = ""):
     if not target_dir or not os.path.isdir(target_dir):
         target_dir = APP_DIR
 
-    # 터미널 실행 명령어 구성 (Windows cmd.exe start 창 분리)
-    short_id = conversation_id[:8]
-    window_title = f"Antigravity CLI - {short_id}"
-    launch_cmd = f'start "{window_title}" /D "{target_dir}" cmd.exe /k "agy --conversation {conversation_id}"'
-
+    # 2. 열린 창이 없는 경우 -> 신규 터미널 실행
+    # Windows Terminal (wt.exe) 우선 확인 (모던 탭 지원)
+    wt_path = shutil.which("wt.exe") or shutil.which("wt")
     try:
-        subprocess.Popen(
-            ["cmd.exe", "/c", launch_cmd],
-            cwd=target_dir,
-            shell=True
-        )
-        core.logger.log_event("info", "agy", f"세션 터미널 실행 성공: {conversation_id}", f"위치: {target_dir}")
+        if wt_path:
+            cmd_args = [
+                wt_path, "-d", target_dir,
+                "--title", f"Antigravity CLI - #{short_id}",
+                "cmd.exe", "/k", f"title Antigravity CLI - #{short_id} && agy --conversation {conversation_id}"
+            ]
+            subprocess.Popen(cmd_args, cwd=target_dir)
+        else:
+            cmd_args = ["cmd.exe", "/k", f"title Antigravity CLI - #{short_id} && agy --conversation {conversation_id}"]
+            subprocess.Popen(
+                cmd_args,
+                cwd=target_dir,
+                creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0x10)
+            )
+        core.logger.log_event("info", "agy", f"신규 세션 터미널 실행: {conversation_id}", f"위치: {target_dir}")
         return {
             "status": "success",
-            "message": f"세션 [{short_id}] 터미널을 실행했습니다. (작업 폴더: {target_dir})"
+            "activated": False,
+            "message": f"세션 [#{short_id}] 터미널을 실행했습니다. (작업 폴더: {target_dir})"
         }
     except Exception as e:
         core.logger.log_event("error", "agy", f"터미널 실행 오류: {e}")
@@ -470,6 +750,125 @@ def launch_agy_session(conversation_id: str, workspace_path: str = ""):
             "status": "error",
             "message": f"터미널 실행 실패: {str(e)}"
         }
+
+
+@eel.expose
+def get_agy_session_live_tail(conversation_id: str, max_steps: int = 15):
+    """
+    세션의 transcript.jsonl로부터 최신 진행 스텝 및 상태를 경량 추출하여 인앱 실시간 모니터링 데이터 제공
+    """
+    if not is_agy_enabled():
+        return {"status": "error", "message": "Antigravity CLI 연동이 비활성화되어 있습니다."}
+
+    if not conversation_id:
+        return {"status": "error", "message": "세션 ID가 없습니다."}
+
+    t_path = os.path.join(AGY_BRAIN_DIR, conversation_id, ".system_generated", "logs", "transcript.jsonl")
+    if not os.path.exists(t_path):
+        return {
+            "status": "success",
+            "conversation_id": conversation_id,
+            "title": _get_annotated_title(conversation_id) or f"세션 {conversation_id[:8]}",
+            "total_steps": 0,
+            "is_permission_waiting": False,
+            "permission_desc": "",
+            "steps": []
+        }
+
+    try:
+        with open(t_path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            # 끝에서 최대 48KB 역방향 읽기 (극도로 가벼운 I/O)
+            f.seek(max(0, size - 49152))
+            raw_lines = f.readlines()
+
+        parsed_steps = []
+        for rl in raw_lines:
+            s = rl.decode("utf-8", errors="ignore").strip()
+            if s.startswith("{") and s.endswith("}"):
+                try:
+                    obj = json.loads(s)
+                    parsed_steps.append(obj)
+                except Exception:
+                    pass
+
+        recent = parsed_steps[-max_steps:] if len(parsed_steps) > max_steps else parsed_steps
+        latest_event = parsed_steps[-1] if parsed_steps else None
+        latest_step = latest_event.get("step_index", 0) if latest_event else 0
+
+        # 권한 대기 여부 실시간 판별
+        is_perm, perm_desc = _check_transcript_permission_requested(latest_event) if latest_event else (False, "")
+
+        rendered_steps = []
+        for s in recent:
+            tp = s.get("type", "")
+            idx = s.get("step_index", 0)
+            st = s.get("status", "")
+            source = s.get("source", "")
+            created_at = s.get("created_at", "")
+            thinking = s.get("thinking", "")
+            content = s.get("content", "")
+            tool_calls = s.get("tool_calls") or []
+
+            parsed_tc = []
+            for tc in tool_calls:
+                if isinstance(tc, dict):
+                    if "function" in tc and isinstance(tc["function"], dict):
+                        tc_name = tc["function"].get("name", "")
+                        tc_args = tc["function"].get("arguments", {})
+                    else:
+                        tc_name = tc.get("name", "")
+                        tc_args = tc.get("args", {})
+                    if isinstance(tc_args, str):
+                        try:
+                            tc_args = json.loads(tc_args)
+                        except Exception:
+                            tc_args = {}
+                    if isinstance(tc_args, dict):
+                        summary = tc_args.get("toolSummary") or tc_args.get("CommandLine") or tc_name
+                        action = tc_args.get("toolAction") or tc_name
+                    else:
+                        summary = tc_name
+                        action = tc_name
+                    parsed_tc.append({
+                        "name": tc_name,
+                        "summary": summary,
+                        "action": action,
+                        "args": tc_args if isinstance(tc_args, dict) else {}
+                    })
+
+            rendered_steps.append({
+                "step_index": idx,
+                "type": tp,
+                "status": st,
+                "source": source,
+                "created_at": created_at,
+                "thinking": thinking[:1500] if thinking else "",
+                "content": content[:2000] if content else "",
+                "tool_calls": parsed_tc
+            })
+
+        title = _get_annotated_title(conversation_id)
+        if not title:
+            parsed_meta = _parse_session_from_conv_db(conversation_id)
+            if parsed_meta:
+                title = parsed_meta.get("title", "")
+        if not title:
+            title = f"세션 {conversation_id[:8]}"
+
+        return {
+            "status": "success",
+            "conversation_id": conversation_id,
+            "title": title,
+            "total_steps": latest_step,
+            "is_permission_waiting": is_perm,
+            "permission_desc": perm_desc,
+            "steps": rendered_steps
+        }
+    except Exception as e:
+        core.logger.log_event("error", "agy", f"라이브 테일 조회 오류: {e}")
+        return {"status": "error", "message": f"라이브 테일 조회 실패: {str(e)}"}
 
 
 # ==============================================================================
