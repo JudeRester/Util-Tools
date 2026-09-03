@@ -34,11 +34,8 @@
                 <button class="tab-btn active" data-tab="system">
                     <span class="tab-icon">🖥️</span> <span class="tab-label">시스템 & 네트워크</span>
                 </button>
-                <button class="tab-btn" data-tab="launch">
+                <button class="tab-btn" data-tab="launch" title="프로그램 빠른 실행 및 폴더 바로가기">
                     <span class="tab-icon">⚡</span> <span class="tab-label">빠른 실행</span>
-                </button>
-                <button class="tab-btn" data-tab="files">
-                    <span class="tab-icon">📁</span> <span class="tab-label">파일 / 폴더</span>
                 </button>
                 <button class="tab-btn" data-tab="generator">
                     <span class="tab-icon">🔢</span> <span class="tab-label">데이터 생성</span>
@@ -180,24 +177,9 @@
                 </div>
             </section>
 
-            <!-- 2. 빠른 실행 탭 -->
+            <!-- 2. 빠른 실행 & 바로가기 탭 (통합) -->
             <section id="tab-launch" class="tab-pane">
-                <div class="pane-toolbar-header">
-                    <div class="group-title-inline">
-                        <span class="title-icon">⚡</span> 빠른 실행 목록
-                        <button class="edit-shortcuts-btn" onclick="openQuickLaunchModal()" title="빠른 실행 항목 실시간 커스텀">
-                            ⚙️ 편집
-                        </button>
-                    </div>
-                </div>
-                <div class="button-grid" id="quick-launch-grid">
-                    <!-- JavaScript로 실시간 동적 렌더링 -->
-                </div>
-            </section>
-
-            <!-- 3. 파일 / 폴더 탭 -->
-            <section id="tab-files" class="tab-pane">
-                <!-- 상단 타이틀 및 우측 컴팩트 터미널 런처 바 -->
+                <!-- 상단 섹션: 폴더 바로가기 & 터미널 런처 바 -->
                 <div class="pane-toolbar-header">
                     <div class="group-title-inline">
                         <span class="title-icon">📂</span> 폴더 바로가기
@@ -219,9 +201,24 @@
                     </div>
                 </div>
 
-                <!-- 폴더 바로가기 나열 (동적 렌더링 컨테이너) -->
+                <!-- 폴더 바로가기 카드 그리드 -->
                 <div class="button-grid" id="folder-shortcuts-grid">
                     <!-- JavaScript로 실시간 렌더링 -->
+                </div>
+
+                <!-- 하단 섹션: 프로그램 & 도구 빠른 실행 -->
+                <div class="pane-toolbar-header" style="margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border-color);">
+                    <div class="group-title-inline">
+                        <span class="title-icon">⚡</span> 프로그램 & 도구 빠른 실행
+                        <button class="edit-shortcuts-btn" onclick="openQuickLaunchModal()" title="빠른 실행 항목 실시간 커스텀">
+                            ⚙️ 편집
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 프로그램 빠른 실행 카드 그리드 -->
+                <div class="button-grid" id="quick-launch-grid">
+                    <!-- JavaScript로 실시간 동적 렌더링 -->
                 </div>
             </section>
 

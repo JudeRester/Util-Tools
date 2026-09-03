@@ -154,10 +154,9 @@ function initTabOnDemand(tabName) {
             // 시스템 정보는 system.js에서 주기적으로 갱신
             break;
         case 'launch':
-            if (typeof loadQuickLaunchItems === 'function') loadQuickLaunchItems();
-            break;
         case 'files':
             if (typeof loadFolderShortcuts === 'function') loadFolderShortcuts();
+            if (typeof loadQuickLaunchItems === 'function') loadQuickLaunchItems();
             break;
         case 'generator':
             if (typeof loadGenerators === 'function') loadGenerators();
@@ -216,6 +215,7 @@ function teardownTab(tabName) {
 
 function switchTab(targetTab) {
     if (!targetTab) return;
+    if (targetTab === 'files') targetTab = 'launch';
 
     // 이전 탭에서 벗어날 때 무거운 리소스 정리 및 GC 실행
     if (currentActiveTab && currentActiveTab !== targetTab) {

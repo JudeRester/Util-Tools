@@ -247,14 +247,13 @@ async function navigateToAiSearchResult(item) {
         if (item.category === 'notes') targetTab = 'notes';
         else if (item.category === 'emails') targetTab = 'emails';
         else if (item.category === 'diagrams') targetTab = 'mermaid';
-        else if (item.category === 'quick_launch') targetTab = 'launch';
-        else if (item.category === 'shortcuts') targetTab = 'files';
+        else if (item.category === 'quick_launch' || item.category === 'shortcuts') targetTab = 'launch';
         else if (item.category === 'generators') targetTab = 'generator';
     }
     if (targetTab === 'scratchpad') targetTab = 'notes';
     if (targetTab === 'diagram-viewer' || targetTab === 'diagram') targetTab = 'mermaid';
     if (targetTab === 'quick-launch' || targetTab === 'quick_launch') targetTab = 'launch';
-    if (targetTab === 'shortcuts') targetTab = 'files';
+    if (targetTab === 'shortcuts' || targetTab === 'files') targetTab = 'launch';
     if (targetTab === 'generators') targetTab = 'generator';
 
     // 해당 탭으로 전환
