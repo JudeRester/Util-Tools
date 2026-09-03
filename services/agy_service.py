@@ -73,6 +73,79 @@ def _parse_workspace_uri(uri: str) -> str:
         return ""
 
 
+AGY_CONVERSATIONS_DIR = os.path.expanduser(r"~/.gemini/antigravity-cli/conversations")
+AGY_BRAIN_DIR = os.path.expanduser(r"~/.gemini/antigravity-cli/brain")
+
+
+def _parse_session_from_conv_db(cid: str) -> dict:
+    """
+    conversation_summaries.db에 아직 요약 기록되지 않은 활성/신규 세션을 파일 시스템에서 직접 파싱
+    """
+    db_path = os.path.join(AGY_CONVERSATIONS_DIR, f"{cid}.db")
+    t_path = os.path.join(AGY_BRAIN_DIR, cid, ".system_generated", "logs", "transcript.jsonl")
+
+    if not os.path.exists(db_path) and not os.path.exists(t_path):
+        return None
+
+    # 1순위: /rename 커스텀 명칭
+    title = _get_annotated_title(cid)
+
+    # 2순위: transcript.jsonl의 첫 번째 사용자 입력 프롬프트 내용
+    if not title and os.path.exists(t_path):
+        try:
+            with open(t_path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    if '"type":"USER_INPUT"' in line:
+                        obj = json.loads(line)
+                        c = obj.get("content", "").replace("<USER_REQUEST>", "").replace("</USER_REQUEST>", "").strip()
+                        if c:
+                            title = c.split("\n")[0][:60].strip()
+                            break
+        except Exception:
+            pass
+
+    if not title:
+        title = f"세션 {cid[:8]}"
+
+    steps = 0
+    workspace = ""
+    if os.path.exists(db_path):
+        try:
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2.0)
+            row = conn.execute("SELECT count(*) FROM steps").fetchone()
+            if row:
+                steps = row[0]
+            blob_row = conn.execute("SELECT data FROM trajectory_metadata_blob WHERE id='main'").fetchone()
+            conn.close()
+            if blob_row and blob_row[0]:
+                decoded = blob_row[0].decode("latin1", errors="ignore")
+                idx = decoded.find("file:///")
+                if idx != -1:
+                    part = decoded[idx + len("file:///"):]
+                    clean = ""
+                    for ch in part:
+                        if ord(ch) < 32 or ch in ('"', "'", '<', '>', '\n', '\r'):
+                            break
+                        clean += ch
+                    workspace = os.path.normpath(urllib.parse.unquote(clean))
+        except Exception:
+            pass
+
+    mtime = os.path.getmtime(db_path) if os.path.exists(db_path) else 0.0
+    if os.path.exists(t_path):
+        mtime = max(mtime, os.path.getmtime(t_path))
+
+    return {
+        "conversation_id": cid,
+        "title": title,
+        "step_count": steps,
+        "primary_workspace": workspace,
+        "sort_timestamp": mtime,
+        "last_modified": datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M") if mtime else "",
+        "status": ""
+    }
+
+
 @eel.expose
 def get_agy_environment_status():
     """agy-cli 실행 파일 및 로컬 세션 데이터베이스 존재 여부 확인"""
@@ -206,6 +279,36 @@ def get_agy_sessions(limit: int = 30, workspace_filter: str = "current"):
                     "status": r["status"] or ""
                 })
 
+            seen_ids = set(s["conversation_id"] for s in sessions)
+
+            # 2. conversation_summaries.db에 아직 요약 기록되지 않은 활성/신규 세션 보충 스캔
+            if os.path.exists(AGY_CONVERSATIONS_DIR):
+                try:
+                    for f in os.listdir(AGY_CONVERSATIONS_DIR):
+                        if not f.endswith(".db"):
+                            continue
+                        cid = f[:-3]
+                        if cid in seen_ids:
+                            continue
+
+                        parsed = _parse_session_from_conv_db(cid)
+                        if not parsed:
+                            continue
+
+                        pw = parsed.get("primary_workspace") or ""
+                        is_cur = False
+                        if pw:
+                            is_cur = (os.path.normpath(pw).lower() == current_norm)
+
+                        if workspace_filter == "current" and not is_cur:
+                            continue
+
+                        parsed["is_current"] = is_cur
+                        sessions.append(parsed)
+                        seen_ids.add(cid)
+                except Exception as ex:
+                    core.logger.log_event("warn", "agy", f"신규 세션 보충 스캔 예외: {ex}")
+
             # 실제 최종 수정 시간(sort_timestamp) 기준 최신순 재정렬
             sessions.sort(key=lambda s: s["sort_timestamp"], reverse=True)
             sessions = sessions[:limit]
@@ -255,6 +358,12 @@ def launch_agy_session(conversation_id: str, workspace_path: str = ""):
                         target_dir = candidate
         except Exception:
             pass
+
+    # 파일 기반 신규 세션 fallback
+    if not target_dir or not os.path.isdir(target_dir):
+        parsed = _parse_session_from_conv_db(conversation_id)
+        if parsed and parsed.get("primary_workspace") and os.path.isdir(parsed["primary_workspace"]):
+            target_dir = parsed["primary_workspace"]
 
     if not target_dir or not os.path.isdir(target_dir):
         target_dir = APP_DIR
@@ -350,8 +459,10 @@ def _watcher_loop():
                 conn.close()
 
                 completed_sessions = []
+                db_found_ids = set()
                 for row in rows:
                     cid = row["conversation_id"]
+                    db_found_ids.add(cid)
                     with _watcher_lock:
                         info = _watched_sessions.get(cid)
                     if not info:
@@ -368,6 +479,26 @@ def _watcher_loop():
                             completed_sessions.append({
                                 "conversation_id": cid,
                                 "title": title,
+                                "step_count": curr_step
+                            })
+
+                # DB에 아직 없는 신규/활성 세션의 파일 시스템 감시
+                missing_from_summary = [w_id for w_id in watched_ids if w_id not in db_found_ids]
+                for cid in missing_from_summary:
+                    with _watcher_lock:
+                        info = _watched_sessions.get(cid)
+                    if not info:
+                        continue
+                    parsed = _parse_session_from_conv_db(cid)
+                    if not parsed:
+                        continue
+                    curr_step = parsed.get("step_count", 0)
+                    curr_time = str(parsed.get("sort_timestamp", ""))
+                    if curr_step > info["last_step"] or (curr_time and curr_time != info["last_time"]):
+                        if _check_session_turn_completed(cid, None):
+                            completed_sessions.append({
+                                "conversation_id": cid,
+                                "title": parsed.get("title", "세션"),
                                 "step_count": curr_step
                             })
 
@@ -463,12 +594,19 @@ def toggle_agy_watch_session(conversation_id: str, enabled: bool):
                     step_count = row["step_count"] or 0
                     title = row["title"] or ""
                     last_time = row["last_modified_time"] or ""
+                else:
+                    parsed = _parse_session_from_conv_db(conversation_id)
+                    if parsed:
+                        step_count = parsed.get("step_count", 0)
+                        title = parsed.get("title", "")
+                        last_time = str(parsed.get("sort_timestamp", ""))
         except Exception:
             pass
 
         # 1순위: /rename 커스텀 명칭 반영
         custom_title = _get_annotated_title(conversation_id)
-        final_title = custom_title if custom_title else (title if title else (row["preview"] if row and row["preview"] else "세션"))
+        default_preview = row["preview"] if (row and "preview" in row.keys() and row["preview"]) else "세션"
+        final_title = custom_title if custom_title else (title if title else default_preview)
 
         _watched_sessions[conversation_id] = {
             "last_step": step_count,
