@@ -1,5 +1,6 @@
 /**
- * Antigravity CLI (agy) 세션 목록화 및 대화형 터미널 런처 연동 모듈 (테이블 뷰 & 실시간 알림 감시 & 프로젝트 멀티 드롭다운)
+ * Antigravity CLI (agy) 세션 목록화 및 대화형 터미널 런처 연동 모듈
+ * (테이블 뷰 & 1회성/지속 알림 감시 & 프로젝트 멀티 드롭다운)
  */
 
 const agyState = {
@@ -10,7 +11,7 @@ const agyState = {
     filterInitialized: false,
     searchKeyword: '',
     sessions: [],
-    watchedSessions: new Set(),
+    watchedSessions: new Map(), // Map<conversationId, 'once' | 'persistent'>
     loading: false,
     dropdownOpen: false
 };
@@ -20,18 +21,26 @@ if (window.eel) {
     eel.expose(on_agy_session_completed);
 }
 
-// 드롭다운 외부 클릭 시 자동 닫기 리스너 등록
+// 외부 클릭 시 드롭다운 및 팝오버 메뉴 자동 닫기 리스너
 document.addEventListener('click', (e) => {
-    const container = document.getElementById('agy-project-dropdown-container');
-    if (container && !container.contains(e.target)) {
+    // 1. 프로젝트 드롭다운 닫기
+    const projectContainer = document.getElementById('agy-project-dropdown-container');
+    if (projectContainer && !projectContainer.contains(e.target)) {
         closeAgyProjectDropdown();
+    }
+
+    // 2. 알림 모드 팝오버 닫기
+    const popover = document.getElementById('agy-notify-popover');
+    if (popover && !popover.contains(e.target) && !e.target.closest('.agy-notify-btn')) {
+        closeAgyNotifyMenu();
     }
 });
 
-// ESC 키 입력 시 드롭다운 닫기
+// ESC 키 입력 시 메뉴 닫기
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && agyState.dropdownOpen) {
-        closeAgyProjectDropdown();
+    if (e.key === 'Escape') {
+        if (agyState.dropdownOpen) closeAgyProjectDropdown();
+        closeAgyNotifyMenu();
     }
 });
 
@@ -146,15 +155,18 @@ async function onToggleAgyIntegration(isChecked) {
 }
 
 /**
- * 백엔드에서 현재 감시 중인 세션 목록 조회
+ * 백엔드에서 현재 감시 중인 세션 목록 및 모드 조회
  */
 async function loadWatchedSessions() {
     if (!agyState.enabled) return;
     try {
         if (window.eel && eel.get_watched_agy_sessions) {
-            const list = await eel.get_watched_agy_sessions()();
-            if (Array.isArray(list)) {
-                agyState.watchedSessions = new Set(list);
+            const mapData = await eel.get_watched_agy_sessions()();
+            if (mapData && typeof mapData === 'object') {
+                agyState.watchedSessions = new Map(Object.entries(mapData));
+            } else if (Array.isArray(mapData)) {
+                // 이전 버전 호환 (배열인 경우 once 모드로 간주)
+                agyState.watchedSessions = new Map(mapData.map(id => [id, 'once']));
             }
         }
     } catch (e) {
@@ -359,33 +371,94 @@ function refreshAgySessions() {
 }
 
 /**
- * 세션 알림 구독 토글 (🔔 Watchlist)
+ * 알림 설정 팝오버 메뉴 열기 (1회성 vs 지속 알림 선택)
  */
-async function toggleAgySessionWatch(conversationId, event) {
+function openAgyNotifyMenu(conversationId, event) {
     if (event) event.stopPropagation();
+    closeAgyNotifyMenu(); // 기존 팝오버 닫기
+
+    const btn = event.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    const currentMode = agyState.watchedSessions.get(conversationId) || '';
+
+    const popover = document.createElement('div');
+    popover.id = 'agy-notify-popover';
+    popover.className = 'agy-notify-popover';
+    popover.style.top = `${rect.bottom + 6}px`;
+    popover.style.left = `${Math.max(10, rect.left - 130)}px`;
+
+    popover.innerHTML = `
+        <div class="agy-popover-item ${currentMode === 'once' ? 'selected' : ''}" onclick="setAgyWatchMode('${conversationId}', 'once', event)">
+            <span class="agy-popover-icon">🔔</span>
+            <div class="agy-popover-text">
+                <div class="agy-popover-title">1회 알림 (One-Shot)</div>
+                <div class="agy-popover-desc">이번 턴 작업 완료 시 1회 알림 후 자동 해제</div>
+            </div>
+            ${currentMode === 'once' ? '<span class="agy-popover-check">✓</span>' : ''}
+        </div>
+        <div class="agy-popover-item ${currentMode === 'persistent' ? 'selected' : ''}" onclick="setAgyWatchMode('${conversationId}', 'persistent', event)">
+            <span class="agy-popover-icon">🔁</span>
+            <div class="agy-popover-text">
+                <div class="agy-popover-title">지속 알림 (Persistent)</div>
+                <div class="agy-popover-desc">직접 끄기 전까지 매 턴 완료 시마다 계속 알림</div>
+            </div>
+            ${currentMode === 'persistent' ? '<span class="agy-popover-check">✓</span>' : ''}
+        </div>
+        ${currentMode ? `
+        <div class="agy-popover-divider"></div>
+        <div class="agy-popover-item danger" onclick="setAgyWatchMode('${conversationId}', 'off', event)">
+            <span class="agy-popover-icon">🔕</span>
+            <div class="agy-popover-text">
+                <div class="agy-popover-title">알림 해제 (Off)</div>
+                <div class="agy-popover-desc">작업 완료 감시를 즉시 중단합니다</div>
+            </div>
+        </div>` : ''}
+    `;
+
+    document.body.appendChild(popover);
+}
+
+/**
+ * 알림 설정 팝오버 메뉴 닫기
+ */
+function closeAgyNotifyMenu() {
+    const existing = document.getElementById('agy-notify-popover');
+    if (existing) {
+        existing.remove();
+    }
+}
+
+/**
+ * 세션 알림 모드 설정 ('once' | 'persistent' | 'off')
+ */
+async function setAgyWatchMode(conversationId, mode, event) {
+    if (event) event.stopPropagation();
+    closeAgyNotifyMenu();
     if (!conversationId) return;
 
-    const isCurrentlyWatched = agyState.watchedSessions.has(conversationId);
-    const nextState = !isCurrentlyWatched;
+    const enable = (mode !== 'off');
+    const watchMode = enable ? mode : 'once';
 
     try {
         if (window.eel && eel.toggle_agy_watch_session) {
-            const res = await eel.toggle_agy_watch_session(conversationId, nextState)();
+            const res = await eel.toggle_agy_watch_session(conversationId, enable, watchMode)();
             if (res && res.status === 'success') {
-                if (nextState) {
-                    agyState.watchedSessions.add(conversationId);
+                if (enable) {
+                    agyState.watchedSessions.set(conversationId, watchMode);
                 } else {
                     agyState.watchedSessions.delete(conversationId);
                 }
                 renderAgySessionsUI();
 
                 if (typeof showToast === 'function') {
-                    showToast(
-                        nextState ? `🔔 알림 감시 시작: #${conversationId.slice(0, 8)}` : `🔕 알림 감시 해제: #${conversationId.slice(0, 8)}`,
-                        nextState ? '작업이 완료되면 Windows 트레이 알림 및 알림음으로 알려드립니다.' : '감시가 해제되었습니다.',
-                        nextState ? '🔔' : '🔕',
-                        4000
-                    );
+                    const shortId = conversationId.slice(0, 8);
+                    if (!enable) {
+                        showToast(`🔕 알림 감시 해제: #${shortId}`, '감시가 해제되었습니다.', '🔕', 3000);
+                    } else if (watchMode === 'once') {
+                        showToast(`🔔 1회 알림 시작: #${shortId}`, '이번 턴 작업 완료 시 1회 알림 후 자동 해제됩니다.', '🔔', 4000);
+                    } else {
+                        showToast(`🔁 지속 알림 시작: #${shortId}`, '직접 끄기 전까지 매 턴 작업 완료 시마다 계속 알림을 드립니다.', '🔁', 4000);
+                    }
                 }
             } else {
                 if (typeof showToast === 'function') {
@@ -394,7 +467,7 @@ async function toggleAgySessionWatch(conversationId, event) {
             }
         }
     } catch (e) {
-        console.error('[agy_sessions] 알림 구독 오류:', e);
+        console.error('[agy_sessions] 알림 모드 설정 오류:', e);
     }
 }
 
@@ -408,26 +481,30 @@ function on_agy_session_completed(sessionInfo) {
     const title = sessionInfo.title || '세션';
     const shortId = convId.length >= 8 ? convId.slice(0, 8) : convId;
     const stepCount = sessionInfo.step_count || 0;
+    const mode = sessionInfo.mode || 'once';
 
-    // 감시 목록에서 자동 제거
-    agyState.watchedSessions.delete(convId);
+    // 1회 알림인 경우에만 감시 목록에서 자동 제거
+    if (mode === 'once') {
+        agyState.watchedSessions.delete(convId);
+    }
     renderAgySessionsUI();
 
     // 1. 소리 알림 (Web Audio API 기반 딩동 사운드)
     playAgyNotificationSound();
 
     // 2. 앱 내 토스트 알림 팝업
+    const modeLabel = mode === 'once' ? '1회 알림' : '지속 알림';
     if (typeof showToast === 'function') {
         showToast(
-            `🔔 agy 작업 완료 (#${shortId})`,
+            `🔔 agy 작업 완료 (${modeLabel} #${shortId})`,
             `[${title}] 에이전트 응답이 완료되었습니다. (스텝 ${stepCount})`,
-            '🤖',
+            mode === 'once' ? '🔔' : '🔁',
             7000
         );
     }
 
     if (typeof logToConsole === 'function') {
-        logToConsole('Antigravity CLI 작업 완료', `세션 #${shortId}: [${title}] 완료 (스텝 ${stepCount})`);
+        logToConsole('Antigravity CLI 작업 완료', `세션 #${shortId}: [${title}] 완료 (스텝 ${stepCount}, ${modeLabel})`);
     }
 }
 
@@ -528,10 +605,28 @@ function renderAgySessionsUI() {
         const lastModified = s.last_modified || '';
         const stepCount = s.step_count || 0;
         const isCurrent = Boolean(s.is_current);
-        const isWatched = agyState.watchedSessions.has(fullId);
+
+        // 알림 모드 판별
+        const watchMode = agyState.watchedSessions.get(fullId) || '';
+        let btnContent = '🔕';
+        let btnClass = 'agy-notify-btn';
+        let btnTitle = '알림 모드 선택 (1회성 / 지속 알림)';
+        let rowWatchedClass = '';
+
+        if (watchMode === 'once') {
+            btnClass += ' mode-once';
+            btnContent = '🔔 <span class="agy-mode-tag">1회</span>';
+            btnTitle = '1회 알림 감시 중 (완료 시 자동 해제)';
+            rowWatchedClass = 'row-watched-once';
+        } else if (watchMode === 'persistent') {
+            btnClass += ' mode-persistent';
+            btnContent = '🔁 <span class="agy-mode-tag">지속</span>';
+            btnTitle = '지속 알림 감시 중 (직접 끄기 전까지 매 턴 알림)';
+            rowWatchedClass = 'row-watched-persistent';
+        }
 
         return `
-            <tr class="agy-table-row ${isWatched ? 'row-watched' : ''}">
+            <tr class="agy-table-row ${rowWatchedClass}">
                 <td class="agy-cell-title" title="${title}">
                     <div class="agy-title-wrapper">
                         <span class="agy-row-icon">🤖</span>
@@ -558,8 +653,8 @@ function renderAgySessionsUI() {
                     <span class="agy-time-text">${lastModified}</span>
                 </td>
                 <td class="agy-cell-notify" style="text-align: center;">
-                    <button class="agy-notify-btn ${isWatched ? 'active' : ''}" onclick="toggleAgySessionWatch('${fullId}', event)" title="${isWatched ? '알림 감시 중 (클릭하여 해제)' : '작업 완료 알림 받기'}">
-                        ${isWatched ? '🔔' : '🔕'}
+                    <button class="${btnClass}" onclick="openAgyNotifyMenu('${fullId}', event)" title="${btnTitle}">
+                        ${btnContent}
                     </button>
                 </td>
                 <td class="agy-cell-action" style="text-align: center;">

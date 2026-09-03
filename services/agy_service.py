@@ -621,24 +621,36 @@ def _watcher_loop():
             is_done, latest_step = _check_transcript_turn_completed(cid, last_step)
             if is_done:
                 title = info.get("title") or _get_annotated_title(cid) or "세션"
+                mode = info.get("mode", "once")
                 completed_sessions.append({
                     "conversation_id": cid,
                     "title": title,
-                    "step_count": latest_step
+                    "step_count": latest_step,
+                    "mode": mode
                 })
 
-        # 완료된 세션 알림 전송 및 구독 해제
+        # 완료된 세션 알림 전송 및 모드별 구독 처리
         for comp in completed_sessions:
             cid = comp["conversation_id"]
+            mode = comp.get("mode", "once")
+            latest_step = comp["step_count"]
+
             with _watcher_lock:
-                if cid in _watched_sessions:
-                    del _watched_sessions[cid]
+                if mode == "once":
+                    # 1회 알림: 완료 후 자동 해제
+                    if cid in _watched_sessions:
+                        del _watched_sessions[cid]
+                else:
+                    # 지속 알림(persistent): 감시 유지 및 last_step 갱신 (다음 턴 대기)
+                    if cid in _watched_sessions:
+                        _watched_sessions[cid]["last_step"] = latest_step
 
             short_id = cid[:8]
+            mode_label = "1회 알림" if mode == "once" else "지속 알림"
             # 1) Windows OS 시스템 트레이 알림 전송
             show_tray_notification(
-                "🤖 Antigravity CLI 작업 완료",
-                f"[{comp['title'][:30]}] 에이전트 응답이 완료되었습니다. (스텝 {comp['step_count']})"
+                f"🤖 Antigravity CLI 작업 완료 ({mode_label})",
+                f"[{comp['title'][:30]}] 에이전트 응답이 완료되었습니다. (스텝 {latest_step})"
             )
 
             # 2) 앱 내부 프론트엔드 Eel 이벤트 전송
@@ -647,7 +659,7 @@ def _watcher_loop():
             except Exception:
                 pass
 
-            core.logger.log_event("info", "agy", f"세션 작업 완료 알림 전송: #{short_id}", f"제목: {comp['title']}")
+            core.logger.log_event("info", "agy", f"세션 작업 완료 알림 전송: #{short_id} ({mode_label})", f"제목: {comp['title']}")
 
         time.sleep(2.5)
 
@@ -675,8 +687,13 @@ def stop_agy_watcher():
 
 
 @eel.expose
-def toggle_agy_watch_session(conversation_id: str, enabled: bool):
-    """특정 세션의 작업 완료 알림 구독 토글 (Strict Gated)"""
+def toggle_agy_watch_session(conversation_id: str, enabled: bool, mode: str = "once"):
+    """
+    특정 세션의 작업 완료 알림 구독 토글 (Strict Gated)
+    :param conversation_id: 세션 ID
+    :param enabled: 활성화 여부
+    :param mode: 'once' (1회 알림 후 자동 해제) | 'persistent' (사용자가 끌 때까지 매 턴 알림)
+    """
     if not is_agy_enabled():
         return {
             "status": "error",
@@ -687,6 +704,8 @@ def toggle_agy_watch_session(conversation_id: str, enabled: bool):
     if not conversation_id:
         return {"status": "error", "message": "세션 ID가 없습니다.", "watched": False}
 
+    watch_mode = mode if mode in ("once", "persistent") else "once"
+
     with _watcher_lock:
         if not enabled:
             if conversation_id in _watched_sessions:
@@ -694,11 +713,12 @@ def toggle_agy_watch_session(conversation_id: str, enabled: bool):
             return {
                 "status": "success",
                 "watched": False,
+                "mode": "off",
                 "conversation_id": conversation_id,
                 "message": "알림 감시가 해제되었습니다."
             }
 
-        # 구독 활성화: 현재 실시간 최신 스텝 수 및 명칭 기록
+        # 구독 활성화: 현재 실시간 최신 스텝 수 및 명칭, 모드 기록
         current_step = _get_current_session_step(conversation_id)
         custom_title = _get_annotated_title(conversation_id)
         if not custom_title:
@@ -710,27 +730,30 @@ def toggle_agy_watch_session(conversation_id: str, enabled: bool):
 
         _watched_sessions[conversation_id] = {
             "last_step": current_step,
-            "title": custom_title
+            "title": custom_title,
+            "mode": watch_mode
         }
 
     start_agy_watcher_if_needed()
     short_id = conversation_id[:8]
+    mode_desc = "1회 알림 (완료 시 자동 해제)" if watch_mode == "once" else "지속 알림 (매 턴마다 계속 알림)"
     return {
         "status": "success",
         "watched": True,
+        "mode": watch_mode,
         "conversation_id": conversation_id,
         "current_step": current_step,
-        "message": f"세션 [#{short_id}] 작업 완료 알림을 켰습니다. (현재 {current_step}스텝 이후 완료 시 알림)"
+        "message": f"세션 [#{short_id}] {mode_desc}을 켰습니다. (현재 {current_step}스텝 이후)"
     }
 
 
 @eel.expose
 def get_watched_agy_sessions():
-    """현재 알림 감시 중인 세션 ID 목록 조회"""
+    """현재 알림 감시 중인 세션 ID 및 모드 맵 조회"""
     if not is_agy_enabled():
-        return []
+        return {}
     with _watcher_lock:
-        return list(_watched_sessions.keys())
+        return {cid: info.get("mode", "once") for cid, info in _watched_sessions.items()}
 
 
 @eel.expose
