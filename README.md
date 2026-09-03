@@ -53,7 +53,8 @@ D:\python
 ├── requirements.txt            # 필수 Python 패키지 목록
 ├── utiltools.ico               # 애플리케이션 & 시스템 트레이 아이콘
 │
-├── docs/                       # [기술 문서] 9대 기능별 상세 아키텍처 및 구현 명세서
+├── docs/                       # [기술 문서] 9대 기능별 상세 아키텍처 및 기획서
+│   ├── plans/                  # [기획 문서] 세션 센터, 런처 통합 등 구현 기획서 보관소
 │   ├── DATABASE_SCHEMA.md      # 중앙 SQLite DB(app.db) 13개 테이블 ERD 및 상세 스키마 명세
 │   ├── REDMINE_INTEGRATION.md  # Redmine REST API 연동, 일감/위키, 주요 프로젝트⭐ 우선순위
 │   ├── EMAIL_ARCHIVE.md        # 대용량 이메일 아카이브 & 대화 스레드 타임라인 아키텍처
@@ -63,6 +64,8 @@ D:\python
 │   ├── DATA_VIEWERS.md         # CSV/TSV 테이블 뷰어, Markdown Studio & Mermaid 렌더러
 │   ├── BACKUP_AND_RESTORE.md   # Zero-Memory 백엔드 스트리밍 백업 & 원자적 복원 엔진
 │   └── CORE_AND_UTILITIES.md   # 시스템 트레이, 세마포어 싱글턴, 캘린더 & agy 실시간 알림
+│
+├── templates/                  # [기본 서식] 최초 실행 시 DB/설정 초기화용 템플릿 (*.example.json 8종)
 │
 ├── data/                       # [사용자 데이터] SQLite 중앙 데이터베이스 (Git 제외)
 │   └── app.db                  # emails, notes, diagrams, redmine, quick_launch 등 13개 테이블

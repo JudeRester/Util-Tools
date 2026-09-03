@@ -19,7 +19,7 @@ tok_datas, tok_binaries, tok_hidden = collect_all('tokenizers')
 added_datas = [
     ('web', 'web'),
     ('utiltools.ico', '.'),
-    ('*.example.json', '.'),
+    ('templates', 'templates'),
     ('models', 'models'),
 ] + onnx_datas + tok_datas
 

@@ -5,7 +5,7 @@
 ## 🚨 필수 개발 및 변경 규정 (Mandatory Guidelines)
 
 1. **경로 참조 원칙**:
-   - 모든 파일/디렉토리 경로는 [`core.paths`](file:///D:/python/core/paths.py)에 정의된 표준 상수(`APP_DIR`, `BUNDLE_DIR`, `DATA_DIR`, `WEB_DIR`, `ICON_PATH`, `DB_PATH`, `EMAILS_DIR`, `MODELS_DIR`)를 사용해야 합니다.
+   - 모든 파일/디렉토리 경로는 [`core.paths`](file:///D:/python/core/paths.py)에 정의된 표준 상수(`APP_DIR`, `BUNDLE_DIR`, `DATA_DIR`, `WEB_DIR`, `ICON_PATH`, `DB_PATH`, `EMAILS_DIR`, `MODELS_DIR`, `TEMPLATES_DIR`)를 사용해야 합니다.
    - 개별 모듈에서 `base_dir`을 임의로 선언하거나 하드코딩하는 것을 엄격히 금지합니다.
 
 2. **전역 변수 / 함수 변경 시 영향도 전수 조사**:

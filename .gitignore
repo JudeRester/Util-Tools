@@ -53,6 +53,8 @@ data/
 *.db-shm
 
 # Allow public templates
+!templates/
+!templates/*.example.json
 !*.example.json
 
 # AI Models & Vector Cache

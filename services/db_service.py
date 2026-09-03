@@ -12,26 +12,26 @@ import re
 import time
 import datetime
 import threading
-from core.paths import APP_DIR, BUNDLE_DIR, DATA_DIR, DB_PATH
+from core.paths import APP_DIR, BUNDLE_DIR, DATA_DIR, DB_PATH, TEMPLATES_DIR
 
-# 각 모듈별 JSON 파일 경로 (마이그레이션 및 폴백용: *.example.json은 번들에서 참조)
+# 각 모듈별 JSON 파일 경로 (마이그레이션 및 폴백용: *.example.json은 번들의 templates 폴더에서 참조)
 EMAILS_JSON_PATH = os.path.join(APP_DIR, "emails.json")
-EMAILS_EXAMPLE_PATH = os.path.join(BUNDLE_DIR, "emails.example.json")
+EMAILS_EXAMPLE_PATH = os.path.join(TEMPLATES_DIR, "emails.example.json")
 
 NOTES_JSON_PATH = os.path.join(APP_DIR, "notes.json")
-NOTES_EXAMPLE_PATH = os.path.join(BUNDLE_DIR, "notes.example.json")
+NOTES_EXAMPLE_PATH = os.path.join(TEMPLATES_DIR, "notes.example.json")
 
 DIAGRAMS_JSON_PATH = os.path.join(APP_DIR, "diagrams.json")
-DIAGRAMS_EXAMPLE_PATH = os.path.join(BUNDLE_DIR, "diagrams.example.json")
+DIAGRAMS_EXAMPLE_PATH = os.path.join(TEMPLATES_DIR, "diagrams.example.json")
 
 QUICK_LAUNCH_JSON_PATH = os.path.join(APP_DIR, "quick_launch.json")
-QUICK_LAUNCH_EXAMPLE_PATH = os.path.join(BUNDLE_DIR, "quick_launch.example.json")
+QUICK_LAUNCH_EXAMPLE_PATH = os.path.join(TEMPLATES_DIR, "quick_launch.example.json")
 
 SHORTCUTS_JSON_PATH = os.path.join(APP_DIR, "shortcuts.json")
-SHORTCUTS_EXAMPLE_PATH = os.path.join(BUNDLE_DIR, "shortcuts.example.json")
+SHORTCUTS_EXAMPLE_PATH = os.path.join(TEMPLATES_DIR, "shortcuts.example.json")
 
 GENERATORS_JSON_PATH = os.path.join(APP_DIR, "generators.json")
-GENERATORS_EXAMPLE_PATH = os.path.join(BUNDLE_DIR, "generators.example.json")
+GENERATORS_EXAMPLE_PATH = os.path.join(TEMPLATES_DIR, "generators.example.json")
 
 _init_lock = threading.Lock()
 _is_initialized = False
