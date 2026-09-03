@@ -89,14 +89,11 @@ def get_agy_sessions(limit: int = 30, workspace_filter: str = "current"):
 
         try:
             cursor = conn.cursor()
-            # 최근 수정된 세션 순으로 넉넉히 가져온 뒤 필터링
-            fetch_limit = limit * 3 if workspace_filter == "current" else limit
+            # 전체 세션을 가져와 실제 파일 수정 시간 기준으로 최신 정렬
             cursor.execute("""
                 SELECT conversation_id, preview, title, step_count, last_modified_time, workspace_uris, status
                 FROM conversation_summaries
-                ORDER BY last_modified_time DESC
-                LIMIT ?
-            """, (fetch_limit,))
+            """)
             rows = cursor.fetchall()
 
             for r in rows:
@@ -130,22 +127,61 @@ def get_agy_sessions(limit: int = 30, workspace_filter: str = "current"):
                 if workspace_filter == "current" and not is_current:
                     continue
 
-                # 날짜 형식 정리 (ISO -> YYYY-MM-DD HH:MM)
-                raw_time = r["last_modified_time"] or ""
-                formatted_time = raw_time[:16].replace("T", " ") if len(raw_time) >= 16 else raw_time
+                step_count = r["step_count"] or 0
+
+                # 실제 물리 파일 (transcript.jsonl 또는 conversations/{id}.db) 최신 타임스탬프 & 스텝 확인
+                t_path = os.path.expanduser(rf"~/.gemini/antigravity-cli/brain/{conv_id}/.system_generated/logs/transcript.jsonl")
+                c_db_path = os.path.expanduser(rf"~/.gemini/antigravity-cli/conversations/{conv_id}.db")
+
+                sort_ts = 0.0
+                real_mtime = None
+
+                if os.path.exists(t_path):
+                    real_mtime = os.path.getmtime(t_path)
+                    try:
+                        with open(t_path, "rb") as f:
+                            f.seek(0, os.SEEK_END)
+                            size = f.tell()
+                            f.seek(max(0, size - 4096))
+                            lines = f.readlines()
+                            if lines:
+                                last_event = json.loads(lines[-1].decode("utf-8", errors="ignore"))
+                                actual_step = last_event.get("step_index")
+                                if actual_step is not None and actual_step > step_count:
+                                    step_count = actual_step
+                    except Exception:
+                        pass
+                elif os.path.exists(c_db_path):
+                    real_mtime = os.path.getmtime(c_db_path)
+
+                if real_mtime:
+                    sort_ts = real_mtime
+                    formatted_time = datetime.fromtimestamp(real_mtime).strftime("%Y-%m-%d %H:%M")
+                else:
+                    raw_time = r["last_modified_time"] or ""
+                    formatted_time = raw_time[:16].replace("T", " ") if len(raw_time) >= 16 else raw_time
+                    try:
+                        # ISO parse fallback for sorting
+                        cleaned_iso = raw_time.split("+")[0].split(".")[0].replace("Z", "")
+                        dt = datetime.fromisoformat(cleaned_iso)
+                        sort_ts = dt.timestamp()
+                    except Exception:
+                        sort_ts = 0.0
 
                 sessions.append({
                     "conversation_id": conv_id,
                     "title": display_title,
-                    "step_count": r["step_count"] or 0,
+                    "step_count": step_count,
                     "last_modified": formatted_time,
+                    "sort_timestamp": sort_ts,
                     "primary_workspace": primary_workspace,
                     "is_current": is_current,
                     "status": r["status"] or ""
                 })
 
-                if len(sessions) >= limit:
-                    break
+            # 실제 최종 수정 시간(sort_timestamp) 기준 최신순 재정렬
+            sessions.sort(key=lambda s: s["sort_timestamp"], reverse=True)
+            sessions = sessions[:limit]
 
         finally:
             conn.close()
