@@ -4,6 +4,7 @@ Antigravity CLI (agy) 세션 목록 조회 및 대화형 터미널 연동 서비
 선택한 세션의 작업 디렉토리에서 터미널을 즉시 이어 실행합니다.
 """
 import os
+import re
 import json
 import time
 import shutil
@@ -19,6 +20,30 @@ from core.tray import show_tray_notification
 from services.settings_service import load_settings_from_file
 
 AGY_DB_PATH = os.path.expanduser(r"~/.gemini/antigravity-cli/conversation_summaries.db")
+AGY_ANNOTATIONS_DIR = os.path.expanduser(r"~/.gemini/antigravity-cli/annotations")
+
+
+def _get_annotated_title(conv_id: str) -> str:
+    """
+    사용자가 agy CLI에서 /rename 명령으로 지정한 커스텀 세션 명칭을 최우선으로 읽어옵니다.
+    (저장 위치: ~/.gemini/antigravity-cli/annotations/<conv_id>.pbtxt)
+    """
+    if not conv_id:
+        return ""
+    ann_path = os.path.join(AGY_ANNOTATIONS_DIR, f"{conv_id}.pbtxt")
+    if os.path.exists(ann_path):
+        try:
+            with open(ann_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read().strip()
+                m = re.search(r'title:\s*"(.*)"', content)
+                if m:
+                    val = m.group(1).replace('\\"', '"')
+                    val = val.strip('"').strip()
+                    if val:
+                        return val
+        except Exception:
+            pass
+    return ""
 
 # 알림 감시 대상 세션 캐시 및 스레드 상태 관리
 _watched_sessions = {}  # { conversation_id: { "last_step": int, "title": str, "last_time": str } }
@@ -98,9 +123,11 @@ def get_agy_sessions(limit: int = 30, workspace_filter: str = "current"):
 
             for r in rows:
                 conv_id = r["conversation_id"] or ""
+                # 1순위: 사용자가 agy에서 /rename으로 지정한 커스텀 세션명 (annotations/<id>.pbtxt)
+                custom_title = _get_annotated_title(conv_id)
+                db_title = (r["title"] or "").strip()
                 preview = (r["preview"] or "").strip()
-                title = (r["title"] or "").strip()
-                display_title = preview if preview else (title if title else f"세션 {conv_id[:8]}")
+                display_title = custom_title if custom_title else (db_title if db_title else (preview if preview else f"세션 {conv_id[:8]}"))
 
                 # 워크스페이스 파싱
                 workspace_paths = []
@@ -336,7 +363,8 @@ def _watcher_loop():
                     # 스텝이 증가했거나 수정 일시가 변경된 경우
                     if curr_step > info["last_step"] or (curr_time != info["last_time"] and curr_step >= info["last_step"]):
                         if _check_session_turn_completed(cid, row):
-                            title = row["title"] or info.get("title") or "세션"
+                            custom_title = _get_annotated_title(cid)
+                            title = custom_title or row["title"] or info.get("title") or "세션"
                             completed_sessions.append({
                                 "conversation_id": cid,
                                 "title": title,
@@ -438,9 +466,13 @@ def toggle_agy_watch_session(conversation_id: str, enabled: bool):
         except Exception:
             pass
 
+        # 1순위: /rename 커스텀 명칭 반영
+        custom_title = _get_annotated_title(conversation_id)
+        final_title = custom_title if custom_title else (title if title else (row["preview"] if row and row["preview"] else "세션"))
+
         _watched_sessions[conversation_id] = {
             "last_step": step_count,
-            "title": title,
+            "title": final_title,
             "last_time": last_time
         }
 
