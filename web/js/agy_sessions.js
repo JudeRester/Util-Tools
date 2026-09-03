@@ -1,5 +1,5 @@
 /**
- * Antigravity CLI (agy) 세션 목록화 및 대화형 터미널 런처 연동 모듈 (테이블 뷰)
+ * Antigravity CLI (agy) 세션 목록화 및 대화형 터미널 런처 연동 모듈 (테이블 뷰 & 실시간 알림 감시)
  */
 
 const agyState = {
@@ -9,8 +9,14 @@ const agyState = {
     currentFilter: 'current', // 'current' | 'all'
     searchKeyword: '',
     sessions: [],
+    watchedSessions: new Set(),
     loading: false
 };
+
+// Eel 백엔드 알림 리스너 노출 등록
+if (window.eel) {
+    eel.expose(on_agy_session_completed);
+}
 
 /**
  * agy 연동 설정 및 환경 상태 초기화
@@ -59,8 +65,9 @@ async function initAgyIntegration() {
             sectionEl.style.display = agyState.enabled ? 'block' : 'none';
         }
 
-        // 5. 활성화되어 있는 경우 세션 목록 즉시 로드
+        // 5. 활성화되어 있는 경우 세션 목록 및 감시 목록 즉시 로드
         if (agyState.enabled) {
+            await loadWatchedSessions();
             loadAgySessions();
         }
     } catch (e) {
@@ -69,7 +76,7 @@ async function initAgyIntegration() {
 }
 
 /**
- * 시스템 탭에서 토글 스위치 변경 시 호출
+ * 시스템 탭에서 토글 스위치 변경 시 호출 (Strict Gated)
  */
 async function onToggleAgyIntegration(isChecked) {
     agyState.enabled = isChecked;
@@ -86,7 +93,20 @@ async function onToggleAgyIntegration(isChecked) {
         sectionEl.style.display = isChecked ? 'block' : 'none';
     }
 
-    // 설정 영구 저장
+    if (!isChecked) {
+        agyState.watchedSessions.clear();
+    }
+
+    // 백엔드 스레드 생명주기 즉시 동기화
+    if (window.eel && eel.on_agy_toggle_changed) {
+        try {
+            await eel.on_agy_toggle_changed(isChecked)();
+        } catch (e) {
+            console.error('[agy_sessions] 백엔드 토글 동기화 오류:', e);
+        }
+    }
+
+    // 설정 파일 영구 저장
     if (window.eel && eel.save_app_settings) {
         try {
             await eel.save_app_settings({ enable_agy_integration: isChecked })();
@@ -97,13 +117,31 @@ async function onToggleAgyIntegration(isChecked) {
 
     if (typeof showToast === 'function') {
         showToast(
-            isChecked ? 'Antigravity CLI 연동이 활성화되었습니다.' : 'Antigravity CLI 연동이 비활성화되었습니다.',
+            isChecked ? 'Antigravity CLI 연동이 활성화되었습니다.' : 'Antigravity CLI 연동이 비활성화되었습니다. (모든 감시 중단)',
             isChecked ? 'success' : 'info'
         );
     }
 
     if (isChecked) {
+        await loadWatchedSessions();
         loadAgySessions();
+    }
+}
+
+/**
+ * 백엔드에서 현재 감시 중인 세션 목록 조회
+ */
+async function loadWatchedSessions() {
+    if (!agyState.enabled) return;
+    try {
+        if (window.eel && eel.get_watched_agy_sessions) {
+            const list = await eel.get_watched_agy_sessions()();
+            if (Array.isArray(list)) {
+                agyState.watchedSessions = new Set(list);
+            }
+        }
+    } catch (e) {
+        console.error('[agy_sessions] 감시 목록 로드 오류:', e);
     }
 }
 
@@ -119,7 +157,7 @@ async function loadAgySessions() {
     agyState.loading = true;
     tbodyEl.innerHTML = `
         <tr>
-            <td colspan="6" style="padding: 28px; text-align: center; color: var(--text-secondary);">
+            <td colspan="7" style="padding: 28px; text-align: center; color: var(--text-secondary);">
                 <span class="spinner" style="display: inline-block; margin-right: 8px;">🔄</span> agy 세션 목록을 조회하는 중...
             </td>
         </tr>
@@ -171,9 +209,122 @@ function filterAgySessions(filterType) {
  * 새로고침 버튼
  */
 function refreshAgySessions() {
+    loadWatchedSessions();
     loadAgySessions();
     if (typeof showToast === 'function') {
         showToast('agy 세션 목록을 새로고침했습니다.', 'info');
+    }
+}
+
+/**
+ * 세션 알림 구독 토글 (🔔 Watchlist)
+ */
+async function toggleAgySessionWatch(conversationId, event) {
+    if (event) event.stopPropagation();
+    if (!conversationId) return;
+
+    const isCurrentlyWatched = agyState.watchedSessions.has(conversationId);
+    const nextState = !isCurrentlyWatched;
+
+    try {
+        if (window.eel && eel.toggle_agy_watch_session) {
+            const res = await eel.toggle_agy_watch_session(conversationId, nextState)();
+            if (res && res.status === 'success') {
+                if (nextState) {
+                    agyState.watchedSessions.add(conversationId);
+                } else {
+                    agyState.watchedSessions.delete(conversationId);
+                }
+                renderAgySessionsUI();
+
+                if (typeof showToast === 'function') {
+                    showToast(
+                        nextState ? `🔔 알림 감시 시작: #${conversationId.slice(0, 8)}` : `🔕 알림 감시 해제: #${conversationId.slice(0, 8)}`,
+                        nextState ? '작업이 완료되면 Windows 트레이 및 알림음으로 알려드립니다.' : '감시가 해제되었습니다.',
+                        nextState ? '🔔' : '🔕',
+                        4000
+                    );
+                }
+            } else {
+                if (typeof showToast === 'function') {
+                    showToast(res ? res.message : '알림 설정 변경 실패', 'error');
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[agy_sessions] 알림 구독 오류:', e);
+    }
+}
+
+/**
+ * 백엔드에서 세션 응답 완료 시 푸시되는 이벤트 콜백 (Eel exposed)
+ */
+function on_agy_session_completed(sessionInfo) {
+    if (!agyState.enabled || !sessionInfo) return;
+
+    const convId = sessionInfo.conversation_id || '';
+    const title = sessionInfo.title || '세션';
+    const shortId = convId.length >= 8 ? convId.slice(0, 8) : convId;
+    const stepCount = sessionInfo.step_count || 0;
+
+    // 감시 목록에서 자동 제거
+    agyState.watchedSessions.delete(convId);
+    renderAgySessionsUI();
+
+    // 1. 소리 알림 (Web Audio API 기반 딩동 사운드)
+    playAgyNotificationSound();
+
+    // 2. 앱 내 토스트 알림 팝업
+    if (typeof showToast === 'function') {
+        showToast(
+            `🔔 agy 작업 완료 (#${shortId})`,
+            `[${title}] 에이전트 응답이 완료되었습니다. (스텝 ${stepCount})`,
+            '🤖',
+            7000
+        );
+    }
+
+    if (typeof logToConsole === 'function') {
+        logToConsole('Antigravity CLI 작업 완료', `세션 #${shortId}: [${title}] 완료 (스텝 ${stepCount})`);
+    }
+}
+
+/**
+ * Web Audio API를 활용한 알림 사운드 재생 (0 외부 사운드 파일 의존)
+ */
+function playAgyNotificationSound() {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+
+        const ctx = new AudioContext();
+        const now = ctx.currentTime;
+
+        // 1음 (523Hz - C5)
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(523.25, now);
+        gain1.gain.setValueAtTime(0.15, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.18);
+
+        // 2음 (659Hz - E5)
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(659.25, now + 0.12);
+        gain2.gain.setValueAtTime(0.2, now + 0.12);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.12);
+        osc2.stop(now + 0.35);
+    } catch (e) {
+        // 오디오 정책 또는 미지원 시 무시
     }
 }
 
@@ -203,7 +354,7 @@ function renderAgySessionsUI() {
         const filterText = agyState.currentFilter === 'current' ? '현재 프로젝트' : '전체';
         tbodyEl.innerHTML = `
             <tr>
-                <td colspan="6" style="padding: 36px 16px; text-align: center; color: var(--text-secondary);">
+                <td colspan="7" style="padding: 36px 16px; text-align: center; color: var(--text-secondary);">
                     <div style="font-size: 1.8rem; margin-bottom: 8px;">🤖</div>
                     <div style="font-weight: 600; margin-bottom: 4px; color: var(--text-primary);">
                         ${agyState.searchKeyword ? '검색된 세션이 없습니다.' : `조회된 ${filterText} agy 세션이 없습니다.`}
@@ -227,9 +378,10 @@ function renderAgySessionsUI() {
         const lastModified = s.last_modified || '';
         const stepCount = s.step_count || 0;
         const isCurrent = Boolean(s.is_current);
+        const isWatched = agyState.watchedSessions.has(fullId);
 
         return `
-            <tr class="agy-table-row">
+            <tr class="agy-table-row ${isWatched ? 'row-watched' : ''}">
                 <td class="agy-cell-title" title="${title}">
                     <div class="agy-title-wrapper">
                         <span class="agy-row-icon">🤖</span>
@@ -254,6 +406,11 @@ function renderAgySessionsUI() {
                 </td>
                 <td class="agy-cell-time" style="text-align: center;">
                     <span class="agy-time-text">${lastModified}</span>
+                </td>
+                <td class="agy-cell-notify" style="text-align: center;">
+                    <button class="agy-notify-btn ${isWatched ? 'active' : ''}" onclick="toggleAgySessionWatch('${fullId}', event)" title="${isWatched ? '알림 감시 중 (클릭하여 해제)' : '작업 완료 알림 받기'}">
+                        ${isWatched ? '🔔' : '🔕'}
+                    </button>
                 </td>
                 <td class="agy-cell-action" style="text-align: center;">
                     <button class="compact-btn powershell agy-run-btn" onclick="launchAgyTerminal('${fullId}', '${encodeURIComponent(workspacePath)}')" title="이 작업 디렉토리에서 터미널 열기">

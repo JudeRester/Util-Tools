@@ -9,8 +9,25 @@ import eel
 from core.paths import ICON_PATH, BUNDLE_DIR
 
 
+_tray_instance = None
+
+
+def show_tray_notification(title: str, message: str):
+    """트레이 아이콘을 통한 Windows 시스템 OS 알림 전송"""
+    global _tray_instance
+    if _tray_instance and _tray_instance.tray_icon:
+        try:
+            _tray_instance.tray_icon.notify(message, title)
+            return True
+        except Exception as e:
+            print(f"[TrayManager] 알림 전송 실패: {e}")
+    return False
+
+
 class TrayManager:
     def __init__(self, base_dir=None, start_options=None, on_exit=None):
+        global _tray_instance
+        _tray_instance = self
         self.base_dir = base_dir or BUNDLE_DIR
         self.start_options = start_options or {}
         self.on_exit = on_exit

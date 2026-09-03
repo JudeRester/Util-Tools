@@ -73,6 +73,10 @@ stateDiagram-v2
   - `app_settings.json`의 `enable_agy_integration` 옵션이 활성화되었을 때 노출되는 개발자 도구.
   - 로컬 `conversation_summaries.db`를 안전한 Read-Only 모드로 조회하여 세션 목록 및 진행 스텝 수 제공.
   - `[현재 프로젝트]`/`[전체 세션]` 필터링 및 클릭 시 해당 세션의 원래 작업 디렉토리(`workspace_uris`)에서 즉시 대화형 터미널(`agy --conversation <id>`) 실행.
+  - **스마트 세션 알림 구독 (Watchlist & OS/오디오 알림)**:
+    - 세션 테이블의 `🔔` 버튼을 클릭하여 오래 걸리는 작업 세션을 감시 목록에 등록 가능.
+    - 백엔드에서 `conversation_summaries.db`와 `transcript.jsonl`을 감시하여 에이전트 응답 완료(`status: DONE`) 시 **Windows OS 트레이 알림 팝업 + Web Audio 차임벨 사운드 + 앱 토스트 알림** 즉시 전송 후 자동 구독 해제.
+    - `시스템 & 네트워크` 탭의 agy 토글이 꺼지면 감시 스레드가 즉시 소멸하고 DB 쿼리 0건으로 완전 차단(Strict Gating).
 
 ---
 
