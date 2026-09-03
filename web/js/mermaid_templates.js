@@ -619,7 +619,7 @@ const MERMAID_TEMPLATES = {
     RAMCache --> CosineSim
     
     CosineSim --> Ranking
-    Ranking -->|"결과 반환"| UserResult["검색 결과 노출<br/>(원클릭 해당 탭 이동)"]`
+    Ranking -->|"결과 반환"| UserResult["검색 결과 노출<br/>(해당 탭 바로 이동)"]`
 };
 
 const DEFAULT_DIAGRAMS_FALLBACK = [

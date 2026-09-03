@@ -40,7 +40,7 @@
 
 ### 2-2. 상호작용(Interaction) 방식 2가지 옵션
 
-#### [옵션 1 (권장 🌟)] 원클릭 외부 CLI 터미널 런처
+#### [옵션 1 (권장 🌟)] 외부 CLI 터미널 런처 연동
 - **동작**: 앱 내 세션 카드에서 `[⚡ 터미널 열기]`를 클릭하면, Windows Terminal/CMD/PowerShell 새 창이 즉시 실행되며 해당 세션이 자동으로 이어집니다:
   ```powershell
   wt.exe -d "D:\python" agy --conversation <conversation_id>

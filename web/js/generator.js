@@ -669,7 +669,7 @@ async function saveGeneratorsToServer() {
     }
 }
 
-// 템플릿 코드 원클릭 삽입
+// 템플릿 코드 본문 삽입
 function insertGenCodeTemplate(type) {
     const codeArea = document.getElementById('gen-code-input');
     if (!codeArea) return;
