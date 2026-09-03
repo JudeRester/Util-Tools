@@ -510,36 +510,76 @@ def _get_current_session_step(cid: str) -> int:
     return 0
 
 
+def _is_final_waiting_step(obj: dict) -> bool:
+    """
+    해당 스텝이 단순 중간 도구 실행(run_command, view_file 등)이 아니라,
+    에이전트가 모든 작업을 마치고 사용자 응답을 대기하는 최종 스텝인지 판별합니다.
+    """
+    if not isinstance(obj, dict):
+        return False
+
+    st = obj.get("status")
+    tp = obj.get("type")
+
+    # DONE 또는 ERROR 상태가 아니면 아직 진행 중
+    if st not in ("DONE", "ERROR"):
+        return False
+
+    # 1. 플래너/모델 응답인 경우
+    if tp == "PLANNER_RESPONSE":
+        tool_calls = obj.get("tool_calls") or []
+        # 도구 호출이 없는 경우 = 모든 작업을 마치고 사용자에게 텍스트 답변을 전달한 최종 완료 상태!
+        if not tool_calls:
+            return True
+        # 도구 호출 중 사용자에게 질문/선택을 요청하는 상호작용 도구인 경우 = 사용자 응답 대기 상태!
+        for tc in tool_calls:
+            fn = tc.get("function", {}) if isinstance(tc, dict) else {}
+            name = fn.get("name") if isinstance(fn, dict) else getattr(tc, "name", "")
+            if name in ("ask_question", "request_feedback"):
+                return True
+        # 그 외 도구 호출(run_command, view_file, replace_file_content 등)은 작업 중간 스텝이므로 완료 아님!
+        return False
+
+    return False
+
+
+def _get_last_valid_transcript_event(t_path: str) -> dict:
+    """transcript.jsonl의 가장 마지막 완전한 JSON 이벤트를 추출"""
+    if not os.path.exists(t_path):
+        return None
+    try:
+        with open(t_path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - 8192))
+            raw_lines = f.readlines()
+            for rl in reversed(raw_lines):
+                s = rl.decode("utf-8", errors="ignore").strip()
+                if s.startswith("{") and s.endswith("}"):
+                    try:
+                        return json.loads(s)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    return None
+
+
 def _check_transcript_turn_completed(conv_id: str, last_step: int):
     """
     transcript.jsonl의 실시간 로그를 검사하여 에이전트의 턴이 완료(대기 상태)되었는지 판별
     반환값: (is_completed: bool, latest_step: int)
     """
     t_path = os.path.join(AGY_BRAIN_DIR, conv_id, ".system_generated", "logs", "transcript.jsonl")
-    if os.path.exists(t_path):
-        try:
-            with open(t_path, "rb") as f:
-                f.seek(0, os.SEEK_END)
-                size = f.tell()
-                f.seek(max(0, size - 4096))
-                for rl in reversed(f.readlines()):
-                    s = rl.decode("utf-8", errors="ignore").strip()
-                    if s.startswith("{") and s.endswith("}"):
-                        try:
-                            obj = json.loads(s)
-                            idx = obj.get("step_index", 0)
-                            st = obj.get("status")
-                            tp = obj.get("type")
-                            # 등록 시점보다 스텝이 진행되었고, 응답이 DONE/ERROR로 끝났으며, 플래너 응답 또는 사용자 입력 대기 상태인 경우
-                            if idx > last_step and st in ("DONE", "ERROR") and tp in ("PLANNER_RESPONSE", "USER_INPUT"):
-                                return True, idx
-                            # 만약 마지막 이벤트의 스텝이 아직 등록 시점과 같거나 이전이면 계속 대기
-                            if idx <= last_step:
-                                return False, idx
-                        except Exception:
-                            pass
-        except Exception:
-            pass
+    last_event = _get_last_valid_transcript_event(t_path)
+    if last_event:
+        idx = last_event.get("step_index", 0)
+        # 구독 시점보다 스텝이 진행되었을 때
+        if idx > last_step:
+            # 중간 도구 호출이 아닌 최종 완료/사용자 대기 상태인지 판정
+            if _is_final_waiting_step(last_event):
+                return True, idx
+        return False, idx
 
     # transcript가 없는 경우 conv db 스텝 수 검사 (fallback)
     c_db_path = os.path.join(AGY_CONVERSATIONS_DIR, f"{conv_id}.db")
