@@ -1,7 +1,7 @@
 # 🛠️ Utility Toolkit (유틸리티 도구 모음)
 
 Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스크톱 유틸리티 도구 모음입니다.  
-중앙 **SQLite DB(`data/app.db`)** 기반 데이터 영속화와 **로컬 AI 시맨틱 검색 엔진(Multilingual-E5 ONNX)**을 내장하고 있으며, 백그라운드 시스템 트레이에 상주하여 다양한 개발 및 업무 도구를 간편하게 실행할 수 있습니다.
+중앙 **SQLite DB(`data/app.db`)** 기반 데이터 영속화와 **로컬 AI 시맨틱 검색 엔진(Multilingual-E5 ONNX)**, **Antigravity CLI 세션 허브**를 내장하고 있으며, 백그라운드 시스템 트레이에 상주하여 다양한 개발 및 업무 도구를 간편하게 실행할 수 있습니다.
 
 ---
 
@@ -9,7 +9,8 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 
 | 카테고리 | 주요 제공 기능 |
 | :--- | :--- |
-| **💼 업무 & 협업<br>(Redmine·달력·이메일)** | • **🦊 Redmine**: 내 일감(Issues) 실시간 대시보드, 상태/진척도 원클릭 변경, 프로젝트 위키(Wiki) 뷰어/에디터, 백그라운드 트레이 알림<br>• **📅 달력 & 일정**: Google Calendar 및 iCal(ICS) 실시간 구독, 다크 테마 월간 캘린더 & 오늘의 아젠다<br>• **📧 이메일 아카이브**: 3,100+건 EML 로컬 보관소, 대화별 스레드 묶기(Thread View), 시간순 아코디언 타임라인, 첨부파일 추출 |
+| **🤖 Antigravity CLI<br>(agy 세션 센터)** | • **로컬 agy 세션 통합 대시보드 & 터미널 런처**: 여러 프로젝트(`D:\python`, `D:\workspace\bizmeka` 등)의 대화 세션을 자동 수집하고, 해당 작업 폴더에서 `cmd.exe /k "agy --conversation <id>"`로 원클릭 즉시 실행<br>• **실시간 알림 파이프라인**: `transcript.jsonl` 및 세션 DB를 2.5초 주기로 감시하여 **에이전트 턴 완료**뿐만 아니라 **터미널 권한 승인 대기(`BypassSandbox` 등)**까지 실시간 포착하여 Windows 트레이 알림 + 토스트 + 딩동 차임벨 전송<br>• **1회성(One-Shot) vs 지속(Persistent) 듀얼 알림 모드**: 팝오버 메뉴를 통해 이번 작업 1회 알림 또는 매 턴 지속 알림 선택 가능<br>• **프로젝트 멀티 드롭다운 필터**: 체크박스 기반의 워크스페이스 다중 선택 및 0ms 클라이언트 사이드 고속 필터링<br>• **Strict Gating**: 시스템 탭에서 토글 OFF 시 백그라운드 감시 스레드 즉시 파괴 및 0 쿼리 완벽 격리 |
+| **💼 업무 & 협업<br>(Redmine·달력·이메일)** | • **🦊 Redmine**: 내 일감(Issues) 실시간 대시보드, 상태/진척도 원클릭 변경, 프로젝트 위키(Wiki) 뷰어/에디터, 백그라운드 트레이 알림, 관심 프로젝트(⭐ 즐겨찾기) 우선 필터<br>• **📅 달력 & 일정**: Google Calendar 및 iCal(ICS) 실시간 구독, 다크 테마 월간 캘린더 & 오늘의 아젠다<br>• **📧 이메일 아카이브**: 3,100+건 EML 로컬 보관소, 대화별 스레드 묶기(Thread View), 시간순 아코디언 타임라인, 첨부파일 추출 |
 | **📊 뷰어 / 다이어그램<br>(CSV·MD·Mermaid·슬라이서)** | • **📋 CSV / TSV 뷰어**: 인코딩/구분자 자동 감지, 전역 검색/정렬, Markdown/JSON/SQL/CSV 변환<br>• **📝 Markdown 뷰어**: GFM 실시간 에디터, GitHub Alerts 콜아웃, 태스크 체크박스 동기화, 목차(TOC)<br>• **📊 Mermaid 다이어그램**: 16종 프리셋 시각화, 마우스 휠 줌/팬, SVG/PNG 고해상도 이미지 내보내기<br>• **✂️ 이미지 슬라이서**: Pillow 기반 다중 절단선, 고정 px 간격, 균등 N등분, 여백 자동 감지 & ZIP/폴더 저장 |
 | **🧠 AI 시맨틱 검색** | • **로컬 딥러닝 신경망(`intfloat/multilingual-e5-small` ONNX)** 기반 의미론적 문맥 검색<br>• 키워드가 정확히 일치하지 않아도 의미와 문맥으로 전체 데이터(이메일, 메모, 다이어그램 등)를 탐색<br>• 문장 간 유사도 정밀 비교 및 증분 벡터 캐싱 지원 |
 | **🎲 모의 데이터 스튜디오** | • **3-Pass 복합 가상 데이터 생성기 & 엑셀(.xlsx) / CSV 내보내기 엔진**<br>• 순번(Sequence), 한국인 이름/이메일 영문 로마자 표기법 변환, 선택(Choice) 및 키-값(Key-Value) 연계 매핑<br>• 커스텀 컬럼 양식 생성, 수정, 삭제 및 SQLite 영구 동기화 |
@@ -18,7 +19,7 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 | **🧪 JS 실행기** | • JSFiddle / RunJS 스타일의 **JavaScript 코드 샌드박스** (비동기 `async/await` 지원)<br>• `console.log/warn/error` 출력 캡처, 실행 시간 측정, `Ctrl + Enter` 실행, 코드 자동 영구 보존 |
 | **📝 빠른 메모** | • **경량 스크래치패드 / 메모장**<br>• 다중 메모 생성, 실시간 자동 저장(Autosave), 고정(Pin) 기능, 마우스 드래그블 스플리터 제공 |
 | **💾 통합 백업 / 복원** | • **Zero-Memory Python 백엔드 스트리밍 아키텍처** (브라우저 메모리 소모 최소화)<br>• 중앙 SQLite DB 및 설정을 **단일 JSON 및 90% 압축 ZIP 포맷으로 일괄/선택적 내보내기 & 복원(Merge/Replace)** |
-| **🛠️ 시스템 트레이** | • 검은색 콘솔 창 없는 GUI 구동 및 Windows 시스템 트레이 상주 (`utiltools.ico` 연동)<br>• V8 힙 128MB 제한 및 Windows WorkingSet 유휴 RAM 자동 회수 엔진 탑재 |
+| **🛡️ 시스템 트레이 & 싱글턴** | • **Windows Named Semaphore** 기반 단일 인스턴스 락(중복 실행 방지 및 기존 창 자동 활성화)<br>• 검은색 콘솔 창 없는 GUI 구동(`run.pyw`) 및 Windows 시스템 트레이 상주 (`utiltools.ico` 연동)<br>• V8 힙 128MB 제한 및 Windows WorkingSet 유휴 RAM 자동 회수 엔진 탑재 |
 
 ---
 
@@ -36,7 +37,7 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 | **✂️ Image Slicer Studio** | • **Pillow 이미지 분할 파이프라인 & 인터랙티브 HTML5 캔버스**<br>• 다중 절단선, 자유 경계 박스, 고정 px, 균등 N등분, 여백 자동 감지 & ZIP 패킹 | [📖 `docs/IMAGE_SLICER.md`](docs/IMAGE_SLICER.md) |
 | **📊 Data & Document Viewers** | • **CSV/TSV 테이블 뷰어** (인코딩/구분자 자동 감지, MD/JSON/SQL 변환)<br>• **Markdown Studio** (GitHub Alerts, 양방향 태스크 동기화, TOC) & **Mermaid 다이어그램** | [📖 `docs/DATA_VIEWERS.md`](docs/DATA_VIEWERS.md) |
 | **💾 Zero-Memory Backup & Restore** | • **Zero-Memory Python 디스크 직접 스트리밍 아키텍처** (브라우저 메모리 소모 최소화)<br>• 90% 압축 ZIP 포맷, 2대 복원 모드(Merge vs Replace) & SQLite 원자적 일괄 복원 | [📖 `docs/BACKUP_AND_RESTORE.md`](docs/BACKUP_AND_RESTORE.md) |
-| **🛠️ Core System & Utilities** | • **무창(Windowless) 런처(`run.pyw`), pystray 시스템 트레이, WorkingSet 메모리 자동 회수**<br>• Google Calendar/iCal 동기화, JS 샌드박스 런너, 빠른 실행 & 폴더 바로가기 | [📖 `docs/CORE_AND_UTILITIES.md`](docs/CORE_AND_UTILITIES.md) |
+| **🛠️ Core System & Utilities** | • **단일 인스턴스 세마포어, 무창 런처(`run.pyw`), pystray 시스템 트레이, 메모리 자동 회수**<br>• Google Calendar/iCal 동기화, JS 샌드박스 런너, 빠른 실행 & Antigravity CLI 세션 알림 | [📖 `docs/CORE_AND_UTILITIES.md`](docs/CORE_AND_UTILITIES.md) |
 
 ---
 
@@ -45,7 +46,7 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 ```text
 D:\python
 │
-├── main.py                     # [진입점] Eel 초기화 및 서비스 모듈 바인딩
+├── main.py                     # [진입점] 단일 인스턴스 검증, Eel 초기화 및 서비스 모듈 바인딩
 ├── run.pyw                     # [런처] Windows 무창(Windowless) 백그라운드 실행기
 ├── UtilTools.spec              # [패키징] PyInstaller 독립 폴더(--onedir) 빌드 정의서
 ├── build.bat                   # [빌드] 원클릭 데스크톱 배포본 빌드 자동화 스크립트
@@ -61,7 +62,7 @@ D:\python
 │   ├── IMAGE_SLICER.md         # Pillow 이미지 슬라이서, 다중 절단선 & 여백 감지
 │   ├── DATA_VIEWERS.md         # CSV/TSV 테이블 뷰어, Markdown Studio & Mermaid 렌더러
 │   ├── BACKUP_AND_RESTORE.md   # Zero-Memory 백엔드 스트리밍 백업 & 원자적 복원 엔진
-│   └── CORE_AND_UTILITIES.md   # 시스템 트레이, 메모리 자동 회수, 캘린더 & JS 샌드박스
+│   └── CORE_AND_UTILITIES.md   # 시스템 트레이, 세마포어 싱글턴, 캘린더 & agy 실시간 알림
 │
 ├── data/                       # [사용자 데이터] SQLite 중앙 데이터베이스 (Git 제외)
 │   └── app.db                  # emails, notes, diagrams, redmine, quick_launch 등 13개 테이블
@@ -73,11 +74,14 @@ D:\python
 │
 ├── core/                       # [코어 시스템]
 │   ├── __init__.py
-│   ├── paths.py                # 개발 모드 & 배포본(.exe) 경로 분기 헬퍼
-│   └── tray.py                 # pystray 트레이 아이콘 및 윈도우 생명주기 관리자
+│   ├── paths.py                # 개발 모드 & 배포본(.exe) 중앙 표준 경로 관리자
+│   ├── single_instance.py      # Windows Named Semaphore 기반 단일 인스턴스 중복 방지 매니저
+│   ├── logger.py               # 백엔드/프론트엔드 통합 시스템 이벤트 로거
+│   └── tray.py                 # pystray 트레이 아이콘, 윈도우 생명주기 및 트레이 알림 관리자
 │
 ├── services/                   # [백엔드 서비스 모듈 (Python)]
 │   ├── __init__.py
+│   ├── agy_service.py          # Antigravity CLI 세션 목록, 실시간 감시(알림/권한 대기) & 터미널 런처
 │   ├── db_service.py           # 중앙 SQLite WAL 모드 커넥션 풀 & 스키마 관리자
 │   ├── ai_search_service.py    # ONNX AI 시맨틱 검색 & 벡터 캐시 엔진
 │   ├── email_service.py        # EML 파서, 스레드 정규화, 카테고리 분류 & 첨부파일 추출
@@ -91,16 +95,17 @@ D:\python
 │   ├── quick_launch_service.py # 빠른 실행/SSH/URL SQLite CRUD
 │   ├── shortcuts_service.py    # 폴더 바로가기 SQLite CRUD 및 터미널 런처
 │   ├── calendar_service.py     # 구글 캘린더 / iCal(ICS) 파싱 및 일정 동기화
-│   ├── settings_service.py     # 창 크기/테마 영구 설정 관리
-│   ├── backup_service.py       # 전체 데이터 통합 JSON 백업/복원 레지스트리
+│   ├── settings_service.py     # 창 크기/테마/agy 연동 설정 영구 관리
+│   ├── backup_service.py       # 전체 데이터 통합 JSON/ZIP 백업/복원 레지스트리
 │   └── dialog_service.py       # Tkinter 기반 파일/폴더 선택 대화상자
 │
 └── web/                        # [프론트엔드 리소스]
-    ├── index.html              # 메인 UI 마크업 (업무&협업 / 뷰어 드롭다운 및 반응형 메뉴)
-    ├── style.css               # 모던 다크 테마 CSS & 스플리터/모달/타임라인 스타일
+    ├── index.html              # 메인 UI 마크업 (업무&협업 / 뷰어 드롭다운, agy 런처)
+    ├── style.css               # 모던 다크 테마 CSS, agy 팝오버 메뉴 & 드롭다운 스타일
     ├── utiltools.ico           # 브라우저 창 Favicon
     └── js/                     # [프론트엔드 모듈 (JavaScript)]
         ├── app.js              # 탭 전환 네비게이션, 드롭다운 그룹 제어 및 초기화
+        ├── agy_sessions.js     # agy 세션 테이블, 듀얼 모드 알림 팝오버, 멀티 프로젝트 드롭다운
         ├── console.js          # 하단 로그창, 스플리터 조절기 & 고도화된 토스트(Toast) 알림
         ├── drag_drop.js        # 공통 마우스 드래그 앤 드롭 핸들러
         ├── email_viewer.js     # EML 아카이브, 대화 스레드 타임라인 & 온디맨드 뷰어
@@ -117,8 +122,8 @@ D:\python
         ├── js_runner.js        # JS 플레이그라운드 (AsyncFunction 샌드박스 엔진)
         ├── quick_launch.js     # 빠른 실행 렌더링, 인라인 편집 & 파일 선택 연동
         ├── shortcuts.js        # 폴더 바로가기 렌더링, 인라인 편집 & 터미널 런처
-        ├── backup.js           # 통합 백업/복원 모달 제어 (JSON Export/Import)
-        └── system.js           # 시스템 사양 & 타임스탬프 & Ping UI 연동
+        ├── backup.js           # 통합 백업/복원 모달 제어 (JSON/ZIP Export/Import)
+        └── system.js           # 시스템 사양 & 타임스탬프 & agy 통합 토글 연동
 ```
 
 ---
@@ -140,7 +145,8 @@ pip install -r requirements.txt
 ### 2. 실행 방법
 
 #### 방법 A: 더블클릭으로 바로 실행 (권장 🌟)
-탐색기에서 **`run.pyw`** 파일을 더블클릭하면 검은색 CMD 콘솔 창 없이 백그라운드 트레이로 즉시 실행됩니다.
+탐색기에서 **`run.pyw`** 파일을 더블클릭하면 검은색 CMD 콘솔 창 없이 백그라운드 트레이로 즉시 실행됩니다.  
+*(이미 실행 중인 경우 Windows Named Semaphore가 감지하여 기존 창을 화면 맨 앞으로 자동 복원합니다.)*
 
 #### 방법 B: 터미널 명령어로 실행
 ```powershell
@@ -167,6 +173,10 @@ python main.py
 
 * **AI 시맨틱 문맥 검색**:
   * `Ctrl + K`: 언제 어디서나 AI 시맨틱 검색 모달 즉시 호출
+* **Antigravity CLI (agy) 세션 런처 & 알림**:
+  * 세션 행의 **`[⚡ 실행]`** 버튼: 해당 프로젝트 디렉토리에서 대화형 터미널 즉시 오픈
+  * 알림 종 모양 클릭: `1회 알림 (One-Shot)` vs `지속 알림 (Persistent)` 선택
+  * 상단 `📁 프로젝트 ▾`: 복수 프로젝트 워크스페이스 체크박스 멀티 필터링
 * **JS 실행기 단축키**:
   * `Ctrl + Enter` (또는 `Cmd + Enter`): 작성한 자바스크립트 코드 즉시 실행
   * `Tab` 키: 4칸 들여쓰기(`    `) 삽입
