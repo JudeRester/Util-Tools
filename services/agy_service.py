@@ -146,6 +146,75 @@ def _parse_session_from_conv_db(cid: str) -> dict:
     }
 
 
+def _get_valid_user_conversation_ids(summary_conn=None) -> set:
+    """
+    내부 서브에이전트(invoke_subagent로 자동 생성된 비대화형 워커)를 배제하고,
+    사용자가 직접 상호작용한 진짜 세션 ID들만 수집하여 반환합니다.
+    """
+    valid_cids = set()
+
+    # 1. conversation_summaries.db에서 최상위 대화만 (부모가 없는 단독 세션)
+    try:
+        need_close = False
+        if summary_conn is None and os.path.exists(AGY_DB_PATH):
+            summary_conn = sqlite3.connect(f"file:{AGY_DB_PATH}?mode=ro", uri=True, timeout=2.0)
+            summary_conn.row_factory = sqlite3.Row
+            need_close = True
+
+        if summary_conn:
+            rows = summary_conn.execute(
+                "SELECT conversation_id, parent_conversation_id, nesting_depth FROM conversation_summaries"
+            ).fetchall()
+            for r in rows:
+                p_id = r["parent_conversation_id"] if "parent_conversation_id" in r.keys() else None
+                depth = r["nesting_depth"] if "nesting_depth" in r.keys() else 0
+                if (not p_id) and (depth == 0 or depth is None):
+                    valid_cids.add(r["conversation_id"])
+
+        if need_close and summary_conn:
+            summary_conn.close()
+    except Exception:
+        pass
+
+    # 2. history.jsonl (사용자가 CLI에서 직접 프롬프트를 입력하여 실행한 대화 목록)
+    history_path = os.path.expanduser(r"~/.gemini/antigravity-cli/history.jsonl")
+    if os.path.exists(history_path):
+        try:
+            with open(history_path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    try:
+                        obj = json.loads(line)
+                        cid = obj.get("conversationId")
+                        if cid:
+                            valid_cids.add(cid)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    # 3. cache/last_conversations.json (각 워크스페이스별 최종 활성 대화)
+    last_conv_path = os.path.expanduser(r"~/.gemini/antigravity-cli/cache/last_conversations.json")
+    if os.path.exists(last_conv_path):
+        try:
+            with open(last_conv_path, "r", encoding="utf-8", errors="ignore") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    valid_cids.update(data.values())
+        except Exception:
+            pass
+
+    # 4. annotations/*.pbtxt (사용자가 /rename 명령으로 이름을 붙인 세션)
+    if os.path.exists(AGY_ANNOTATIONS_DIR):
+        try:
+            for f in os.listdir(AGY_ANNOTATIONS_DIR):
+                if f.endswith(".pbtxt"):
+                    valid_cids.add(f[:-6])
+        except Exception:
+            pass
+
+    return valid_cids
+
+
 @eel.expose
 def get_agy_environment_status():
     """agy-cli 실행 파일 및 로컬 세션 데이터베이스 존재 여부 확인"""
@@ -186,16 +255,22 @@ def get_agy_sessions(limit: int = 30, workspace_filter: str = "current"):
         conn.row_factory = sqlite3.Row
 
         try:
+            # 내부 서브에이전트를 배제하고 유효한 사용자 세션 ID만 추출
+            valid_user_cids = _get_valid_user_conversation_ids(conn)
+
             cursor = conn.cursor()
             # 전체 세션을 가져와 실제 파일 수정 시간 기준으로 최신 정렬
             cursor.execute("""
-                SELECT conversation_id, preview, title, step_count, last_modified_time, workspace_uris, status
+                SELECT conversation_id, preview, title, step_count, last_modified_time, workspace_uris, status, parent_conversation_id, nesting_depth
                 FROM conversation_summaries
             """)
             rows = cursor.fetchall()
 
             for r in rows:
                 conv_id = r["conversation_id"] or ""
+                # 내부 서브에이전트 배제
+                if conv_id not in valid_user_cids:
+                    continue
                 # 1순위: 사용자가 agy에서 /rename으로 지정한 커스텀 세션명 (annotations/<id>.pbtxt)
                 custom_title = _get_annotated_title(conv_id)
                 db_title = (r["title"] or "").strip()
@@ -288,7 +363,7 @@ def get_agy_sessions(limit: int = 30, workspace_filter: str = "current"):
                         if not f.endswith(".db"):
                             continue
                         cid = f[:-3]
-                        if cid in seen_ids:
+                        if cid in seen_ids or cid not in valid_user_cids:
                             continue
 
                         parsed = _parse_session_from_conv_db(cid)
