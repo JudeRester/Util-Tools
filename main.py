@@ -81,12 +81,28 @@ def app_cleanup():
                 shutil.rmtree(temp_att_dir, ignore_errors=True)
             except Exception:
                 pass
+
+        # 3. 단일 인스턴스 세마포어 해제
+        try:
+            from core.single_instance import get_single_instance
+            get_single_instance().release()
+        except Exception:
+            pass
+
         core.logger.log_info("Lifecycle", "🛑 Utility Toolkit이 안전하게 종료되었습니다.")
     except Exception as ex:
         core.logger.log_error("Lifecycle", f"종료 정리 중 예외 발생: {ex}", exc=ex)
 
 
 def main():
+    # 0. 중복 실행 방지: Windows Named Semaphore 락 획득 검사
+    from core.single_instance import get_single_instance
+    single_inst = get_single_instance()
+    if not single_inst.acquire():
+        core.logger.log_warn("Lifecycle", "⚠️ 프로그램이 이미 실행 중입니다. 기존 인스턴스를 활성화하고 새 프로세스를 종료합니다.")
+        single_inst.activate_existing_window()
+        sys.exit(0)
+
     core.logger.log_info("Lifecycle", "🛠️ Utility Toolkit을 시작합니다 (모듈화 아키텍처 / 트레이 상주 모드)...")
     tray_manager = TrayManager(BUNDLE_DIR, start_options, on_exit=app_cleanup)
     tray_manager.start()
