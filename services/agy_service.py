@@ -565,6 +565,57 @@ def _get_last_valid_transcript_event(t_path: str) -> dict:
     return None
 
 
+def _check_transcript_permission_requested(last_event: dict) -> tuple:
+    """
+    마지막 transcript 이벤트가 사용자의 권한 승인(BypassSandbox 등)이나 인터랙티브 질문을 대기 중인지 판별
+    반환값: (is_permission_required: bool, description: str)
+    """
+    if not isinstance(last_event, dict):
+        return False, ""
+    tp = last_event.get("type")
+    if tp == "PLANNER_RESPONSE":
+        tool_calls = last_event.get("tool_calls") or []
+        for tc in tool_calls:
+            name = tc.get("function", {}).get("name") if isinstance(tc, dict) else (tc.get("name") if isinstance(tc, dict) else "")
+            args = tc.get("function", {}).get("arguments") if isinstance(tc, dict) else (tc.get("args") if isinstance(tc, dict) else {})
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except Exception:
+                    args = {}
+            if isinstance(args, dict):
+                bypass = args.get("BypassSandbox")
+                if str(bypass).lower() in ("true", "1", "yes"):
+                    summary = args.get("toolSummary") or "터미널 명령어 실행 승인"
+                    return True, f"명령어 실행 승인 대기 ({summary})"
+            if name in ("ask_question", "request_feedback"):
+                return True, "사용자 응답/선택 대기"
+    return False, ""
+
+
+def _check_db_permission_requested(cid: str, last_step: int) -> tuple:
+    """
+    세션 SQLite DB의 steps 테이블을 검사하여 권한 대기(status=2 & permissions 존재) 중인지 판별
+    반환값: (is_permission: bool, step_idx: int, description: str)
+    """
+    c_db_path = os.path.join(AGY_CONVERSATIONS_DIR, f"{cid}.db")
+    if not os.path.exists(c_db_path):
+        return False, 0, ""
+    try:
+        conn = sqlite3.connect(f"file:{c_db_path}?mode=ro", uri=True, timeout=1.0)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT idx, status, permissions FROM steps ORDER BY idx DESC LIMIT 1"
+        ).fetchone()
+        conn.close()
+        if row and row["idx"] > last_step:
+            if row["status"] == 2 and row["permissions"] and len(row["permissions"]) > 0:
+                return True, int(row["idx"]), "터미널 명령어 권한 승인 대기 (BypassSandbox)"
+    except Exception:
+        pass
+    return False, 0, ""
+
+
 def _check_transcript_turn_completed(conv_id: str, last_step: int):
     """
     transcript.jsonl의 실시간 로그를 검사하여 에이전트의 턴이 완료(대기 상태)되었는지 판별
@@ -618,6 +669,52 @@ def _watcher_loop():
         completed_sessions = []
         for cid, info in watched_items:
             last_step = info.get("last_step", 0)
+            last_perm_step = info.get("last_perm_step", 0)
+
+            # [A] 권한 승인 대기(Request Permission / Interactive) 감지
+            t_path = os.path.join(AGY_BRAIN_DIR, cid, ".system_generated", "logs", "transcript.jsonl")
+            last_event = _get_last_valid_transcript_event(t_path)
+
+            is_perm = False
+            perm_step = 0
+            perm_desc = ""
+
+            if last_event and last_event.get("step_index", 0) > last_step:
+                is_perm, perm_desc = _check_transcript_permission_requested(last_event)
+                perm_step = last_event.get("step_index", 0)
+
+            if not is_perm:
+                db_perm, db_p_step, db_p_desc = _check_db_permission_requested(cid, last_step)
+                if db_perm:
+                    is_perm = True
+                    perm_step = db_p_step
+                    perm_desc = db_p_desc
+
+            # 권한 승인 대기 최초 1회 알림 (동일 스텝 중복 알림 방지)
+            if is_perm and perm_step > last_perm_step:
+                with _watcher_lock:
+                    if cid in _watched_sessions:
+                        _watched_sessions[cid]["last_perm_step"] = perm_step
+
+                title = info.get("title") or _get_annotated_title(cid) or "세션"
+                short_id = cid[:8]
+                show_tray_notification(
+                    "🔐 agy 권한 승인 대기",
+                    f"[{title[:30]}] 터미널에서 실행 권한 승인을 기다리고 있습니다. (스텝 {perm_step})"
+                )
+                try:
+                    eel.on_agy_permission_requested({
+                        "conversation_id": cid,
+                        "title": title,
+                        "step_count": perm_step,
+                        "description": perm_desc
+                    })()
+                except Exception:
+                    pass
+
+                core.logger.log_event("info", "agy", f"세션 권한 승인 대기 알림: #{short_id}", f"사유: {perm_desc}")
+
+            # [B] 최종 작업 완료 감지
             is_done, latest_step = _check_transcript_turn_completed(cid, last_step)
             if is_done:
                 title = info.get("title") or _get_annotated_title(cid) or "세션"

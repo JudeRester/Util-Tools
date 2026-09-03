@@ -19,6 +19,7 @@ const agyState = {
 // Eel 백엔드 알림 리스너 노출 등록
 if (window.eel) {
     eel.expose(on_agy_session_completed);
+    eel.expose(on_agy_permission_requested);
 }
 
 // 외부 클릭 시 드롭다운 및 팝오버 메뉴 자동 닫기 리스너
@@ -505,6 +506,75 @@ function on_agy_session_completed(sessionInfo) {
 
     if (typeof logToConsole === 'function') {
         logToConsole('Antigravity CLI 작업 완료', `세션 #${shortId}: [${title}] 완료 (스텝 ${stepCount}, ${modeLabel})`);
+    }
+}
+
+/**
+ * 터미널에서 권한 승인(BypassSandbox 등) 대기 중일 때 푸시되는 실시간 이벤트 콜백
+ */
+function on_agy_permission_requested(permInfo) {
+    if (!agyState.enabled || !permInfo) return;
+
+    const convId = permInfo.conversation_id || '';
+    const title = permInfo.title || '세션';
+    const shortId = convId.length >= 8 ? convId.slice(0, 8) : convId;
+    const stepCount = permInfo.step_count || 0;
+    const desc = permInfo.description || '터미널에서 실행 권한 승인을 기다리고 있습니다.';
+
+    // 주의 집중 사운드 재생
+    playAgyPermissionSound();
+
+    // 앱 내 토스트 알림 팝업
+    if (typeof showToast === 'function') {
+        showToast(
+            `🔐 agy 권한 승인 대기 (#${shortId})`,
+            `[${title}] ${desc} (스텝 ${stepCount})`,
+            '🔐',
+            8000
+        );
+    }
+
+    if (typeof logToConsole === 'function') {
+        logToConsole('Antigravity CLI 권한 승인 대기', `세션 #${shortId}: [${title}] ${desc}`);
+    }
+}
+
+/**
+ * 권한 승인 대기 전용 주의 알림 사운드 (Web Audio API 2단 고주파 비프음)
+ */
+function playAgyPermissionSound() {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+
+        const ctx = new AudioContext();
+        const now = ctx.currentTime;
+
+        // 1음 (784Hz - G5)
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(783.99, now);
+        gain1.gain.setValueAtTime(0.2, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.12);
+
+        // 2음 (880Hz - A5)
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(880.0, now + 0.1);
+        gain2.gain.setValueAtTime(0.25, now + 0.1);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.1);
+        osc2.stop(now + 0.28);
+    } catch (e) {
+        // 무시
     }
 }
 
