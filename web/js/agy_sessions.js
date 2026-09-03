@@ -1,22 +1,38 @@
 /**
- * Antigravity CLI (agy) 세션 목록화 및 대화형 터미널 런처 연동 모듈 (테이블 뷰 & 실시간 알림 감시)
+ * Antigravity CLI (agy) 세션 목록화 및 대화형 터미널 런처 연동 모듈 (테이블 뷰 & 실시간 알림 감시 & 프로젝트 멀티 드롭다운)
  */
 
 const agyState = {
     enabled: false,
     detected: false,
     cliPath: '',
-    currentFilter: 'current', // 'current' | 'all'
+    selectedWorkspaces: new Set(), // 체크된 프로젝트 워크스페이스 Set (비어있으면 전체)
     searchKeyword: '',
     sessions: [],
     watchedSessions: new Set(),
-    loading: false
+    loading: false,
+    dropdownOpen: false
 };
 
 // Eel 백엔드 알림 리스너 노출 등록
 if (window.eel) {
     eel.expose(on_agy_session_completed);
 }
+
+// 드롭다운 외부 클릭 시 자동 닫기 리스너 등록
+document.addEventListener('click', (e) => {
+    const container = document.getElementById('agy-project-dropdown-container');
+    if (container && !container.contains(e.target)) {
+        closeAgyProjectDropdown();
+    }
+});
+
+// ESC 키 입력 시 드롭다운 닫기
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && agyState.dropdownOpen) {
+        closeAgyProjectDropdown();
+    }
+});
 
 /**
  * agy 연동 설정 및 환경 상태 초기화
@@ -68,7 +84,7 @@ async function initAgyIntegration() {
         // 5. 활성화되어 있는 경우 세션 목록 및 감시 목록 즉시 로드
         if (agyState.enabled) {
             await loadWatchedSessions();
-            loadAgySessions();
+            await loadAgySessions();
         }
     } catch (e) {
         console.error('[agy_sessions] 초기화 실패:', e);
@@ -124,7 +140,7 @@ async function onToggleAgyIntegration(isChecked) {
 
     if (isChecked) {
         await loadWatchedSessions();
-        loadAgySessions();
+        await loadAgySessions();
     }
 }
 
@@ -146,7 +162,7 @@ async function loadWatchedSessions() {
 }
 
 /**
- * agy 세션 목록 불러오기
+ * agy 세션 목록 불러오기 (전체 세션을 1회 로드 후 클라이언트 사이드 멀티 필터링)
  */
 async function loadAgySessions() {
     if (!agyState.enabled) return;
@@ -165,9 +181,14 @@ async function loadAgySessions() {
 
     try {
         if (window.eel && eel.get_agy_sessions) {
-            const res = await eel.get_agy_sessions(30, agyState.currentFilter)();
+            const res = await eel.get_agy_sessions(100, 'all')();
             if (res && res.status === 'success' && Array.isArray(res.sessions)) {
                 agyState.sessions = res.sessions;
+                // 최초 1회 로드 시 모든 프로젝트를 기본 선택 상태로 초기화
+                if (agyState.selectedWorkspaces.size === 0) {
+                    const uniqueWorkspaces = new Set(res.sessions.map(s => s.primary_workspace || '기타'));
+                    agyState.selectedWorkspaces = uniqueWorkspaces;
+                }
             } else {
                 agyState.sessions = [];
             }
@@ -177,7 +198,137 @@ async function loadAgySessions() {
         agyState.sessions = [];
     } finally {
         agyState.loading = false;
+        buildProjectDropdownUI();
         renderAgySessionsUI();
+    }
+}
+
+/**
+ * 프로젝트 드롭다운 메뉴 토글
+ */
+function toggleAgyProjectDropdown(event) {
+    if (event) event.stopPropagation();
+    agyState.dropdownOpen = !agyState.dropdownOpen;
+    const menuEl = document.getElementById('agy-project-dropdown-menu');
+    if (menuEl) {
+        menuEl.style.display = agyState.dropdownOpen ? 'block' : 'none';
+    }
+}
+
+/**
+ * 프로젝트 드롭다운 메뉴 닫기
+ */
+function closeAgyProjectDropdown() {
+    agyState.dropdownOpen = false;
+    const menuEl = document.getElementById('agy-project-dropdown-menu');
+    if (menuEl) {
+        menuEl.style.display = 'none';
+    }
+}
+
+/**
+ * 프로젝트 체크박스 리스트 동적 구성
+ */
+function buildProjectDropdownUI() {
+    const listEl = document.getElementById('agy-project-checkbox-list');
+    if (!listEl) return;
+
+    // 세션들로부터 고유 워크스페이스 및 카운트 집계
+    const counts = {};
+    agyState.sessions.forEach(s => {
+        const ws = s.primary_workspace || '기타';
+        counts[ws] = (counts[ws] || 0) + 1;
+    });
+
+    const workspaces = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+
+    if (workspaces.length === 0) {
+        listEl.innerHTML = '<div style="padding: 8px; text-align: center; color: var(--text-muted); font-size: 0.75rem;">등록된 프로젝트가 없습니다.</div>';
+        updateDropdownButtonLabel();
+        return;
+    }
+
+    listEl.innerHTML = workspaces.map(ws => {
+        const isChecked = agyState.selectedWorkspaces.has(ws);
+        const baseName = escapeHtml(getBaseName(ws) || '루트');
+        const safeWs = escapeHtml(ws);
+        const count = counts[ws] || 0;
+
+        return `
+            <label class="agy-project-checkbox-item">
+                <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="onToggleProjectFilter('${safeWs}', this.checked)">
+                <div class="agy-project-item-info">
+                    <div class="agy-project-item-name" title="${safeWs}">${baseName}</div>
+                    <div class="agy-project-item-path" title="${safeWs}">${safeWs}</div>
+                </div>
+                <span class="agy-project-item-count">${count}</span>
+            </label>
+        `;
+    }).join('');
+
+    updateDropdownButtonLabel();
+}
+
+/**
+ * 프로젝트 체크박스 개별 토글
+ */
+function onToggleProjectFilter(workspacePath, isChecked) {
+    if (isChecked) {
+        agyState.selectedWorkspaces.add(workspacePath);
+    } else {
+        agyState.selectedWorkspaces.delete(workspacePath);
+    }
+    updateDropdownButtonLabel();
+    renderAgySessionsUI();
+}
+
+/**
+ * 프로젝트 전체 선택 / 선택 해제
+ */
+function selectAllAgyProjects(selectAll, event) {
+    if (event) event.stopPropagation();
+
+    const uniqueWorkspaces = new Set(agyState.sessions.map(s => s.primary_workspace || '기타'));
+    if (selectAll) {
+        agyState.selectedWorkspaces = uniqueWorkspaces;
+    } else {
+        agyState.selectedWorkspaces.clear();
+    }
+
+    // 체크박스 UI 상태 갱신
+    const listEl = document.getElementById('agy-project-checkbox-list');
+    if (listEl) {
+        const checkboxes = listEl.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(cb => cb.checked = selectAll);
+    }
+
+    updateDropdownButtonLabel();
+    renderAgySessionsUI();
+}
+
+/**
+ * 드롭다운 버튼 라벨 업데이트
+ */
+function updateDropdownButtonLabel() {
+    const labelEl = document.getElementById('agy-dropdown-label');
+    if (!labelEl) return;
+
+    const allWorkspaces = Array.from(new Set(agyState.sessions.map(s => s.primary_workspace || '기타')));
+    const totalCount = allWorkspaces.length;
+    const selectedCount = agyState.selectedWorkspaces.size;
+
+    if (totalCount === 0 || selectedCount === totalCount) {
+        labelEl.textContent = `프로젝트 (전체 ${totalCount}개)`;
+    } else if (selectedCount === 0) {
+        labelEl.textContent = '프로젝트 선택 (0개)';
+    } else if (selectedCount === 1) {
+        const onlyWs = Array.from(agyState.selectedWorkspaces)[0];
+        const baseName = getBaseName(onlyWs);
+        labelEl.textContent = `📁 ${baseName}`;
+    } else {
+        const firstWs = Array.from(agyState.selectedWorkspaces)[0];
+        const firstBaseName = getBaseName(firstWs);
+        labelEl.textContent = `📁 ${firstBaseName} 외 ${selectedCount - 1}개`;
     }
 }
 
@@ -187,22 +338,6 @@ async function loadAgySessions() {
 function onAgySearchInput(keyword) {
     agyState.searchKeyword = (keyword || '').trim().toLowerCase();
     renderAgySessionsUI();
-}
-
-/**
- * 세션 필터(현재 프로젝트 vs 전체 세션) 전환
- */
-function filterAgySessions(filterType) {
-    if (agyState.currentFilter === filterType) return;
-    agyState.currentFilter = filterType;
-
-    const currentBtn = document.getElementById('agy-filter-current-btn');
-    const allBtn = document.getElementById('agy-filter-all-btn');
-
-    if (currentBtn) currentBtn.classList.toggle('active', filterType === 'current');
-    if (allBtn) allBtn.classList.toggle('active', filterType === 'all');
-
-    loadAgySessions();
 }
 
 /**
@@ -240,7 +375,7 @@ async function toggleAgySessionWatch(conversationId, event) {
                 if (typeof showToast === 'function') {
                     showToast(
                         nextState ? `🔔 알림 감시 시작: #${conversationId.slice(0, 8)}` : `🔕 알림 감시 해제: #${conversationId.slice(0, 8)}`,
-                        nextState ? '작업이 완료되면 Windows 트레이 및 알림음으로 알려드립니다.' : '감시가 해제되었습니다.',
+                        nextState ? '작업이 완료되면 Windows 트레이 알림 및 알림음으로 알려드립니다.' : '감시가 해제되었습니다.',
                         nextState ? '🔔' : '🔕',
                         4000
                     );
@@ -257,7 +392,7 @@ async function toggleAgySessionWatch(conversationId, event) {
 }
 
 /**
- * 백엔드에서 세션 응답 완료 시 푸시되는 이벤트 콜백 (Eel exposed)
+ * 백엔드에서 세션 응답 완료 시 푸시되는 실시간 이벤트 콜백 (Eel exposed)
  */
 function on_agy_session_completed(sessionInfo) {
     if (!agyState.enabled || !sessionInfo) return;
@@ -336,14 +471,23 @@ function renderAgySessionsUI() {
     const countBadgeEl = document.getElementById('agy-session-count-badge');
     if (!tbodyEl) return;
 
-    // 검색 필터 적용
+    // 1. 프로젝트 멀티 체크박스 필터 & 검색 필터 적용
     const filtered = agyState.sessions.filter(s => {
-        if (!agyState.searchKeyword) return true;
-        const kw = agyState.searchKeyword;
-        const title = (s.title || '').toLowerCase();
-        const path = (s.primary_workspace || '').toLowerCase();
-        const id = (s.conversation_id || '').toLowerCase();
-        return title.includes(kw) || path.includes(kw) || id.includes(kw);
+        // 워크스페이스 체크박스 필터
+        const ws = s.primary_workspace || '기타';
+        if (agyState.selectedWorkspaces.size > 0 && !agyState.selectedWorkspaces.has(ws)) {
+            return false;
+        }
+
+        // 검색어 필터
+        if (agyState.searchKeyword) {
+            const kw = agyState.searchKeyword;
+            const title = (s.title || '').toLowerCase();
+            const path = (s.primary_workspace || '').toLowerCase();
+            const id = (s.conversation_id || '').toLowerCase();
+            return title.includes(kw) || path.includes(kw) || id.includes(kw);
+        }
+        return true;
     });
 
     if (countBadgeEl) {
@@ -351,16 +495,15 @@ function renderAgySessionsUI() {
     }
 
     if (filtered.length === 0) {
-        const filterText = agyState.currentFilter === 'current' ? '현재 프로젝트' : '전체';
         tbodyEl.innerHTML = `
             <tr>
                 <td colspan="7" style="padding: 36px 16px; text-align: center; color: var(--text-secondary);">
                     <div style="font-size: 1.8rem; margin-bottom: 8px;">🤖</div>
                     <div style="font-weight: 600; margin-bottom: 4px; color: var(--text-primary);">
-                        ${agyState.searchKeyword ? '검색된 세션이 없습니다.' : `조회된 ${filterText} agy 세션이 없습니다.`}
+                        ${agyState.searchKeyword ? '검색된 세션이 없습니다.' : '선택된 프로젝트에 해당하는 세션이 없습니다.'}
                     </div>
                     <div style="font-size: 0.8rem; color: var(--text-muted);">
-                        ${agyState.searchKeyword ? '검색어를 변경하거나 지워보세요.' : (agyState.currentFilter === 'current' ? '상단의 <b>[🌐 전체 세션]</b>을 선택하여 다른 프로젝트의 세션을 확인해 보세요.' : '터미널에서 <code>agy</code> 명령어로 새 세션을 시작할 수 있습니다.')}
+                        ${agyState.searchKeyword ? '검색어를 변경하거나 지워보세요.' : '상단의 프로젝트 드롭다운에서 다른 프로젝트를 선택해 보세요.'}
                     </div>
                 </td>
             </tr>

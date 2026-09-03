@@ -254,11 +254,27 @@
                     <div class="pane-toolbar-header agy-toolbar-header" style="flex-wrap: wrap; gap: 10px;">
                         <div class="group-title-inline">
                             <span class="title-icon">🤖</span> Antigravity CLI 세션
-                            <span class="badge" id="agy-session-count-badge" style="margin-left: 8px; font-size: 0.74rem; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 2px 8px;">0개</span>
-                            <div class="filter-btn-group" style="margin-left: 14px; display: inline-flex; gap: 4px;">
-                                <button class="compact-btn active" id="agy-filter-current-btn" onclick="filterAgySessions('current')">📍 현재 프로젝트</button>
-                                <button class="compact-btn" id="agy-filter-all-btn" onclick="filterAgySessions('all')">🌐 전체 세션</button>
+                            <div class="agy-project-dropdown-container" id="agy-project-dropdown-container" style="margin-left: 14px; position: relative; display: inline-block;">
+                                <button type="button" id="agy-project-dropdown-btn" class="agy-dropdown-btn" onclick="toggleAgyProjectDropdown(event)" title="프로젝트 / 워크스페이스 선택">
+                                    <span class="agy-dropdown-icon">📁</span>
+                                    <span id="agy-dropdown-label" class="agy-dropdown-label">프로젝트 (전체)</span>
+                                    <span class="agy-dropdown-arrow">▾</span>
+                                </button>
+                                <div id="agy-project-dropdown-menu" class="agy-dropdown-menu" style="display: none;">
+                                    <div class="agy-dropdown-header">
+                                        <span class="agy-dropdown-title">프로젝트 필터</span>
+                                        <div class="agy-dropdown-actions">
+                                            <button type="button" class="agy-dropdown-action-btn" onclick="selectAllAgyProjects(true, event)">전체 선택</button>
+                                            <span class="sep">|</span>
+                                            <button type="button" class="agy-dropdown-action-btn" onclick="selectAllAgyProjects(false, event)">선택 해제</button>
+                                        </div>
+                                    </div>
+                                    <div id="agy-project-checkbox-list" class="agy-project-checkbox-list">
+                                        <!-- JS 동적 렌더링 -->
+                                    </div>
+                                </div>
                             </div>
+                            <span class="badge" id="agy-session-count-badge" style="margin-left: 8px; font-size: 0.74rem; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 2px 8px;">0개</span>
                         </div>
                         <div class="agy-toolbar-right" style="display: flex; align-items: center; gap: 8px;">
                             <input type="text" id="agy-search-input" class="compact-search-input" placeholder="🔍 제목, 프로젝트, 세션ID 검색..." oninput="onAgySearchInput(this.value)">

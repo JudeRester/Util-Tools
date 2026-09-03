@@ -68,7 +68,10 @@ def _parse_workspace_uri(uri: str) -> str:
         path = urllib.parse.unquote(parsed.path)
         if path.startswith('/') and len(path) > 2 and path[2] == ':':
             path = path[1:]
-        return os.path.normpath(path)
+        norm = os.path.normpath(path)
+        if len(norm) >= 2 and norm[1] == ':':
+            norm = norm[0].upper() + norm[1:]
+        return norm
     except Exception:
         return ""
 
@@ -128,6 +131,8 @@ def _parse_session_from_conv_db(cid: str) -> dict:
                             break
                         clean += ch
                     workspace = os.path.normpath(urllib.parse.unquote(clean))
+                    if len(workspace) >= 2 and workspace[1] == ':':
+                        workspace = workspace[0].upper() + workspace[1:]
         except Exception:
             pass
 
@@ -471,38 +476,88 @@ def launch_agy_session(conversation_id: str, workspace_path: str = ""):
 # 실시간 세션 완료 감지 및 알림 워커 (Strict Gated by enable_agy_integration)
 # ==============================================================================
 
-def _check_session_turn_completed(conv_id: str, row: sqlite3.Row) -> bool:
-    """
-    transcript.jsonl의 마지막 이벤트를 검사하여 에이전트의 턴이 완료(대기 상태)되었는지 판별
-    """
-    transcript_path = os.path.expanduser(rf"~/.gemini/antigravity-cli/brain/{conv_id}/.system_generated/logs/transcript.jsonl")
-    if os.path.exists(transcript_path):
+def _get_current_session_step(cid: str) -> int:
+    """현재 세션의 실시간 스텝 번호를 transcript.jsonl 또는 conv db에서 직접 조회"""
+    t_path = os.path.join(AGY_BRAIN_DIR, cid, ".system_generated", "logs", "transcript.jsonl")
+    if os.path.exists(t_path):
         try:
-            with open(transcript_path, "rb") as f:
+            with open(t_path, "rb") as f:
                 f.seek(0, os.SEEK_END)
                 size = f.tell()
                 f.seek(max(0, size - 4096))
-                lines = f.readlines()
-                if lines:
-                    last_obj = json.loads(lines[-1].decode("utf-8", errors="ignore"))
-                    # 플래너/모델 응답이 DONE 상태이거나 사용자 입력 대기 상태인 경우 완료로 판정
-                    if last_obj.get("type") in ("PLANNER_RESPONSE", "USER_INPUT") and last_obj.get("status") in ("DONE", "ERROR"):
-                        return True
+                for rl in reversed(f.readlines()):
+                    s = rl.decode("utf-8", errors="ignore").strip()
+                    if s.startswith("{") and s.endswith("}"):
+                        try:
+                            obj = json.loads(s)
+                            if "step_index" in obj:
+                                return int(obj["step_index"])
+                        except Exception:
+                            pass
         except Exception:
             pass
 
-    # DB 컬럼 fallback (not_fully_idle가 0이면 대기 상태)
-    try:
-        if row and "not_fully_idle" in row.keys() and row["not_fully_idle"] == 0:
-            return True
-    except Exception:
-        pass
+    c_db_path = os.path.join(AGY_CONVERSATIONS_DIR, f"{cid}.db")
+    if os.path.exists(c_db_path):
+        try:
+            conn = sqlite3.connect(f"file:{c_db_path}?mode=ro", uri=True, timeout=1.0)
+            row = conn.execute("SELECT count(*) FROM steps").fetchone()
+            conn.close()
+            if row:
+                return int(row[0])
+        except Exception:
+            pass
+    return 0
 
-    return True
+
+def _check_transcript_turn_completed(conv_id: str, last_step: int):
+    """
+    transcript.jsonl의 실시간 로그를 검사하여 에이전트의 턴이 완료(대기 상태)되었는지 판별
+    반환값: (is_completed: bool, latest_step: int)
+    """
+    t_path = os.path.join(AGY_BRAIN_DIR, conv_id, ".system_generated", "logs", "transcript.jsonl")
+    if os.path.exists(t_path):
+        try:
+            with open(t_path, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                f.seek(max(0, size - 4096))
+                for rl in reversed(f.readlines()):
+                    s = rl.decode("utf-8", errors="ignore").strip()
+                    if s.startswith("{") and s.endswith("}"):
+                        try:
+                            obj = json.loads(s)
+                            idx = obj.get("step_index", 0)
+                            st = obj.get("status")
+                            tp = obj.get("type")
+                            # 등록 시점보다 스텝이 진행되었고, 응답이 DONE/ERROR로 끝났으며, 플래너 응답 또는 사용자 입력 대기 상태인 경우
+                            if idx > last_step and st in ("DONE", "ERROR") and tp in ("PLANNER_RESPONSE", "USER_INPUT"):
+                                return True, idx
+                            # 만약 마지막 이벤트의 스텝이 아직 등록 시점과 같거나 이전이면 계속 대기
+                            if idx <= last_step:
+                                return False, idx
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+    # transcript가 없는 경우 conv db 스텝 수 검사 (fallback)
+    c_db_path = os.path.join(AGY_CONVERSATIONS_DIR, f"{conv_id}.db")
+    if os.path.exists(c_db_path):
+        try:
+            conn = sqlite3.connect(f"file:{c_db_path}?mode=ro", uri=True, timeout=1.0)
+            row = conn.execute("SELECT count(*) FROM steps").fetchone()
+            conn.close()
+            if row and row[0] > last_step:
+                return True, row[0]
+        except Exception:
+            pass
+
+    return False, last_step
 
 
 def _watcher_loop():
-    """백그라운드 세션 감시 루프 (4초 주기 폴링, 토글 OFF 시 즉시 종료)"""
+    """백그라운드 세션 감시 루프 (2.5초 주기 폴링, transcript.jsonl 실시간 감시)"""
     global _watcher_running
     while _watcher_running:
         # 1. 토글 활성화 여부 엄격 검사 (토글 꺼지면 스레드 즉시 종료)
@@ -512,97 +567,49 @@ def _watcher_loop():
                 _watcher_running = False
             break
 
-        # 2. 감시 중인 세션 목록 확인 (없으면 DB 쿼리 0건)
+        # 2. 감시 중인 세션 목록 확인 (없으면 0 CPU 대기)
         with _watcher_lock:
-            watched_ids = list(_watched_sessions.keys())
+            watched_items = list(_watched_sessions.items())
 
-        if not watched_ids:
-            time.sleep(3.0)
+        if not watched_items:
+            time.sleep(2.5)
             continue
 
-        # 3. 감시 중인 세션의 DB 변경 감지
-        try:
-            if os.path.exists(AGY_DB_PATH):
-                db_uri = f"file:{AGY_DB_PATH}?mode=ro"
-                conn = sqlite3.connect(db_uri, uri=True, timeout=2.0)
-                conn.row_factory = sqlite3.Row
-                placeholders = ",".join("?" for _ in watched_ids)
-                rows = conn.execute(
-                    f"SELECT conversation_id, title, preview, step_count, last_modified_time, not_fully_idle FROM conversation_summaries WHERE conversation_id IN ({placeholders})",
-                    watched_ids
-                ).fetchall()
-                conn.close()
+        completed_sessions = []
+        for cid, info in watched_items:
+            last_step = info.get("last_step", 0)
+            is_done, latest_step = _check_transcript_turn_completed(cid, last_step)
+            if is_done:
+                title = info.get("title") or _get_annotated_title(cid) or "세션"
+                completed_sessions.append({
+                    "conversation_id": cid,
+                    "title": title,
+                    "step_count": latest_step
+                })
 
-                completed_sessions = []
-                db_found_ids = set()
-                for row in rows:
-                    cid = row["conversation_id"]
-                    db_found_ids.add(cid)
-                    with _watcher_lock:
-                        info = _watched_sessions.get(cid)
-                    if not info:
-                        continue
+        # 완료된 세션 알림 전송 및 구독 해제
+        for comp in completed_sessions:
+            cid = comp["conversation_id"]
+            with _watcher_lock:
+                if cid in _watched_sessions:
+                    del _watched_sessions[cid]
 
-                    curr_step = row["step_count"] or 0
-                    curr_time = row["last_modified_time"] or ""
+            short_id = cid[:8]
+            # 1) Windows OS 시스템 트레이 알림 전송
+            show_tray_notification(
+                "🤖 Antigravity CLI 작업 완료",
+                f"[{comp['title'][:30]}] 에이전트 응답이 완료되었습니다. (스텝 {comp['step_count']})"
+            )
 
-                    # 스텝이 증가했거나 수정 일시가 변경된 경우
-                    if curr_step > info["last_step"] or (curr_time != info["last_time"] and curr_step >= info["last_step"]):
-                        if _check_session_turn_completed(cid, row):
-                            custom_title = _get_annotated_title(cid)
-                            title = custom_title or row["title"] or info.get("title") or "세션"
-                            completed_sessions.append({
-                                "conversation_id": cid,
-                                "title": title,
-                                "step_count": curr_step
-                            })
+            # 2) 앱 내부 프론트엔드 Eel 이벤트 전송
+            try:
+                eel.on_agy_session_completed(comp)()
+            except Exception:
+                pass
 
-                # DB에 아직 없는 신규/활성 세션의 파일 시스템 감시
-                missing_from_summary = [w_id for w_id in watched_ids if w_id not in db_found_ids]
-                for cid in missing_from_summary:
-                    with _watcher_lock:
-                        info = _watched_sessions.get(cid)
-                    if not info:
-                        continue
-                    parsed = _parse_session_from_conv_db(cid)
-                    if not parsed:
-                        continue
-                    curr_step = parsed.get("step_count", 0)
-                    curr_time = str(parsed.get("sort_timestamp", ""))
-                    if curr_step > info["last_step"] or (curr_time and curr_time != info["last_time"]):
-                        if _check_session_turn_completed(cid, None):
-                            completed_sessions.append({
-                                "conversation_id": cid,
-                                "title": parsed.get("title", "세션"),
-                                "step_count": curr_step
-                            })
+            core.logger.log_event("info", "agy", f"세션 작업 완료 알림 전송: #{short_id}", f"제목: {comp['title']}")
 
-                # 완료된 세션 알림 전송 및 구독 해제
-                for comp in completed_sessions:
-                    cid = comp["conversation_id"]
-                    with _watcher_lock:
-                        if cid in _watched_sessions:
-                            del _watched_sessions[cid]
-
-                    # 1) Windows OS 시스템 트레이 알림 전송
-                    short_id = cid[:8]
-                    show_tray_notification(
-                        "🤖 Antigravity CLI 작업 완료",
-                        f"[{comp['title'][:30]}] 에이전트 응답이 완료되었습니다. (스텝 {comp['step_count']})"
-                    )
-
-                    # 2) 앱 내부 프론트엔드 Eel 이벤트 전송
-                    try:
-                        eel.on_agy_session_completed(comp)()
-                    except Exception:
-                        pass
-
-                    core.logger.log_event("info", "agy", f"세션 작업 완료 알림 전송: #{short_id}", f"제목: {comp['title']}")
-
-        except Exception as e:
-            core.logger.log_event("error", "agy", f"세션 감시 오류: {e}")
-
-        time.sleep(3.0)
+        time.sleep(2.5)
 
 
 def start_agy_watcher_if_needed():
@@ -651,42 +658,19 @@ def toggle_agy_watch_session(conversation_id: str, enabled: bool):
                 "message": "알림 감시가 해제되었습니다."
             }
 
-        # 구독 활성화: 현재 step_count 및 title 기록
-        step_count = 0
-        title = ""
-        last_time = ""
-        try:
-            if os.path.exists(AGY_DB_PATH):
-                db_uri = f"file:{AGY_DB_PATH}?mode=ro"
-                conn = sqlite3.connect(db_uri, uri=True, timeout=2.0)
-                conn.row_factory = sqlite3.Row
-                row = conn.execute(
-                    "SELECT step_count, title, last_modified_time FROM conversation_summaries WHERE conversation_id = ?",
-                    (conversation_id,)
-                ).fetchone()
-                conn.close()
-                if row:
-                    step_count = row["step_count"] or 0
-                    title = row["title"] or ""
-                    last_time = row["last_modified_time"] or ""
-                else:
-                    parsed = _parse_session_from_conv_db(conversation_id)
-                    if parsed:
-                        step_count = parsed.get("step_count", 0)
-                        title = parsed.get("title", "")
-                        last_time = str(parsed.get("sort_timestamp", ""))
-        except Exception:
-            pass
-
-        # 1순위: /rename 커스텀 명칭 반영
+        # 구독 활성화: 현재 실시간 최신 스텝 수 및 명칭 기록
+        current_step = _get_current_session_step(conversation_id)
         custom_title = _get_annotated_title(conversation_id)
-        default_preview = row["preview"] if (row and "preview" in row.keys() and row["preview"]) else "세션"
-        final_title = custom_title if custom_title else (title if title else default_preview)
+        if not custom_title:
+            parsed = _parse_session_from_conv_db(conversation_id)
+            if parsed:
+                custom_title = parsed.get("title", "")
+        if not custom_title:
+            custom_title = f"세션 {conversation_id[:8]}"
 
         _watched_sessions[conversation_id] = {
-            "last_step": step_count,
-            "title": final_title,
-            "last_time": last_time
+            "last_step": current_step,
+            "title": custom_title
         }
 
     start_agy_watcher_if_needed()
@@ -695,7 +679,8 @@ def toggle_agy_watch_session(conversation_id: str, enabled: bool):
         "status": "success",
         "watched": True,
         "conversation_id": conversation_id,
-        "message": f"세션 [#{short_id}] 작업 완료 알림을 켰습니다."
+        "current_step": current_step,
+        "message": f"세션 [#{short_id}] 작업 완료 알림을 켰습니다. (현재 {current_step}스텝 이후 완료 시 알림)"
     }
 
 

@@ -792,6 +792,146 @@ body {
     background: rgba(245, 158, 11, 0.05);
 }
 
+/* agy 프로젝트 멀티 선택 드롭다운 */
+.agy-project-dropdown-container {
+    position: relative;
+    display: inline-block;
+}
+
+.agy-dropdown-btn {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: var(--radius-md);
+    padding: 4px 12px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: border-color var(--transition), background var(--transition);
+}
+
+.agy-dropdown-btn:hover {
+    border-color: var(--accent-color);
+    background: var(--bg-secondary);
+}
+
+.agy-dropdown-arrow {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    transition: transform var(--transition);
+}
+
+.agy-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 1000;
+    min-width: 300px;
+    max-width: 400px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: 10px;
+}
+
+.agy-dropdown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.agy-dropdown-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.agy-dropdown-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.agy-dropdown-action-btn {
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    font-size: 0.72rem;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.agy-dropdown-action-btn:hover {
+    color: var(--accent-hover);
+}
+
+.agy-project-checkbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.agy-project-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background var(--transition);
+    user-select: none;
+}
+
+.agy-project-checkbox-item:hover {
+    background: var(--bg-hover);
+}
+
+.agy-project-checkbox-item input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: var(--accent-color);
+}
+
+.agy-project-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.agy-project-item-name {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.agy-project-item-path {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.agy-project-item-count {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1px 6px;
+    white-space: nowrap;
+}
+
 .compact-search-input {
     background: var(--bg-primary);
     color: var(--text-primary);
