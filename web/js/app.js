@@ -48,6 +48,7 @@ function closeMobileNav() {
 
 function toggleViewerDiagramDropdown(e) {
     if (e) e.stopPropagation();
+    closeWorkspaceDropdown();
     const dropdown = document.getElementById('viewer-diagram-dropdown');
     if (dropdown) {
         dropdown.classList.toggle('open');
@@ -61,9 +62,26 @@ function closeViewerDiagramDropdown() {
     }
 }
 
+function toggleWorkspaceDropdown(e) {
+    if (e) e.stopPropagation();
+    closeViewerDiagramDropdown();
+    const dropdown = document.getElementById('workspace-dropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('open');
+    }
+}
+
+function closeWorkspaceDropdown() {
+    const dropdown = document.getElementById('workspace-dropdown');
+    if (dropdown && dropdown.classList.contains('open')) {
+        dropdown.classList.remove('open');
+    }
+}
+
 function selectDropdownTab(tabName, icon, label, e) {
     if (e) e.stopPropagation();
     closeViewerDiagramDropdown();
+    closeWorkspaceDropdown();
     switchTab(tabName);
 }
 
@@ -206,7 +224,8 @@ function switchTab(targetTab) {
     currentActiveTab = targetTab;
 
     const tabButtons = document.querySelectorAll('.tab-btn:not(.tab-dropdown-trigger)');
-    const dropdownBtn = document.getElementById('viewer-diagram-tab-btn');
+    const workspaceBtn = document.getElementById('workspace-tab-btn');
+    const viewerBtn = document.getElementById('viewer-diagram-tab-btn');
     const dropdownItems = document.querySelectorAll('.tab-dropdown-item');
     const tabPanes = document.querySelectorAll('.tab-pane');
     const mobileActiveText = document.getElementById('mobile-active-tab-text');
@@ -218,31 +237,65 @@ function switchTab(targetTab) {
     let activeIcon = '';
     let activeLabel = '';
 
-    if (targetTab === 'csv' || targetTab === 'markdown' || targetTab === 'mermaid' || targetTab === 'emails') {
-        if (dropdownBtn) dropdownBtn.classList.add('active');
-        const activeItem = document.querySelector(`.tab-dropdown-item[data-tab="${targetTab}"]`);
+    const workspaceIconEl = document.getElementById('workspace-tab-icon');
+    const workspaceLabelEl = document.getElementById('workspace-tab-label');
+    const viewerIconEl = document.getElementById('viewer-diagram-icon');
+    const viewerLabelEl = document.getElementById('viewer-diagram-label');
+
+    const WORKSPACE_TABS = {
+        redmine: { icon: '🦊', label: 'Redmine' },
+        calendar: { icon: '📅', label: '달력 & 일정' },
+        emails: { icon: '📧', label: '이메일 아카이브' }
+    };
+
+    const VIEWER_TABS = {
+        csv: { icon: '📋', label: 'CSV 뷰어' },
+        markdown: { icon: '📝', label: 'Markdown 뷰어' },
+        mermaid: { icon: '📊', label: '다이어그램' },
+        slicer: { icon: '✂️', label: '이미지 슬라이서' }
+    };
+
+    if (WORKSPACE_TABS[targetTab]) {
+        if (workspaceBtn) workspaceBtn.classList.add('active');
+        if (viewerBtn) viewerBtn.classList.remove('active');
+        const info = WORKSPACE_TABS[targetTab];
+        activeIcon = info.icon;
+        activeLabel = info.label;
+        if (workspaceIconEl) workspaceIconEl.textContent = activeIcon;
+        if (workspaceLabelEl) workspaceLabelEl.textContent = activeLabel;
+
+        const activeItem = document.querySelector(`#workspace-dropdown .tab-dropdown-item[data-tab="${targetTab}"]`);
         if (activeItem) activeItem.classList.add('active');
 
-        if (targetTab === 'csv') {
-            activeIcon = '📋';
-            activeLabel = 'CSV 뷰어';
-        } else if (targetTab === 'markdown') {
-            activeIcon = '📝';
-            activeLabel = 'Markdown 뷰어';
-        } else if (targetTab === 'emails') {
-            activeIcon = '📧';
-            activeLabel = '이메일 아카이브';
-        } else {
-            activeIcon = '📊';
-            activeLabel = '다이어그램';
-        }
+        // 뷰어 버튼 라벨 초기화
+        if (viewerIconEl) viewerIconEl.textContent = '📊';
+        if (viewerLabelEl) viewerLabelEl.textContent = '뷰어 / 다이어그램';
+    } else if (VIEWER_TABS[targetTab]) {
+        if (workspaceBtn) workspaceBtn.classList.remove('active');
+        if (viewerBtn) viewerBtn.classList.add('active');
+        const info = VIEWER_TABS[targetTab];
+        activeIcon = info.icon;
+        activeLabel = info.label;
+        if (viewerIconEl) viewerIconEl.textContent = activeIcon;
+        if (viewerLabelEl) viewerLabelEl.textContent = activeLabel;
 
-        const dropdownIconEl = document.getElementById('viewer-diagram-icon');
-        const dropdownLabelEl = document.getElementById('viewer-diagram-label');
-        if (dropdownIconEl) dropdownIconEl.textContent = activeIcon;
-        if (dropdownLabelEl) dropdownLabelEl.textContent = activeLabel;
+        const activeItem = document.querySelector(`#viewer-diagram-dropdown .tab-dropdown-item[data-tab="${targetTab}"]`);
+        if (activeItem) activeItem.classList.add('active');
+
+        // 업무 버튼 라벨 초기화
+        if (workspaceIconEl) workspaceIconEl.textContent = '💼';
+        if (workspaceLabelEl) workspaceLabelEl.textContent = '업무 & 협업';
     } else {
-        if (dropdownBtn) dropdownBtn.classList.remove('active');
+        if (workspaceBtn) {
+            workspaceBtn.classList.remove('active');
+            if (workspaceIconEl) workspaceIconEl.textContent = '💼';
+            if (workspaceLabelEl) workspaceLabelEl.textContent = '업무 & 협업';
+        }
+        if (viewerBtn) {
+            viewerBtn.classList.remove('active');
+            if (viewerIconEl) viewerIconEl.textContent = '📊';
+            if (viewerLabelEl) viewerLabelEl.textContent = '뷰어 / 다이어그램';
+        }
         const targetBtn = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
         if (targetBtn) {
             targetBtn.classList.add('active');
@@ -301,9 +354,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 드롭다운 및 햄버거 메뉴 바깥 영역 클릭 시 자동 닫기
     document.addEventListener('click', (e) => {
-        const dropdown = document.getElementById('viewer-diagram-dropdown');
-        if (dropdown && !dropdown.contains(e.target)) {
+        const viewerDropdown = document.getElementById('viewer-diagram-dropdown');
+        if (viewerDropdown && !viewerDropdown.contains(e.target)) {
             closeViewerDiagramDropdown();
+        }
+        const workspaceDropdown = document.getElementById('workspace-dropdown');
+        if (workspaceDropdown && !workspaceDropdown.contains(e.target)) {
+            closeWorkspaceDropdown();
         }
         const nav = document.getElementById('main-tab-nav');
         if (nav && !nav.contains(e.target)) {

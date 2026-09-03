@@ -49,15 +49,40 @@
                 <button class="tab-btn" data-tab="notes">
                     <span class="tab-icon">📝</span> <span class="tab-label">빠른 메모</span>
                 </button>
-                <button class="tab-btn" data-tab="calendar">
-                    <span class="tab-icon">📅</span> <span class="tab-label">달력 & 일정</span>
-                </button>
-                <button class="tab-btn" data-tab="redmine">
-                    <span class="tab-icon">🦊</span> <span class="tab-label">Redmine</span>
-                </button>
-                <!-- CSV 뷰어 & 다이어그램 통합 드롭다운 -->
+                <!-- 업무 & 협업 통합 드롭다운 -->
+                <div class="tab-dropdown-group" id="workspace-dropdown">
+                    <button type="button" class="tab-btn tab-dropdown-trigger" id="workspace-tab-btn" onclick="toggleWorkspaceDropdown(event)" title="업무 & 협업">
+                        <span class="tab-icon" id="workspace-tab-icon">💼</span>
+                        <span class="tab-label" id="workspace-tab-label">업무 & 협업</span>
+                        <span class="tab-dropdown-arrow">▾</span>
+                    </button>
+                    <div class="tab-dropdown-menu" id="workspace-dropdown-menu">
+                        <button type="button" class="tab-dropdown-item" data-tab="redmine" onclick="selectDropdownTab('redmine', '🦊', 'Redmine', event)">
+                            <span class="item-icon">🦊</span>
+                            <div class="item-text">
+                                <span class="item-title">Redmine</span>
+                                <span class="item-desc">프로젝트 일감 & 위키</span>
+                            </div>
+                        </button>
+                        <button type="button" class="tab-dropdown-item" data-tab="calendar" onclick="selectDropdownTab('calendar', '📅', '달력 & 일정', event)">
+                            <span class="item-icon">📅</span>
+                            <div class="item-text">
+                                <span class="item-title">달력 & 일정</span>
+                                <span class="item-desc">Google Calendar & 월간 일정</span>
+                            </div>
+                        </button>
+                        <button type="button" class="tab-dropdown-item" data-tab="emails" onclick="selectDropdownTab('emails', '📧', '이메일 아카이브', event)">
+                            <span class="item-icon">📧</span>
+                            <div class="item-text">
+                                <span class="item-title">이메일 아카이브</span>
+                                <span class="item-desc">EML 보관, 스레드 타임라인</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+                <!-- 파일 뷰어 & 다이어그램 통합 드롭다운 -->
                 <div class="tab-dropdown-group" id="viewer-diagram-dropdown">
-                    <button type="button" class="tab-btn tab-dropdown-trigger" id="viewer-diagram-tab-btn" onclick="toggleViewerDiagramDropdown(event)" title="CSV 뷰어 & 다이어그램">
+                    <button type="button" class="tab-btn tab-dropdown-trigger" id="viewer-diagram-tab-btn" onclick="toggleViewerDiagramDropdown(event)" title="파일 뷰어 & 다이어그램">
                         <span class="tab-icon" id="viewer-diagram-icon">📊</span>
                         <span class="tab-label" id="viewer-diagram-label">뷰어 / 다이어그램</span>
                         <span class="tab-dropdown-arrow">▾</span>
@@ -82,13 +107,6 @@
                             <div class="item-text">
                                 <span class="item-title">다이어그램</span>
                                 <span class="item-desc">Mermaid 실시간 시각화</span>
-                            </div>
-                        </button>
-                        <button type="button" class="tab-dropdown-item" data-tab="emails" onclick="selectDropdownTab('emails', '📧', '이메일 아카이브', event)">
-                            <span class="item-icon">📧</span>
-                            <div class="item-text">
-                                <span class="item-title">이메일 아카이브</span>
-                                <span class="item-desc">EML 저장, 분류 & AI 검색</span>
                             </div>
                         </button>
                         <button type="button" class="tab-dropdown-item" data-tab="slicer" onclick="selectDropdownTab('slicer', '✂️', '이미지 슬라이서', event)">

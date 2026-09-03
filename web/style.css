@@ -230,6 +230,13 @@ body {
     color: #e0e7ff;
 }
 
+@media (min-width: 1081px) {
+    #workspace-dropdown .tab-dropdown-menu {
+        left: 0;
+        right: auto;
+    }
+}
+
 /* 중간 화면 (1081px ~ 1280px): 브랜드 텍스트 숨김 및 탭 버튼 패딩 컴팩트화 */
 @media (min-width: 1081px) and (max-width: 1280px) {
     .nav-brand .brand-title {
