@@ -6,7 +6,8 @@ const agyState = {
     enabled: false,
     detected: false,
     cliPath: '',
-    selectedWorkspaces: new Set(), // 체크된 프로젝트 워크스페이스 Set (비어있으면 전체)
+    selectedWorkspaces: new Set(), // 체크된 프로젝트 워크스페이스 Set
+    filterInitialized: false,
     searchKeyword: '',
     sessions: [],
     watchedSessions: new Set(),
@@ -185,9 +186,10 @@ async function loadAgySessions() {
             if (res && res.status === 'success' && Array.isArray(res.sessions)) {
                 agyState.sessions = res.sessions;
                 // 최초 1회 로드 시 모든 프로젝트를 기본 선택 상태로 초기화
-                if (agyState.selectedWorkspaces.size === 0) {
+                if (!agyState.filterInitialized) {
                     const uniqueWorkspaces = new Set(res.sessions.map(s => s.primary_workspace || '기타'));
                     agyState.selectedWorkspaces = uniqueWorkspaces;
+                    agyState.filterInitialized = true;
                 }
             } else {
                 agyState.sessions = [];
@@ -253,10 +255,11 @@ function buildProjectDropdownUI() {
         const baseName = escapeHtml(getBaseName(ws) || '루트');
         const safeWs = escapeHtml(ws);
         const count = counts[ws] || 0;
+        const encodedWs = encodeURIComponent(ws);
 
         return `
             <label class="agy-project-checkbox-item">
-                <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="onToggleProjectFilter('${safeWs}', this.checked)">
+                <input type="checkbox" data-ws="${encodedWs}" ${isChecked ? 'checked' : ''} onchange="onToggleProjectFilter(this)">
                 <div class="agy-project-item-info">
                     <div class="agy-project-item-name" title="${safeWs}">${baseName}</div>
                     <div class="agy-project-item-path" title="${safeWs}">${safeWs}</div>
@@ -270,13 +273,17 @@ function buildProjectDropdownUI() {
 }
 
 /**
- * 프로젝트 체크박스 개별 토글
+ * 프로젝트 체크박스 개별 토글 (data-ws attribute에서 안전하게 디코딩)
  */
-function onToggleProjectFilter(workspacePath, isChecked) {
-    if (isChecked) {
-        agyState.selectedWorkspaces.add(workspacePath);
+function onToggleProjectFilter(checkboxEl) {
+    if (!checkboxEl) return;
+    const ws = decodeURIComponent(checkboxEl.getAttribute('data-ws') || '');
+    if (!ws) return;
+
+    if (checkboxEl.checked) {
+        agyState.selectedWorkspaces.add(ws);
     } else {
-        agyState.selectedWorkspaces.delete(workspacePath);
+        agyState.selectedWorkspaces.delete(ws);
     }
     updateDropdownButtonLabel();
     renderAgySessionsUI();
@@ -290,7 +297,7 @@ function selectAllAgyProjects(selectAll, event) {
 
     const uniqueWorkspaces = new Set(agyState.sessions.map(s => s.primary_workspace || '기타'));
     if (selectAll) {
-        agyState.selectedWorkspaces = uniqueWorkspaces;
+        agyState.selectedWorkspaces = new Set(uniqueWorkspaces);
     } else {
         agyState.selectedWorkspaces.clear();
     }
@@ -475,7 +482,7 @@ function renderAgySessionsUI() {
     const filtered = agyState.sessions.filter(s => {
         // 워크스페이스 체크박스 필터
         const ws = s.primary_workspace || '기타';
-        if (agyState.selectedWorkspaces.size > 0 && !agyState.selectedWorkspaces.has(ws)) {
+        if (!agyState.selectedWorkspaces.has(ws)) {
             return false;
         }
 
