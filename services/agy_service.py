@@ -458,6 +458,12 @@ def _bring_window_to_front(target_hwnd: int) -> bool:
         SW_RESTORE = 9
         user32.ShowWindow(target_hwnd, SW_RESTORE)
 
+        # Windows 10/11의 엄격한 SetForegroundWindow 락 해제 트릭 (Alt 키 시뮬레이션)
+        VK_MENU = 0x12
+        KEYEVENTF_KEYUP = 0x0002
+        user32.keybd_event(VK_MENU, 0, 0, 0)
+        user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+
         foreground_hwnd = user32.GetForegroundWindow()
         cur_thread = kernel32.GetCurrentThreadId()
         fg_thread = user32.GetWindowThreadProcessId(foreground_hwnd, None)
@@ -476,7 +482,7 @@ def _bring_window_to_front(target_hwnd: int) -> bool:
 
 
 def _get_visible_desktop_windows():
-    """사용자의 활성 데스크톱 상의 모든 보이는 창(HWND, PID, Title)을 듀얼 모드로 안전하게 수집"""
+    """사용자의 활성 대화형 데스크톱 상의 모든 보이는 창(HWND, PID, Title)을 안전하게 수집"""
     user32 = ctypes.windll.user32
     user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
     user32.GetWindowThreadProcessId.restype = wintypes.DWORD
@@ -493,17 +499,18 @@ def _get_visible_desktop_windows():
                 windows.append((hwnd, pid.value, buff.value))
         return True
 
-    WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-    user32.EnumWindows(WNDENUMPROC(enum_proc), 0)
+    WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
 
-    # 백그라운드 세션 또는 데스크톱 분리 환경 대비 OpenInputDesktop fallback
+    # 활성 입력 데스크톱 핸들을 우선 획득하여 실제 사용자 화면 창을 100% 수집
+    hDesk = user32.OpenInputDesktop(0, False, 0x01FF)
+    if hDesk:
+        try:
+            user32.EnumDesktopWindows(hDesk, WNDENUMPROC(enum_proc), 0)
+        finally:
+            user32.CloseDesktop(hDesk)
+
     if not windows:
-        hDesk = user32.OpenInputDesktop(0, False, 0x01FF)
-        if hDesk:
-            try:
-                user32.EnumDesktopWindows(hDesk, WNDENUMPROC(enum_proc), 0)
-            finally:
-                user32.CloseDesktop(hDesk)
+        user32.EnumWindows(WNDENUMPROC(enum_proc), 0)
 
     return windows
 
@@ -600,7 +607,7 @@ def activate_session_terminal_window(conversation_id: str) -> bool:
     """
     이미 실행 중인 해당 세션의 터미널 윈도우(CMD, PowerShell, Windows Terminal 등)를 찾아
     화면 맨 앞으로 복원 및 활성화합니다.
-    (1단계: 세션 타이틀 직접 매칭 -> 2단계: 파일 락 프로세스 PID 및 콘솔 호스트 역추적 매칭)
+    (1단계: 세션 타이틀 직접 매칭 -> 2단계: 파일 락 프로세스 PID 및 ConPTY/터미널 호스트 역추적 매칭)
     :return: True (기존 창 발견 및 활성화 성공), False (창 없음)
     """
     if sys.platform != "win32" or not conversation_id:
@@ -621,42 +628,67 @@ def activate_session_terminal_window(conversation_id: str) -> bool:
                     return True
 
         # [2단계] 외부 쉘(PowerShell, VS Code, Windows Terminal)에서 열린 세션: 세션 락 PID 역추적
+        # 락 파일이 존재하더라도 실제로 다른 프로세스가 잠그고 있지 않다면(이전 세션 찌꺼기) 절대 창을 찾지 않고 즉시 False 반환
         lock_file = os.path.join(os.path.expanduser(r"~/.gemini/antigravity-cli/presence"), f"{conversation_id}.lock")
         if os.path.exists(lock_file):
-            locking_pids = _get_pids_locking_file(lock_file)
-            if locking_pids:
-                proc_map = _get_process_map()
-                target_pids = set(locking_pids)
-                for p in locking_pids:
-                    curr = p
-                    depth = 0
-                    while curr in proc_map and proc_map[curr]['parent'] > 0 and depth < 6:
-                        parent = proc_map[curr]['parent']
-                        target_pids.add(parent)
-                        curr = parent
-                        depth += 1
+            import msvcrt
+            is_locked = False
+            try:
+                fd = os.open(lock_file, os.O_RDWR)
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                os.close(fd)
+            except OSError:
+                is_locked = True
 
-                # 콘솔 호스트 프로세스들도 탐색 대상에 포함
-                terminal_names = ('windowsterminal.exe', 'powershell.exe', 'pwsh.exe', 'cmd.exe', 'conhost.exe', 'code.exe')
-                for pid, info in proc_map.items():
-                    if info['name'] in terminal_names:
-                        target_pids.add(pid)
+            # 실제로 현재 실행 중인 프로세스가 락을 쥐고 있는 경우에만 역추적 수행
+            if is_locked:
+                locking_pids = _get_pids_locking_file(lock_file)
+                if locking_pids:
+                    proc_map = _get_process_map()
+                    direct_target_pids = set(locking_pids)
+                    has_conpty = False
 
-                # 일치하는 창 검색 (터미널 관련 창 우선 정렬)
-                matched_windows = []
-                for hwnd, pid, title in windows:
-                    if pid in target_pids:
-                        t_lower = title.lower()
-                        is_term = any(k in t_lower for k in ('powershell', 'terminal', 'cmd', 'agy', 'visual studio code', 'code'))
-                        matched_windows.append((is_term, hwnd, title))
+                    for p in locking_pids:
+                        curr = p
+                        depth = 0
+                        while curr in proc_map and proc_map[curr]['parent'] > 0 and depth < 6:
+                            parent = proc_map[curr]['parent']
+                            p_name = proc_map.get(parent, {}).get('name', '')
+                            # 오직 해당 agy 프로세스를 직접 감싸고 실행 중인 직계 콘솔 호스트만 부모로 수집
+                            if any(term in p_name for term in ('powershell', 'pwsh', 'cmd', 'code', 'conhost')):
+                                direct_target_pids.add(parent)
+                            curr = parent
+                            depth += 1
 
-                if matched_windows:
-                    matched_windows.sort(key=lambda x: x[0], reverse=True)
-                    best_hwnd = matched_windows[0][1]
-                    best_title = matched_windows[0][2]
-                    if _bring_window_to_front(best_hwnd):
-                        core.logger.log_event("info", "agy", f"PID 역추적 기반 터미널 창 활성화 성공: #{short_id} -> {best_title}")
-                        return True
+                    # 해당 직계 쉘 프로세스의 자식 중 conhost가 존재하는 경우 Windows Terminal(ConPTY) 호스팅 여부 판단
+                    for pid, info in proc_map.items():
+                        if info.get('parent') in direct_target_pids:
+                            if 'conhost' in info.get('name', ''):
+                                has_conpty = True
+                                break
+
+                    # ConPTY 모드인 경우 Windows Terminal UI 호스트 프로세스도 타겟에 안전하게 편입
+                    if has_conpty:
+                        for pid, info in proc_map.items():
+                            if 'windowsterminal' in info.get('name', ''):
+                                direct_target_pids.add(pid)
+
+                    # 일치하는 창 검색 (터미널 관련 창 우선 정렬)
+                    matched_windows = []
+                    for hwnd, pid, title in windows:
+                        if pid in direct_target_pids:
+                            t_lower = title.lower()
+                            is_term = any(k in t_lower for k in ('powershell', 'terminal', 'cmd', 'agy', 'visual studio code', 'code'))
+                            matched_windows.append((is_term, hwnd, title))
+
+                    if matched_windows:
+                        matched_windows.sort(key=lambda x: x[0], reverse=True)
+                        best_hwnd = matched_windows[0][1]
+                        best_title = matched_windows[0][2]
+                        if _bring_window_to_front(best_hwnd):
+                            core.logger.log_event("info", "agy", f"PID/ConPTY 역추적 기반 터미널 창 활성화 성공: #{short_id} -> {best_title}")
+                            return True
 
     except Exception as e:
         core.logger.log_event("warn", "agy", f"기존 터미널 창 활성화 탐색 예외: {e}")
@@ -721,24 +753,16 @@ def launch_agy_session(conversation_id: str, workspace_path: str = "", force: bo
         target_dir = APP_DIR
 
     # 2. 열린 창이 없는 경우 -> 신규 터미널 실행
-    # Windows Terminal (wt.exe) 우선 확인 (모던 탭 지원)
-    wt_path = shutil.which("wt.exe") or shutil.which("wt")
+    # PowerShell 독립 콘솔 창 직접 실행 (타이틀 명시적 동기화 및 윈도우 무결성 보장)
     try:
-        if wt_path:
-            cmd_args = [
-                wt_path, "-d", target_dir,
-                "--title", f"Antigravity CLI - #{short_id}",
-                "cmd.exe", "/k", f"title Antigravity CLI - #{short_id} && agy --conversation {conversation_id}"
-            ]
-            subprocess.Popen(cmd_args, cwd=target_dir)
-        else:
-            cmd_args = ["cmd.exe", "/k", f"title Antigravity CLI - #{short_id} && agy --conversation {conversation_id}"]
-            subprocess.Popen(
-                cmd_args,
-                cwd=target_dir,
-                creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0x10)
-            )
-        core.logger.log_event("info", "agy", f"신규 세션 터미널 실행: {conversation_id}", f"위치: {target_dir}")
+        ps_cmd = f"Set-Location '{target_dir}'; $Host.UI.RawUI.WindowTitle = 'Antigravity CLI - #{short_id}'; agy --conversation {conversation_id}"
+        cmd_args = ["powershell.exe", "-NoExit", "-Command", ps_cmd]
+        subprocess.Popen(
+            cmd_args,
+            cwd=target_dir,
+            creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0x10)
+        )
+        core.logger.log_event("info", "agy", f"신규 세션 터미널 실행: #{short_id}", f"위치: {target_dir}")
         return {
             "status": "success",
             "activated": False,
