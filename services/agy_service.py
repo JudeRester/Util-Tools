@@ -223,18 +223,23 @@ def _get_valid_user_conversation_ids(summary_conn=None) -> set:
     return valid_cids
 
 
+import services.opencodex_service as opencodex_service
+
+
 @eel.expose
 def get_agy_environment_status():
-    """agy-cli 실행 파일 및 로컬 세션 데이터베이스 존재 여부 확인"""
+    """agy-cli 및 OpenCodex 환경 상태 및 세션 데이터베이스 존재 여부 확인"""
     cli_path = shutil.which("agy") or ""
     db_exists = os.path.exists(AGY_DB_PATH)
     detected = bool(cli_path or db_exists)
+    ocx_installed = opencodex_service.is_opencodex_installed()
 
     return {
         "status": "success",
         "detected": detected,
         "cli_path": cli_path,
         "db_exists": db_exists,
+        "ocx_installed": ocx_installed,
         "current_workspace": APP_DIR
     }
 
@@ -352,13 +357,19 @@ def get_agy_sessions(limit: int = 30, workspace_filter: str = "current"):
                         sort_ts = 0.0
 
                 sessions.append({
+                    "id": conv_id,
                     "conversation_id": conv_id,
                     "title": display_title,
+                    "source": "agy",
+                    "source_label": "Antigravity",
+                    "model": "Gemini",
                     "step_count": step_count,
                     "last_modified": formatted_time,
                     "sort_timestamp": sort_ts,
+                    "workspace_path": primary_workspace,
                     "primary_workspace": primary_workspace,
                     "is_current": is_current,
+                    "is_current_workspace": is_current,
                     "status": r["status"] or ""
                 })
 
@@ -418,6 +429,72 @@ def get_agy_sessions(limit: int = 30, workspace_filter: str = "current"):
             "message": f"세션 조회 실패: {str(e)}",
             "sessions": []
         }
+
+
+@eel.expose
+def get_all_ai_sessions(source_filter: str = "all", limit: int = 80, workspace_filter: str = "all"):
+    """
+    통합 AI 세션 목록 조회 (Antigravity CLI + OpenCodex)
+    :param source_filter: 'all' (전체), 'agy' (Antigravity 전용), 'ocx' (OpenCodex 전용)
+    :param limit: 최대 조회 건수
+    :param workspace_filter: 'all' (전체) 또는 특정 경로
+    """
+    all_sessions = []
+    current_norm = os.path.normpath(APP_DIR).lower()
+
+    # 1. Antigravity CLI 세션 수집
+    if source_filter in ("all", "agy"):
+        try:
+            agy_res = get_agy_sessions(limit=limit, workspace_filter="all")
+            if agy_res.get("status") == "success":
+                all_sessions.extend(agy_res.get("sessions", []))
+        except Exception as e:
+            core.logger.log_event("warn", "agy", f"Antigravity 세션 수집 오류: {e}")
+
+    # 2. OpenCodex 세션 수집
+    if source_filter in ("all", "ocx"):
+        try:
+            ocx_sessions = opencodex_service.get_opencodex_sessions(limit=limit)
+            all_sessions.extend(ocx_sessions)
+        except Exception as e:
+            core.logger.log_event("warn", "ocx", f"OpenCodex 세션 수집 오류: {e}")
+
+    # 3. 워크스페이스 필터링 적용 (지정된 경우)
+    if workspace_filter and workspace_filter != "all":
+        if workspace_filter == "current":
+            all_sessions = [s for s in all_sessions if s.get("is_current")]
+        else:
+            target_norm = os.path.normpath(workspace_filter).lower()
+            all_sessions = [
+                s for s in all_sessions
+                if os.path.normpath(s.get("primary_workspace") or s.get("workspace_path") or "").lower() == target_norm
+            ]
+
+    # 4. 정렬: 최신 타임스탬프(sort_timestamp) 내림차순
+    all_sessions.sort(key=lambda s: float(s.get("sort_timestamp") or 0.0), reverse=True)
+
+    return {
+        "status": "success",
+        "sessions": all_sessions[:limit],
+        "count": len(all_sessions[:limit]),
+        "current_workspace": APP_DIR
+    }
+
+
+@eel.expose
+def get_ai_session_live_tail(conversation_id: str, source: str = "agy", max_steps: int = 15):
+    """통합 인앱 세션 실시간 모니터링 API (Antigravity & OpenCodex)"""
+    if source == "ocx":
+        return opencodex_service.get_opencodex_live_tail(conversation_id, max_steps)
+    return get_agy_session_live_tail(conversation_id, max_steps)
+
+
+@eel.expose
+def launch_ai_session(conversation_id: str, workspace_path: str = "", source: str = "agy", force: bool = False):
+    """통합 세션 터미널 창 전환 또는 신규 실행 API (Antigravity & OpenCodex)"""
+    if source == "ocx":
+        return opencodex_service.launch_opencodex_session(conversation_id, workspace_path, force)
+    return launch_agy_session(conversation_id, workspace_path, force)
 
 
 def _get_active_cli_cids() -> set:

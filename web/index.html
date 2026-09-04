@@ -188,10 +188,11 @@
                             <div class="settings-icon">🤖</div>
                             <div class="settings-text">
                                 <div class="settings-title-row">
-                                    <span class="settings-title">Antigravity CLI (agy) 연동</span>
-                                    <span class="badge badge-success" id="agy-env-badge" style="display: none;">감지됨</span>
+                                    <span class="settings-title">AI 코딩 세션 (AGY & OpenCodex) 연동</span>
+                                    <span class="badge badge-success" id="agy-env-badge" style="display: none;">AGY 감지됨</span>
+                                    <span class="badge badge-success" id="ocx-env-badge" style="display: none; background: rgba(147, 51, 234, 0.15); color: #a855f7; border: 1px solid rgba(147, 51, 234, 0.3);">OpenCodex 감지됨</span>
                                 </div>
-                                <div class="settings-desc">로컬 agy CLI 세션 목록을 조회하고 작업 폴더에서 즉시 대화형 터미널을 이어 실행합니다.</div>
+                                <div class="settings-desc">로컬 Antigravity CLI 및 OpenCodex (ocx) 세션을 통합 조회하고 터미널을 즉시 이어 실행합니다.</div>
                             </div>
                         </div>
                         <div class="settings-panel-right">
@@ -249,12 +250,18 @@
                     <!-- JavaScript로 실시간 동적 렌더링 -->
                 </div>
 
-                <!-- 3) Antigravity CLI 세션 바로가기 섹션 (선택적 활성화 - 테이블 뷰) -->
+                <!-- 3) AI 코딩 세션 바로가기 섹션 (선택적 활성화 - 테이블 뷰) -->
                 <div id="agy-launch-section" style="display: none; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border-color);">
                     <div class="pane-toolbar-header agy-toolbar-header" style="flex-wrap: wrap; gap: 10px;">
                         <div class="group-title-inline">
-                            <span class="title-icon">🤖</span> Antigravity CLI 세션
-                            <div class="agy-project-dropdown-container" id="agy-project-dropdown-container" style="margin-left: 14px; position: relative; display: inline-block;">
+                            <span class="title-icon">🤖</span> AI 코딩 세션
+                            <!-- 소스 엔진 필터 칩 (All / AGY / OCX) -->
+                            <div class="ai-source-filter-group" id="ai-source-filter-group" style="margin-left: 12px; display: inline-flex; align-items: center; gap: 4px;">
+                                <button type="button" class="ai-source-chip active" id="ai-chip-all" onclick="setAiSourceFilter('all')">전체</button>
+                                <button type="button" class="ai-source-chip" id="ai-chip-agy" onclick="setAiSourceFilter('agy')">🤖 AGY</button>
+                                <button type="button" class="ai-source-chip" id="ai-chip-ocx" onclick="setAiSourceFilter('ocx')">🟣 OpenCodex</button>
+                            </div>
+                            <div class="agy-project-dropdown-container" id="agy-project-dropdown-container" style="margin-left: 10px; position: relative; display: inline-block;">
                                 <button type="button" id="agy-project-dropdown-btn" class="agy-dropdown-btn" onclick="toggleAgyProjectDropdown(event)" title="프로젝트 / 워크스페이스 선택">
                                     <span class="agy-dropdown-icon">📁</span>
                                     <span id="agy-dropdown-label" class="agy-dropdown-label">프로젝트 (전체)</span>
