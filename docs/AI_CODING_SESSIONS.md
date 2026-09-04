@@ -537,7 +537,9 @@ def _is_final_waiting_step(obj: dict) -> bool:
 ### 5-1. 클라이언트 상태 객체 (`agyState`)
 ```javascript
 const agyState = {
-    enabled: false,                 // 연동 기능 전역 활성화 여부
+    agyEnabled: false,              // Antigravity (agy) 활성화 여부
+    ocxEnabled: false,              // OpenCodex (ocx) 활성화 여부
+    enabled: false,                 // 통합 허브 활성화 여부 (agyEnabled || ocxEnabled)
     detected: false,                // 로컬 CLI/DB 감지 여부
     cliPath: '',                    // agy 실행 파일 경로
     sourceFilter: 'all',            // 소스 엔진 필터: 'all' | 'agy' | 'ocx'
@@ -569,6 +571,14 @@ const agyState = {
 - **Live Tail 모달**:
   - 3초 주기 자동 갱신 토글 (`#agy-inspector-auto-toggle`)
   - 스크롤 앵커링: 사용자가 스트림의 최하단을 보고 있을 때만 신규 이벤트 도착 시 자동 스크롤(Auto-scroll lock) 유지.
+
+### 5-4. 엔진별 독립 활성화 게이팅 (Independent Engine Gating)
+- **독립 토글 설정 분리**: `enable_agy_integration` 및 `enable_ocx_integration`을 분리하여 사용자가 원하는 AI 엔진만 독립적으로 활성화할 수 있습니다.
+- **백엔드 리소스 격리**: 비활성화된 엔진의 경우 로컬 SQLite DB 쿼리, 파일 락 검사 및 백그라운드 감시 스레드가 완전히 차단됩니다.
+- **필터 칩 동적 반응 (`updateSourceFilterChips`)**:
+  - **둘 다 활성화 시**: `[전체]`, `[🤖 AGY]`, `[🟣 OpenCodex]` 3종 칩 제공.
+  - **하나만 활성화 시**: 비활성화된 엔진 칩을 자동 숨김 처리하고 활성 엔진 단일 뷰로 전환.
+  - **둘 다 비활성화 시**: 빠른 실행 탭 내 AI 세션 섹션(`agy-launch-section`)을 완전 숨김(`display: none`) 처리.
 
 ---
 

@@ -210,16 +210,16 @@
                             <span class="title-icon">⚙️</span> 외부 도구 및 확장 연동 설정
                         </div>
                     </div>
-                    <div class="settings-panel-row" id="agy-setting-card">
+                    <!-- 1) Antigravity CLI (agy) 설정 카드 -->
+                    <div class="settings-panel-row" id="agy-setting-card" style="margin-bottom: 12px;">
                         <div class="settings-panel-left">
                             <div class="settings-icon">🤖</div>
                             <div class="settings-text">
                                 <div class="settings-title-row">
-                                    <span class="settings-title">AI 코딩 세션 (AGY & OpenCodex) 연동</span>
+                                    <span class="settings-title">Google Antigravity CLI (agy) 연동</span>
                                     <span class="badge badge-success" id="agy-env-badge" style="display: none;">AGY 감지됨</span>
-                                    <span class="badge badge-success" id="ocx-env-badge" style="display: none; background: rgba(147, 51, 234, 0.15); color: #a855f7; border: 1px solid rgba(147, 51, 234, 0.3);">OpenCodex 감지됨</span>
                                 </div>
-                                <div class="settings-desc">로컬 Antigravity CLI 및 OpenCodex (ocx) 세션을 통합 조회하고 터미널을 즉시 이어 실행합니다.</div>
+                                <div class="settings-desc">로컬 Antigravity CLI 세션(conversation_summaries.db)을 조회하고 실시간 작업 알림 및 터미널을 연동합니다.</div>
                             </div>
                         </div>
                         <div class="settings-panel-right">
@@ -227,6 +227,27 @@
                                 <input type="checkbox" id="agy-enable-toggle" onchange="onToggleAgyIntegration(this.checked)">
                                 <span class="toggle-slider"></span>
                                 <span class="toggle-label" id="agy-toggle-label">비활성화됨</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 2) OpenCodex CLI (ocx) 설정 카드 -->
+                    <div class="settings-panel-row" id="ocx-setting-card">
+                        <div class="settings-panel-left">
+                            <div class="settings-icon">🟣</div>
+                            <div class="settings-text">
+                                <div class="settings-title-row">
+                                    <span class="settings-title">OpenCodex CLI (ocx) 연동</span>
+                                    <span class="badge badge-success" id="ocx-env-badge" style="display: none; background: rgba(147, 51, 234, 0.15); color: #a855f7; border: 1px solid rgba(147, 51, 234, 0.3);">OpenCodex 감지됨</span>
+                                </div>
+                                <div class="settings-desc">로컬 OpenCodex 세션(codex-dev.db)을 조회하고 5ms 논블로킹 활성 락 감지 및 터미널을 연동합니다.</div>
+                            </div>
+                        </div>
+                        <div class="settings-panel-right">
+                            <label class="toggle-switch-wrapper">
+                                <input type="checkbox" id="ocx-enable-toggle" onchange="onToggleOcxIntegration(this.checked)">
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-label" id="ocx-toggle-label">비활성화됨</span>
                             </label>
                         </div>
                     </div>

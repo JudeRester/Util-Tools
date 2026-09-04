@@ -64,6 +64,16 @@ def is_agy_enabled() -> bool:
         return False
 
 
+def is_ocx_enabled() -> bool:
+    """시스템 설정에서 OpenCodex (ocx) 연동 활성화 여부 확인"""
+    try:
+        settings = load_settings_from_file()
+        return bool(settings.get("enable_ocx_integration", False))
+    except Exception:
+        return False
+
+
+
 def _parse_workspace_uri(uri: str) -> str:
     """file:///D:/python 형식의 URI를 Windows 표준 경로(D:\\python)로 파싱합니다."""
     try:
@@ -240,7 +250,9 @@ def get_agy_environment_status():
         "cli_path": cli_path,
         "db_exists": db_exists,
         "ocx_installed": ocx_installed,
-        "current_workspace": APP_DIR
+        "current_workspace": APP_DIR,
+        "agy_enabled": is_agy_enabled(),
+        "ocx_enabled": is_ocx_enabled()
     }
 
 
@@ -442,8 +454,8 @@ def get_all_ai_sessions(source_filter: str = "all", limit: int = 80, workspace_f
     all_sessions = []
     current_norm = os.path.normpath(APP_DIR).lower()
 
-    # 1. Antigravity CLI 세션 수집
-    if source_filter in ("all", "agy"):
+    # 1. Antigravity CLI 세션 수집 (AGY 활성화 시에만)
+    if is_agy_enabled() and source_filter in ("all", "agy"):
         try:
             agy_res = get_agy_sessions(limit=limit, workspace_filter="all")
             if agy_res.get("status") == "success":
@@ -451,8 +463,8 @@ def get_all_ai_sessions(source_filter: str = "all", limit: int = 80, workspace_f
         except Exception as e:
             core.logger.log_event("warn", "agy", f"Antigravity 세션 수집 오류: {e}")
 
-    # 2. OpenCodex 세션 수집
-    if source_filter in ("all", "ocx"):
+    # 2. OpenCodex 세션 수집 (OCX 활성화 시에만)
+    if is_ocx_enabled() and source_filter in ("all", "ocx"):
         try:
             ocx_sessions = opencodex_service.get_opencodex_sessions(limit=limit)
             all_sessions.extend(ocx_sessions)
@@ -1419,10 +1431,18 @@ def get_watched_agy_sessions():
 
 @eel.expose
 def on_agy_toggle_changed(enabled: bool):
-    """시스템 탭에서 토글 변경 시 백엔드 스레드 생명주기 즉시 동기화"""
+    """시스템 탭에서 Antigravity 활성화 토글 변경 시 백엔드 스레드 생명주기 즉시 동기화"""
     if not enabled:
         stop_agy_watcher()
     else:
         start_agy_watcher_if_needed()
     return {"status": "success", "enabled": enabled}
+
+
+@eel.expose
+def on_ocx_toggle_changed(enabled: bool):
+    """시스템 탭에서 OpenCodex 활성화 토글 변경 시 동기화"""
+    core.logger.log_event("info", "ocx", f"OpenCodex 연동 상태 변경: {'활성화' if enabled else '비활성화'}")
+    return {"status": "success", "enabled": enabled}
+
 

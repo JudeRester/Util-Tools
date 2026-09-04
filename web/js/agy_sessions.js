@@ -4,9 +4,12 @@
  */
 
 const agyState = {
-    enabled: false,
+    agyEnabled: false,
+    ocxEnabled: false,
+    enabled: false, // helper: agyEnabled || ocxEnabled
     detected: false,
     cliPath: '',
+    ocxInstalled: false,
     sourceFilter: 'all', // 'all' | 'agy' | 'ocx'
     selectedWorkspaces: new Set(), // 체크된 프로젝트 워크스페이스 Set
     filterInitialized: false,
@@ -47,15 +50,17 @@ document.addEventListener('keydown', (e) => {
 });
 
 /**
- * agy 연동 설정 및 환경 상태 초기화
+ * agy 및 OpenCodex 연동 설정 및 환경 상태 초기화
  */
 async function initAgyIntegration() {
     try {
-        // 1. 앱 설정에서 사용 여부 로드
+        // 1. 앱 설정에서 AGY 및 OpenCodex 사용 여부 로드
         if (window.eel && eel.get_app_settings) {
             const settingsRes = await eel.get_app_settings()();
             if (settingsRes && settingsRes.status === 'success' && settingsRes.data) {
-                agyState.enabled = Boolean(settingsRes.data.enable_agy_integration);
+                agyState.agyEnabled = Boolean(settingsRes.data.enable_agy_integration);
+                agyState.ocxEnabled = Boolean(settingsRes.data.enable_ocx_integration);
+                agyState.enabled = agyState.agyEnabled || agyState.ocxEnabled;
             }
         }
 
@@ -67,44 +72,58 @@ async function initAgyIntegration() {
                 agyState.cliPath = envRes.cli_path || '';
                 agyState.ocxInstalled = Boolean(envRes.ocx_installed);
 
+                const agyBadgeEl = document.getElementById('agy-env-badge');
+                if (agyBadgeEl) {
+                    if (agyState.detected) {
+                        agyBadgeEl.style.display = 'inline-flex';
+                        agyBadgeEl.title = agyState.cliPath ? `CLI 경로: ${agyState.cliPath}` : '로컬 agy 환경이 감지되었습니다.';
+                    } else {
+                        agyBadgeEl.style.display = 'none';
+                    }
+                }
+
                 const ocxBadgeEl = document.getElementById('ocx-env-badge');
                 if (ocxBadgeEl) {
-                    ocxBadgeEl.style.display = envRes.ocx_installed ? 'inline-flex' : 'none';
                     if (envRes.ocx_installed) {
+                        ocxBadgeEl.style.display = 'inline-flex';
                         ocxBadgeEl.title = '로컬 OpenCodex (.codex) 환경이 감지되었습니다.';
+                    } else {
+                        ocxBadgeEl.style.display = 'none';
                     }
                 }
             }
         }
 
-        // 3. 시스템 탭 설정 UI 반영
-        const toggleEl = document.getElementById('agy-enable-toggle');
-        const labelEl = document.getElementById('agy-toggle-label');
-        const badgeEl = document.getElementById('agy-env-badge');
+        // 3. 시스템 탭 설정 UI 반영 (AGY)
+        const agyToggleEl = document.getElementById('agy-enable-toggle');
+        const agyLabelEl = document.getElementById('agy-toggle-label');
+        if (agyToggleEl) agyToggleEl.checked = agyState.agyEnabled;
+        if (agyLabelEl) {
+            agyLabelEl.textContent = agyState.agyEnabled ? '활성화됨' : '비활성화됨';
+            agyLabelEl.classList.toggle('active', agyState.agyEnabled);
+        }
+
+        // 4. 시스템 탭 설정 UI 반영 (OpenCodex)
+        const ocxToggleEl = document.getElementById('ocx-enable-toggle');
+        const ocxLabelEl = document.getElementById('ocx-toggle-label');
+        if (ocxToggleEl) ocxToggleEl.checked = agyState.ocxEnabled;
+        if (ocxLabelEl) {
+            ocxLabelEl.textContent = agyState.ocxEnabled ? '활성화됨' : '비활성화됨';
+            ocxLabelEl.classList.toggle('active', agyState.ocxEnabled);
+        }
+
+        // 5. 빠른 실행 탭 내 섹션 표시 여부 및 필터 칩 동기화
         const sectionEl = document.getElementById('agy-launch-section');
-
-        if (toggleEl) toggleEl.checked = agyState.enabled;
-        if (labelEl) {
-            labelEl.textContent = agyState.enabled ? '활성화됨' : '비활성화됨';
-            labelEl.classList.toggle('active', agyState.enabled);
-        }
-        if (badgeEl) {
-            if (agyState.detected) {
-                badgeEl.style.display = 'inline-flex';
-                badgeEl.title = agyState.cliPath ? `CLI 경로: ${agyState.cliPath}` : '로컬 agy 환경이 감지되었습니다.';
-            } else {
-                badgeEl.style.display = 'none';
-            }
-        }
-
-        // 4. 빠른 실행 탭 내 섹션 표시 여부
         if (sectionEl) {
             sectionEl.style.display = agyState.enabled ? 'block' : 'none';
         }
+        updateSourceFilterChips();
 
-        // 5. 활성화되어 있는 경우 세션 목록 및 감시 목록 즉시 로드
+        // 6. 활성화되어 있는 경우 세션 목록 및 감시 목록 즉시 로드
         if (agyState.enabled) {
-            await loadWatchedSessions();
+            if (agyState.agyEnabled) {
+                await loadWatchedSessions();
+            }
             await loadAgySessions();
         }
     } catch (e) {
@@ -113,10 +132,61 @@ async function initAgyIntegration() {
 }
 
 /**
- * 시스템 탭에서 토글 스위치 변경 시 호출 (Strict Gated)
+ * 소스 필터 칩 그룹 표시 상태 갱신
+ */
+function updateSourceFilterChips() {
+    const chipGroup = document.getElementById('ai-source-filter-group');
+    const chipAll = document.getElementById('ai-chip-all');
+    const chipAgy = document.getElementById('ai-chip-agy');
+    const chipOcx = document.getElementById('ai-chip-ocx');
+
+    if (!chipGroup) return;
+
+    if (agyState.agyEnabled && agyState.ocxEnabled) {
+        // 둘 다 활성화된 경우: 전체 / AGY / OpenCodex 모두 노출
+        chipGroup.style.display = 'inline-flex';
+        if (chipAll) chipAll.style.display = 'inline-flex';
+        if (chipAgy) chipAgy.style.display = 'inline-flex';
+        if (chipOcx) chipOcx.style.display = 'inline-flex';
+        if (!['all', 'agy', 'ocx'].includes(agyState.sourceFilter)) {
+            agyState.sourceFilter = 'all';
+        }
+    } else if (agyState.agyEnabled && !agyState.ocxEnabled) {
+        // AGY만 활성화된 경우
+        agyState.sourceFilter = 'agy';
+        chipGroup.style.display = 'inline-flex';
+        if (chipAll) chipAll.style.display = 'none';
+        if (chipAgy) {
+            chipAgy.style.display = 'inline-flex';
+            chipAgy.classList.add('active');
+        }
+        if (chipOcx) chipOcx.style.display = 'none';
+    } else if (!agyState.agyEnabled && agyState.ocxEnabled) {
+        // OpenCodex만 활성화된 경우
+        agyState.sourceFilter = 'ocx';
+        chipGroup.style.display = 'inline-flex';
+        if (chipAll) chipAll.style.display = 'none';
+        if (chipAgy) chipAgy.style.display = 'none';
+        if (chipOcx) {
+            chipOcx.style.display = 'inline-flex';
+            chipOcx.classList.add('active');
+        }
+    } else {
+        // 둘 다 비활성화
+        chipGroup.style.display = 'none';
+    }
+
+    document.querySelectorAll('.ai-source-chip').forEach(el => {
+        el.classList.toggle('active', el.id === `ai-chip-${agyState.sourceFilter}`);
+    });
+}
+
+/**
+ * 시스템 탭에서 Antigravity (agy) 토글 스위치 변경 시 호출 (Strict Gated)
  */
 async function onToggleAgyIntegration(isChecked) {
-    agyState.enabled = isChecked;
+    agyState.agyEnabled = isChecked;
+    agyState.enabled = agyState.agyEnabled || agyState.ocxEnabled;
 
     const labelEl = document.getElementById('agy-toggle-label');
     const sectionEl = document.getElementById('agy-launch-section');
@@ -127,19 +197,21 @@ async function onToggleAgyIntegration(isChecked) {
     }
 
     if (sectionEl) {
-        sectionEl.style.display = isChecked ? 'block' : 'none';
+        sectionEl.style.display = agyState.enabled ? 'block' : 'none';
     }
 
     if (!isChecked) {
         agyState.watchedSessions.clear();
     }
 
+    updateSourceFilterChips();
+
     // 백엔드 스레드 생명주기 즉시 동기화
     if (window.eel && eel.on_agy_toggle_changed) {
         try {
             await eel.on_agy_toggle_changed(isChecked)();
         } catch (e) {
-            console.error('[agy_sessions] 백엔드 토글 동기화 오류:', e);
+            console.error('[agy_sessions] AGY 백엔드 토글 동기화 오류:', e);
         }
     }
 
@@ -154,13 +226,64 @@ async function onToggleAgyIntegration(isChecked) {
 
     if (typeof showToast === 'function') {
         showToast(
-            isChecked ? 'Antigravity CLI 연동이 활성화되었습니다.' : 'Antigravity CLI 연동이 비활성화되었습니다. (모든 감시 중단)',
+            isChecked ? 'Google Antigravity CLI (agy) 연동이 활성화되었습니다.' : 'Google Antigravity CLI 연동이 비활성화되었습니다. (감시 중단)',
             isChecked ? 'success' : 'info'
         );
     }
 
-    if (isChecked) {
-        await loadWatchedSessions();
+    if (agyState.enabled) {
+        if (isChecked) await loadWatchedSessions();
+        await loadAgySessions();
+    }
+}
+
+/**
+ * 시스템 탭에서 OpenCodex (ocx) 토글 스위치 변경 시 호출
+ */
+async function onToggleOcxIntegration(isChecked) {
+    agyState.ocxEnabled = isChecked;
+    agyState.enabled = agyState.agyEnabled || agyState.ocxEnabled;
+
+    const labelEl = document.getElementById('ocx-toggle-label');
+    const sectionEl = document.getElementById('agy-launch-section');
+
+    if (labelEl) {
+        labelEl.textContent = isChecked ? '활성화됨' : '비활성화됨';
+        labelEl.classList.toggle('active', isChecked);
+    }
+
+    if (sectionEl) {
+        sectionEl.style.display = agyState.enabled ? 'block' : 'none';
+    }
+
+    updateSourceFilterChips();
+
+    // 백엔드 동기화
+    if (window.eel && eel.on_ocx_toggle_changed) {
+        try {
+            await eel.on_ocx_toggle_changed(isChecked)();
+        } catch (e) {
+            console.error('[agy_sessions] OpenCodex 백엔드 토글 동기화 오류:', e);
+        }
+    }
+
+    // 설정 파일 영구 저장
+    if (window.eel && eel.save_app_settings) {
+        try {
+            await eel.save_app_settings({ enable_ocx_integration: isChecked })();
+        } catch (e) {
+            console.error('[agy_sessions] 설정 저장 오류:', e);
+        }
+    }
+
+    if (typeof showToast === 'function') {
+        showToast(
+            isChecked ? 'OpenCodex CLI (ocx) 연동이 활성화되었습니다.' : 'OpenCodex CLI 연동이 비활성화되었습니다.',
+            isChecked ? 'success' : 'info'
+        );
+    }
+
+    if (agyState.enabled) {
         await loadAgySessions();
     }
 }
@@ -169,14 +292,13 @@ async function onToggleAgyIntegration(isChecked) {
  * 백엔드에서 현재 감시 중인 세션 목록 및 모드 조회
  */
 async function loadWatchedSessions() {
-    if (!agyState.enabled) return;
+    if (!agyState.agyEnabled) return;
     try {
         if (window.eel && eel.get_watched_agy_sessions) {
             const mapData = await eel.get_watched_agy_sessions()();
             if (mapData && typeof mapData === 'object') {
                 agyState.watchedSessions = new Map(Object.entries(mapData));
             } else if (Array.isArray(mapData)) {
-                // 이전 버전 호환 (배열인 경우 once 모드로 간주)
                 agyState.watchedSessions = new Map(mapData.map(id => [id, 'once']));
             }
         }
@@ -189,6 +311,8 @@ async function loadWatchedSessions() {
  * 소스 엔진 필터 선택 ('all' | 'agy' | 'ocx')
  */
 function setAiSourceFilter(source) {
+    if (source === 'agy' && !agyState.agyEnabled) return;
+    if (source === 'ocx' && !agyState.ocxEnabled) return;
     agyState.sourceFilter = source;
     document.querySelectorAll('.ai-source-chip').forEach(el => {
         el.classList.toggle('active', el.id === `ai-chip-${source}`);
@@ -397,10 +521,12 @@ function onAgySearchInput(keyword) {
  * 새로고침 버튼
  */
 function refreshAgySessions() {
-    loadWatchedSessions();
+    if (agyState.agyEnabled) {
+        loadWatchedSessions();
+    }
     loadAgySessions();
     if (typeof showToast === 'function') {
-        showToast('agy 세션 목록을 새로고침했습니다.', 'info');
+        showToast('AI 세션 목록을 새로고침했습니다.', 'info');
     }
 }
 
