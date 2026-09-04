@@ -780,6 +780,9 @@ function renderAgySessionsUI() {
                         <button class="compact-btn powershell agy-run-btn" onclick="launchAgyTerminal('${fullId}', '${encodeURIComponent(workspacePath)}', '${source}')" title="터미널 창 전환 또는 새로 열기">
                             <span>⚡</span> 실행
                         </button>
+                        <button class="compact-btn danger agy-del-btn" onclick="deleteAiSession('${fullId}', '${source}', '${title}', event)" title="세션 영구 삭제">
+                            <span>🗑️</span>
+                        </button>
                     </div>
                 </td>
             </tr>
@@ -811,6 +814,52 @@ function getBaseName(pathStr) {
     if (!pathStr) return '';
     const parts = pathStr.replace(/\\/g, '/').split('/').filter(Boolean);
     return parts.length > 0 ? parts[parts.length - 1] : pathStr;
+}
+
+/**
+ * 특정 AI 코딩 세션 영구 삭제 (비차단 인레이어 모달 표준 준수)
+ */
+async function deleteAiSession(conversationId, source = 'agy', title = '', event = null) {
+    if (event) event.stopPropagation();
+    if (!conversationId) return;
+
+    const shortId = conversationId.slice(0, 8);
+    const displayTitle = title ? `[${title}] (#${shortId})` : `[#${shortId}]`;
+
+    // 비차단 인레이어 확인 모달 (Non-blocking In-layer Confirm)
+    const confirmed = await showAppConfirm(
+        `선택한 세션 ${displayTitle}을(를) 영구 삭제하시겠습니까?\n\n이 작업은 데이터베이스 레코드 및 로그 파일을 즉시 제거하며 되돌릴 수 없습니다.`,
+        {
+            title: '세션 영구 삭제',
+            icon: '🗑️',
+            confirmText: '영구 삭제',
+            cancelText: '취소',
+            danger: true
+        }
+    );
+
+    if (!confirmed) return;
+
+    try {
+        if (window.eel && eel.delete_ai_session) {
+            const res = await eel.delete_ai_session(conversationId, source)();
+            if (res && res.status === 'success') {
+                if (typeof showToast === 'function') {
+                    showToast(res.message || '세션이 삭제되었습니다.', 'success');
+                }
+                await loadAgySessions();
+            } else {
+                if (typeof showToast === 'function') {
+                    showToast(res ? res.message : '세션 삭제 실패', 'error');
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[agy_sessions] 세션 삭제 오류:', e);
+        if (typeof showToast === 'function') {
+            showToast('세션 삭제 중 오류가 발생했습니다.', 'error');
+        }
+    }
 }
 
 /**

@@ -848,6 +848,26 @@ body {
     color: var(--accent-color);
 }
 
+.agy-del-btn {
+    padding: 3px 6px;
+    font-size: 0.75rem;
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.agy-del-btn:hover {
+    background: #ef4444;
+    color: #ffffff;
+    border-color: #ef4444;
+}
+
 /* 활성 실행 중인 세션 표시 */
 .agy-active-pulse {
     display: inline-flex;

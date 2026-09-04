@@ -497,6 +497,88 @@ def launch_ai_session(conversation_id: str, workspace_path: str = "", source: st
     return launch_agy_session(conversation_id, workspace_path, force)
 
 
+def delete_agy_session(conversation_id: str) -> dict:
+    """특정 Antigravity 세션 영구 삭제"""
+    if not conversation_id:
+        return {"status": "error", "message": "세션 ID가 지정되지 않았습니다."}
+
+    active_cids = _get_active_cli_cids()
+    if conversation_id in active_cids:
+        return {
+            "status": "error",
+            "message": "현재 터미널에서 실행 중인 세션은 삭제할 수 없습니다. 먼저 터미널을 종료해 주세요."
+        }
+
+    short_id = conversation_id[:8]
+    deleted_items = []
+
+    # 1. conversation_summaries.db에서 삭제
+    if os.path.exists(AGY_DB_PATH):
+        try:
+            conn = sqlite3.connect(AGY_DB_PATH, timeout=3.0)
+            conn.execute("DELETE FROM conversation_summaries WHERE conversation_id = ?", (conversation_id,))
+            conn.commit()
+            conn.close()
+            deleted_items.append("요약 DB 레코드")
+        except Exception as e:
+            core.logger.log_event("warn", "agy", f"conversation_summaries 삭제 오류: {e}")
+
+    # 2. conversations/<id>.db 삭제
+    conv_db = os.path.expanduser(rf"~/.gemini/antigravity-cli/conversations/{conversation_id}.db")
+    if os.path.exists(conv_db):
+        try:
+            os.remove(conv_db)
+            deleted_items.append("대화 DB")
+        except Exception as e:
+            core.logger.log_event("warn", "agy", f"conversations.db 삭제 오류: {e}")
+
+    # 3. brain/<id> 디렉토리 삭제
+    brain_dir = os.path.expanduser(rf"~/.gemini/antigravity-cli/brain/{conversation_id}")
+    if os.path.isdir(brain_dir):
+        try:
+            shutil.rmtree(brain_dir, ignore_errors=True)
+            deleted_items.append("로그 및 아티팩트")
+        except Exception as e:
+            core.logger.log_event("warn", "agy", f"brain 삭제 오류: {e}")
+
+    # 4. annotations/<id>.pbtxt 삭제
+    ann_file = os.path.join(AGY_ANNOTATIONS_DIR, f"{conversation_id}.pbtxt")
+    if os.path.exists(ann_file):
+        try:
+            os.remove(ann_file)
+        except Exception:
+            pass
+
+    # 5. presence/<id>.lock 삭제
+    lock_file = os.path.expanduser(rf"~/.gemini/antigravity-cli/presence/{conversation_id}.lock")
+    if os.path.exists(lock_file):
+        try:
+            os.remove(lock_file)
+        except Exception:
+            pass
+
+    # 6. 알림 감시 목록에서도 제거
+    with _watcher_lock:
+        if conversation_id in _watched_sessions:
+            del _watched_sessions[conversation_id]
+
+    core.logger.log_event("info", "agy", f"Antigravity 세션 영구 삭제 완료: #{short_id}", f"삭제 항목: {', '.join(deleted_items)}")
+    return {
+        "status": "success",
+        "message": f"Antigravity 세션 [#{short_id}]이(가) 영구 삭제되었습니다."
+    }
+
+
+@eel.expose
+def delete_ai_session(conversation_id: str, source: str = "agy") -> dict:
+    """통합 AI 세션 영구 삭제 API (AGY & OpenCodex)"""
+    if not conversation_id:
+        return {"status": "error", "message": "세션 ID가 없습니다."}
+    if source == "ocx":
+        return opencodex_service.delete_opencodex_session(conversation_id)
+    return delete_agy_session(conversation_id)
+
+
 def _get_active_cli_cids() -> set:
     """
     ~/.gemini/antigravity-cli/presence/*.lock 파일의 독점 락을 검사하여

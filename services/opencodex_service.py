@@ -523,3 +523,84 @@ def launch_opencodex_session(thread_id: str, workspace_path: str = "", force: bo
             "status": "error",
             "message": f"터미널 실행 실패: {str(e)}"
         }
+
+
+def delete_opencodex_session(thread_id: str) -> dict:
+    """
+    특정 OpenCodex 세션 영구 삭제
+    codex delete --force 우선 실행 후 SQLite/JSONL/Lock 파일 정리 fallback
+    """
+    if not thread_id:
+        return {"status": "error", "message": "스레드 ID가 지정되지 않았습니다."}
+
+    # 현재 활성 실행 중인지 검사
+    active_ids = _get_active_ocx_thread_ids()
+    if thread_id in active_ids:
+        return {
+            "status": "error",
+            "message": "현재 터미널에서 실행 중인 세션은 삭제할 수 없습니다. 먼저 터미널을 종료해 주세요."
+        }
+
+    short_id = thread_id[:8]
+
+    # 1. codex delete --force CLI 우선 실행
+    codex_bin = shutil.which("codex")
+    if codex_bin:
+        try:
+            res = subprocess.run(
+                ["codex", "delete", "--force", thread_id],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if res.returncode == 0:
+                core.logger.log_event("info", "ocx", f"codex CLI 기반 세션 삭제 완료: #{short_id}")
+                return {
+                    "status": "success",
+                    "message": f"OpenCodex 세션 [#{short_id}]이(가) 영구 삭제되었습니다."
+                }
+        except Exception as e:
+            core.logger.log_event("warn", "ocx", f"codex delete 명령어 실행 예외: {e}")
+
+    # 2. 명령어 실패 또는 미설치 시 SQLite DB 및 물리 파일 직접 정리 fallback
+    # 2-1. codex-dev.db에서 삭제
+    if os.path.exists(CODEX_DB_PATH):
+        try:
+            conn = sqlite3.connect(CODEX_DB_PATH, timeout=3.0)
+            conn.execute("DELETE FROM local_thread_catalog WHERE thread_id = ?", (thread_id,))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            core.logger.log_event("warn", "ocx", f"local_thread_catalog 삭제 오류: {e}")
+
+    # 2-2. state_5.sqlite에서 삭제
+    if os.path.exists(CODEX_STATE_DB_PATH):
+        try:
+            conn = sqlite3.connect(CODEX_STATE_DB_PATH, timeout=3.0)
+            conn.execute("DELETE FROM threads WHERE id = ?", (thread_id,))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            core.logger.log_event("warn", "ocx", f"state_5.sqlite threads 삭제 오류: {e}")
+
+    # 2-3. rollout jsonl 파일 삭제
+    rollout_file = _find_rollout_file_for_thread(thread_id)
+    if rollout_file and os.path.isfile(rollout_file):
+        try:
+            os.remove(rollout_file)
+        except Exception:
+            pass
+
+    # 2-4. lock 파일 삭제
+    lock_file = os.path.join(CODEX_LOCKS_DIR, f"{thread_id}.lock")
+    if os.path.isfile(lock_file):
+        try:
+            os.remove(lock_file)
+        except Exception:
+            pass
+
+    core.logger.log_event("info", "ocx", f"OpenCodex 세션 파일/DB 직접 삭제 완료: #{short_id}")
+    return {
+        "status": "success",
+        "message": f"OpenCodex 세션 [#{short_id}]이(가) 영구 삭제되었습니다."
+    }
