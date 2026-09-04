@@ -2,6 +2,9 @@
 시스템 정보, 하드웨어 사양(CPU/RAM/GPU/Storage), IP 조회 및 네트워크 진단 서비스 모듈
 """
 import os
+import sys
+import time
+import threading
 import platform
 import subprocess
 import socket
@@ -9,6 +12,8 @@ import datetime
 import urllib.request
 import json
 import eel
+from core.paths import APP_DIR
+import core.logger
 
 
 def _get_public_ip():
@@ -195,3 +200,82 @@ def check_network_ping(host="8.8.8.8"):
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@eel.expose
+def shutdown_app():
+    """
+    백엔드 서버 및 시스템 트레이 프로세스 완전 종료
+    비동기 스레드에서 브라우저 응답 전송 후 리소스 정리 및 단일 인스턴스 세마포어 해제
+    """
+    def _do_shutdown():
+        time.sleep(0.3)
+        core.logger.log_event("info", "system", "Web UI 요청에 의한 백엔드 서버 및 트레이 완전 종료")
+        try:
+            from core.tray import get_tray_instance
+            tm = get_tray_instance()
+            if tm and tm.tray_icon:
+                try:
+                    tm.tray_icon.stop()
+                except Exception:
+                    pass
+            if tm and tm.on_exit:
+                try:
+                    tm.on_exit()
+                except Exception:
+                    pass
+        except Exception as e:
+            core.logger.log_event("warn", "system", f"종료 정리 예외: {e}")
+        os._exit(0)
+
+    threading.Thread(target=_do_shutdown, daemon=True).start()
+    return {"status": "success", "message": "애플리케이션과 백엔드 서버를 완전히 종료합니다."}
+
+
+@eel.expose
+def restart_app():
+    """
+    백엔드 서버 및 애플리케이션 즉시 재시작 (파이썬 코드 변경 사항 실시간 반영)
+    기존 인스턴스 리소스 정리 ➔ 신규 인스턴스 백그라운드 구동 ➔ 기존 프로세스 종료
+    """
+    def _do_restart():
+        time.sleep(0.4)
+        core.logger.log_event("info", "system", "Web UI 요청에 의한 백엔드 서버 재시작 시작")
+        try:
+            from core.tray import get_tray_instance
+            tm = get_tray_instance()
+            if tm and tm.tray_icon:
+                try:
+                    tm.tray_icon.stop()
+                except Exception:
+                    pass
+            if tm and tm.on_exit:
+                try:
+                    tm.on_exit()
+                except Exception:
+                    pass
+        except Exception as e:
+            core.logger.log_event("warn", "system", f"재시작 정리 예외: {e}")
+
+        # 신규 프로세스 실행 커맨드 구성
+        try:
+            if getattr(sys, 'frozen', False):
+                cmd = [sys.executable] + sys.argv[1:]
+            else:
+                entry_script = os.path.abspath(sys.argv[0]) if sys.argv and sys.argv[0] else os.path.join(APP_DIR, "main.py")
+                cmd = [sys.executable, entry_script] + sys.argv[1:]
+
+            subprocess.Popen(
+                cmd,
+                cwd=APP_DIR,
+                creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            )
+            core.logger.log_event("info", "system", "신규 백엔드 프로세스 구동 완료")
+        except Exception as e:
+            core.logger.log_event("error", "system", f"신규 프로세스 구동 실패: {e}")
+
+        os._exit(0)
+
+    threading.Thread(target=_do_restart, daemon=True).start()
+    return {"status": "success", "message": "백엔드 서버를 재시작하는 중입니다..."}
+

@@ -24,6 +24,12 @@ def show_tray_notification(title: str, message: str):
     return False
 
 
+def get_tray_instance():
+    """트레이 관리자 전역 싱글톤 인스턴스 반환"""
+    global _tray_instance
+    return _tray_instance
+
+
 class TrayManager:
     def __init__(self, base_dir=None, start_options=None, on_exit=None):
         global _tray_instance

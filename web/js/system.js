@@ -52,3 +52,71 @@ async function callCheckPing(host) {
     }
 }
 
+/**
+ * 백엔드 서버 및 트레이 완전 종료 확인 모달 (Non-blocking In-layer Confirm)
+ */
+async function confirmShutdownApp(event) {
+    if (event) event.stopPropagation();
+
+    const confirmed = await showAppConfirm(
+        'Utility Toolkit 백엔드 서버와 트레이 프로세스를 완전히 종료하시겠습니까?\n\n현재 열려 있는 웹 창과 백그라운드 프로세스가 즉시 종료됩니다.',
+        {
+            title: '애플리케이션 완전 종료',
+            icon: '🚪',
+            confirmText: '완전 종료',
+            cancelText: '취소',
+            danger: true
+        }
+    );
+
+    if (!confirmed) return;
+
+    try {
+        if (typeof showToast === 'function') {
+            showToast('백엔드 서버 및 애플리케이션을 종료합니다...', 'info');
+        }
+        if (window.eel && eel.shutdown_app) {
+            await eel.shutdown_app()();
+        }
+        setTimeout(() => {
+            window.close();
+        }, 500);
+    } catch (e) {
+        console.error('서버 종료 요청 실패:', e);
+        window.close();
+    }
+}
+
+/**
+ * 백엔드 서버 재시작 확인 모달 (파이썬 코드 변경 반영)
+ */
+async function confirmRestartApp(event) {
+    if (event) event.stopPropagation();
+
+    const confirmed = await showAppConfirm(
+        '백엔드 서버를 재시작하시겠습니까?\n\n수정된 파이썬(.py) 코드가 즉시 반영되며, 새 윈도우 창이 자동으로 다시 열립니다.',
+        {
+            title: '백엔드 서버 재시작',
+            icon: '🔄',
+            confirmText: '재시작',
+            cancelText: '취소'
+        }
+    );
+
+    if (!confirmed) return;
+
+    try {
+        if (typeof showToast === 'function') {
+            showToast('백엔드 서버를 재시작하는 중입니다. 잠시 후 새 창이 열립니다...', 'info');
+        }
+        if (window.eel && eel.restart_app) {
+            await eel.restart_app()();
+        }
+        setTimeout(() => {
+            window.close();
+        }, 600);
+    } catch (e) {
+        console.error('서버 재시작 요청 실패:', e);
+    }
+}
+

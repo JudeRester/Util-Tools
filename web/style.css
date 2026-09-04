@@ -4754,6 +4754,70 @@ input[type="checkbox"] {
     transform: translateY(-1px);
 }
 
+/* 상단 헤더 전원 제어 버튼 그룹 (서버 재시작 & 완전 종료) */
+.nav-system-power-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding-left: 6px;
+    border-left: 1px solid var(--border-color);
+    margin-left: 4px;
+}
+
+.header-power-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+
+.header-power-btn.restart {
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #60a5fa;
+}
+
+.header-power-btn.restart:hover {
+    background: rgba(59, 130, 246, 0.25);
+    border-color: #60a5fa;
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.35);
+    transform: translateY(-1px);
+}
+
+.header-power-btn.shutdown {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+}
+
+.header-power-btn.shutdown:hover {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: #ef4444;
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
+    transform: translateY(-1px);
+}
+
+/* 시스템 탭 내부 전원 카드 스타일 */
+.tool-btn.power-tool-btn.restart:hover {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.tool-btn.power-tool-btn.shutdown:hover {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+}
+
 .ai-search-box {
     display: flex;
     align-items: center;

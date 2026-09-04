@@ -118,6 +118,17 @@
                 <button class="header-ai-btn" onclick="openAiSearchModal()" title="AI 문맥 검색 & 의미 유사도 비교 (단축키: Ctrl+K)">
                     <span class="tab-icon">🧠</span> <span class="tab-label">AI 검색</span>
                 </button>
+                <!-- 상단 전원 제어 버튼 그룹 (상시 접근 가능) -->
+                <div class="nav-system-power-group">
+                    <button type="button" class="header-power-btn restart" onclick="confirmRestartApp(event)" title="백엔드 서버 재시작 (.py 코드 변경 실시간 반영)">
+                        <span class="power-icon">🔄</span>
+                        <span class="power-label">재시작</span>
+                    </button>
+                    <button type="button" class="header-power-btn shutdown" onclick="confirmShutdownApp(event)" title="백엔드 서버 및 트레이 프로세스 완전 종료">
+                        <span class="power-icon">🚪</span>
+                        <span class="power-label">종료</span>
+                    </button>
+                </div>
             </div>
         </nav>
 
@@ -172,6 +183,22 @@
                         <div class="btn-text">
                             <h3>데이터 백업 & 복원</h3>
                             <p>전체 설정 및 데이터 내보내기/가져오기 (Export / Import)</p>
+                        </div>
+                    </button>
+
+                    <!-- 백엔드 서버 제어 도구 -->
+                    <button class="tool-btn power-tool-btn restart" onclick="confirmRestartApp(event)" title="파이썬 코드 변경 사항 실시간 반영">
+                        <div class="btn-icon">🔄</div>
+                        <div class="btn-text">
+                            <h3>서버 재시작</h3>
+                            <p>파이썬(.py) 코드 변경 사항 즉시 반영</p>
+                        </div>
+                    </button>
+                    <button class="tool-btn power-tool-btn shutdown" onclick="confirmShutdownApp(event)" title="백엔드 서버 및 트레이 완전 종료">
+                        <div class="btn-icon">🚪</div>
+                        <div class="btn-text">
+                            <h3>서버 완전 종료</h3>
+                            <p>백엔드 프로세스 및 시스템 트레이 완전 종료</p>
                         </div>
                     </button>
                 </div>
