@@ -393,3 +393,36 @@ erDiagram
 데이터베이스 외에 다음 설정 파일들은 독립된 JSON 파일로 관리되어 외부 연동 및 설정을 지원합니다:
 - **`calendar_config.json`**: 구글 캘린더 비공개 주소 및 iCal(ICS) 웹 구독 목록
 - **`app_settings.json`**: 윈도우 창 크기, 콘솔 높이, 분할창 크기 등 사용자 인터페이스 영구 설정
+
+---
+
+## 5. 🤖 외부 로컬 AI 데이터베이스 연동 명세 (External Read-Only AI Databases)
+
+Util-Tools의 통합 AI 코딩 세션 허브는 로컬 머신에 설치된 CLI 에이전트의 SQLite 데이터베이스를 안전하게 읽기 전용(`mode=ro`)으로 쿼리하여 대시보드를 구성합니다:
+
+### 1) Antigravity CLI 세션 DB (`conversation_summaries.db`)
+- **경로**: `C:\Users\<User>\.gemini\antigravity-cli\databases\conversation_summaries.db`
+- **주요 테이블 및 필드**:
+  - `conversations`
+    - `conversation_id` (`TEXT PK`): 세션 UUID
+    - `workspace_uris` (`TEXT`): JSON 배열 형식의 작업 디렉토리 URI 목록
+    - `step_count` (`INTEGER`): 세션 내 상호작용 스텝 수
+    - `created_at` / `updated_at` (`TEXT`): ISO 8601 타임스탬프
+- **접근 방식**: `sqlite3.connect('file:...?mode=ro', uri=True)`를 통해 CLI 엔진 실행 중에도 락 경합 없이 실시간 세션 조회.
+
+### 2) OpenCodex CLI 세션 DB (`codex-dev.db` & `state_5.sqlite`)
+- **경로**: `C:\Users\<User>\.codex\sqlite\`
+- **주요 테이블 및 필드**:
+  - `codex-dev.db`의 `local_thread_catalog`:
+    - `thread_id` (`TEXT PK`): 스레드 UUID
+    - `cwd` (`TEXT`): 작업 디렉토리 (접두사 `\\?\` 정규화 대상)
+    - `title` (`TEXT`): 세션 제목 / 첫 번째 사용자 프롬프트
+    - `source_kind` (`TEXT`): 생성 소스 (`'cli'`, `'vscode'`, `'local'`, `'chatgpt'`)
+    - `host_id` (`TEXT`): 호스트 식별자 (`'local'` 여부 검증)
+    - `updated_at` (`INTEGER`): Epoch 밀리초 타임스탬프
+  - `state_5.sqlite`의 `threads`:
+    - `id` (`TEXT PK`): 스레드 UUID (조인 키)
+    - `model_provider` (`TEXT`): 사용된 모델 (예: `gpt-4o`, `o3-mini`)
+    - `tokens_used` (`INTEGER`): 세션 누적 토큰
+- **필터링 정책**: `(host_id = 'local' OR source_kind IN ('cli', 'vscode', 'local')) AND cwd IS NOT NULL` 조건을 통해 OpenAI 계정에 동기화된 웹 대화를 제외하고 순수 로컬 워크스페이스 세션만 선별 추출.
+

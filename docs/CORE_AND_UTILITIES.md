@@ -37,6 +37,36 @@ stateDiagram-v2
   - `🔄 백그라운드 동기화 확인`
   - `🚪 완전히 종료`
 
+### 1-3. 웹 UI 기반 백엔드 프로세스 제어 및 즉시 재시작(Hot Reload) (`services/system_service.py`)
+- **도입 배경**: 백엔드 Python 코드(`.py`) 수정 시 프로세스를 재시동하기 위해 "웹 창 닫기 ➔ 트레이 우클릭 ➔ 종료 ➔ 재실행"을 거치던 2레벨 뎁스의 조작 번거로움을 웹 UI 상에서 직접 제어하도록 개선.
+- **제어 인터페이스**:
+  - **상단 헤더 네비게이션 (`.header-power-controls`)**: 모든 탭에서 즉시 접근 가능한 `[🔄 재시작]` 및 `[🚪 종료]` 버튼 상시 노출.
+  - **시스템 & 네트워크 탭 (`#system-power-card`)**: 프로세스 제어 메인 카드 제공.
+  - **비차단 인레이어 확인 모달 (`showAppConfirm`)**: 비동기 확인을 거쳐 실수로 인한 프로세스 종료를 방지.
+- **안전한 프로세스 종료 및 핸들 인계 파이프라인**:
+  1. 클라이언트에 200 OK 응답 우선 반환 (0.3초 지연 비동기 스레드 위임).
+  2. **SQLite WAL 동기화**: `PRAGMA wal_checkpoint(TRUNCATE)`를 실행하여 미반영 트랜잭션 로그를 본 DB에 완전히 플러시.
+  3. **단일 인스턴스 락 해제**: Windows 명명된 세마포어(`UtilTools_SingleInstance_Semaphore`) 핸들을 명시적으로 닫아 재시작 시 신규 프로세스의 싱글턴 충돌 방지.
+  4. **트레이 아이콘 스레드 정지**: `TrayManager.tray_icon.stop()` 호출로 백그라운드 알림 영역 리소스 해제.
+  5. **프로세스 분기**:
+     - 완전 종료(`shutdown_app`): `os._exit(0)`으로 즉시 프로세스 클린 종료.
+     - 즉시 재시작(`restart_app`): `subprocess.Popen([sys.executable, 'run.pyw' 또는 'main.py'])`으로 독립된 자식 프로세스를 분기한 후 부모 프로세스 종료.
+
+### 1-4. 독립 애플리케이션 브라우저 프로파일 격리 (`data/browser_profile`)
+- **문제 정의**: Eel 브라우저 구동 시 기본 사용자 데이터 디렉토리 인자가 생략될 경우, Chrome 마스터 프로세스가 사용자의 기본 프로파일(`%LOCALAPPDATA%\Google\Chrome\User Data\Default`)을 점유하고 `--disable-extensions`를 적용하여 사용자의 일상 브라우저 확장프로그램 인증 세션이 만료되는 결함이 발생.
+- **엔지니어링 격리 조치**:
+  - [`core.paths.BROWSER_PROFILE_DIR`](file:///D:/python/core/paths.py) (`D:\python\data\browser_profile`)를 신설.
+  - [`core/tray.py`](file:///D:/python/core/tray.py) 및 [`main.py`](file:///D:/python/main.py)의 Eel 브라우저 런처 옵션에 `--user-data-dir` 및 `--no-first-run` 인자를 주입하여 시스템/개인 Chrome 프로파일과의 상호 간섭을 물리적으로 100% 차단.
+
+### 1-5. 데스크톱 UI 런타임 현대화 로드맵 (내장 Edge WebView2 전환 계획)
+- **현행 외부 브라우저(Eel)의 구조적 한계**:
+  - Python 백엔드 프로세스와 Chrome 브라우저가 물리적으로 분리되어 있어, 세마포어 중복 실행 감지 시 윈도우 전면 활성화를 위해 Win32 `EnumWindows` 창 역추적 및 `Alt` 키 시뮬레이션 트릭(`SetForegroundWindow` 보안 정책 우회)에 의존.
+- **전환 목표 및 기대 효과**:
+  - OS 내장 Microsoft Edge WebView2(Chromium 152.x Evergreen 런타임)로 전환하여 Python 프로세스가 단일 네이티브 윈도우(`HWND`)를 직접 소유.
+  - 5ms 이내 즉시 창 포커스 전환 및 프로세스 종료 시 자식 렌더러의 동시 소멸(Zero Orphaned Process) 달성.
+- **백로그 관리**:
+  - 상세한 4단계 무회귀 전환 로드맵 및 DoD는 [GitHub Issue #1](https://github.com/JudeRester/Util-Tools/issues/1)에 공식 백로그로 등록 및 관리 중.
+
 ---
 
 ## 2. ⚡ 메모리 최적화 및 유휴 자원 자동 회수 엔진
@@ -69,14 +99,14 @@ stateDiagram-v2
 - **하단 섹션: 프로그램 & 도구 빠른 실행 (`quick_launch`)**:
   - 개발 서버 구동 스크립트(`.bat`), 데스크톱 실행 파일(`.exe`), 웹 관리자 페이지(URL), SSH 접속 명령어를 바로 실행.
   - 전용 [⚙️ 편집] 모달을 통한 실시간 추가/수정/삭제 및 마우스 드래그 앤 드롭 카드 순서 변경 (`order_index`).
-- **선택적 확장 섹션: Antigravity CLI(`agy`) 세션 연동 (`services/agy_service.py`)**:
-  - `app_settings.json`의 `enable_agy_integration` 옵션이 활성화되었을 때 노출되는 개발자 도구.
-  - 로컬 `conversation_summaries.db`를 안전한 Read-Only 모드로 조회하여 세션 목록 및 진행 스텝 수 제공.
-  - `[현재 프로젝트]`/`[전체 세션]` 필터링 및 클릭 시 해당 세션의 원래 작업 디렉토리(`workspace_uris`)에서 즉시 대화형 터미널(`agy --conversation <id>`) 실행.
-  - **스마트 세션 알림 구독 (Watchlist & OS/오디오 알림)**:
-    - 세션 테이블의 `🔔` 버튼을 클릭하여 오래 걸리는 작업 세션을 감시 목록에 등록 가능.
-    - 백엔드에서 `conversation_summaries.db`와 `transcript.jsonl`을 감시하여 에이전트 응답 완료(`status: DONE`) 시 **Windows OS 트레이 알림 팝업 + Web Audio 차임벨 사운드 + 앱 토스트 알림** 즉시 전송 후 자동 구독 해제.
-    - `시스템 & 네트워크` 탭의 agy 토글이 꺼지면 감시 스레드가 즉시 소멸하고 DB 쿼리 0건으로 완전 차단(Strict Gating).
+- **통합 AI 코딩 세션 허브 (Unified AI Sessions Hub: Antigravity CLI & OpenCodex)**:
+  - `services/agy_service.py` 및 `services/opencodex_service.py` 기반으로 머신 내 Antigravity(`agy`)와 OpenCodex(`ocx`) 세션을 통합 수집 및 제어.
+  - **터미널 세션 실행 및 창 전환**: Alt 키 시뮬레이션 기반의 활성 콘솔 창 전면 전환 및 신규 CLI 세션 백그라운드 분기 실행.
+  - **5ms 논블로킹 활성 락 감지**: `msvcrt.locking` 파일 락 검사로 현재 실행 중인 세션 실시간 식별.
+  - **비차단 영구 삭제 및 모달 연동**: `showAppConfirm` 모달을 통해 비활성 세션을 영구 삭제하며, 실행 중인 세션은 삭제 방어.
+  - **실시간 Tail 인스펙터**: Rollout / Transcript 스트리밍으로 턴별 프롬프트, 도구 호출, 결과 확인.
+  - **스마트 세션 알림 구독**: 완료(`DONE`) 및 터미널 권한 승인 대기(`BypassSandbox`) 발생 시 Windows 트레이/토스트/차임벨 전송.
+  - *(※ 데이터 소스, 스키마, 락 메커니즘 등 상세 아키텍처는 [`docs/AI_CODING_SESSIONS.md`](docs/AI_CODING_SESSIONS.md)를 참조하십시오.)*
 
 ---
 

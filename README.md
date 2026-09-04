@@ -1,7 +1,7 @@
 # 🛠️ Utility Toolkit (유틸리티 도구 모음)
 
 Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스크톱 유틸리티 도구 모음입니다.  
-중앙 **SQLite DB(`data/app.db`)** 기반 데이터 영속화와 **로컬 AI 시맨틱 검색 엔진(Multilingual-E5 ONNX)**, **Antigravity CLI 세션 허브**를 내장하고 있으며, 백그라운드 시스템 트레이에 상주하여 다양한 개발 및 업무 도구를 간편하게 실행할 수 있습니다.
+중앙 **SQLite DB(`data/app.db`)** 기반 데이터 영속화와 **로컬 AI 시맨틱 검색 엔진(Multilingual-E5 ONNX)**, **통합 AI 코딩 세션 허브(Antigravity CLI & OpenCodex)**를 내장하고 있으며, 백그라운드 시스템 트레이에 상주하여 다양한 개발 및 업무 도구를 간편하게 실행할 수 있습니다.
 
 ---
 
@@ -9,7 +9,7 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 
 | 카테고리 | 주요 제공 기능 |
 | :--- | :--- |
-| **🤖 Antigravity CLI<br>(agy 세션 센터)** | • **로컬 agy 세션 통합 대시보드 & 터미널 런처**: 여러 프로젝트(`D:\python`, `D:\workspace\bizmeka` 등)의 대화 세션을 자동 수집하고, 해당 작업 폴더에서 `cmd.exe /k "agy --conversation <id>"`로 터미널 세션 즉시 실행<br>• **실시간 알림 파이프라인**: `transcript.jsonl` 및 세션 DB를 2.5초 주기로 감시하여 **에이전트 턴 완료**뿐만 아니라 **터미널 권한 승인 대기(`BypassSandbox` 등)**까지 실시간 포착하여 Windows 트레이 알림 + 토스트 + 딩동 차임벨 전송<br>• **1회성(One-Shot) vs 지속(Persistent) 듀얼 알림 모드**: 팝오버 메뉴를 통해 이번 작업 1회 알림 또는 매 턴 지속 알림 선택 가능<br>• **프로젝트 멀티 드롭다운 필터**: 체크박스 기반의 워크스페이스 다중 선택 및 0ms 클라이언트 사이드 고속 필터링<br>• **Strict Gating**: 시스템 탭에서 토글 OFF 시 백그라운드 감시 스레드 즉시 파괴 및 0 쿼리 완벽 격리 |
+| **🤖 통합 AI 코딩 세션 허브<br>(Antigravity & OpenCodex)** | • **듀얼 AI 에이전트 세션 통합 대시보드**: Google Antigravity(`agy`) 및 OpenAI OpenCodex(`ocx`) 세션을 통합 수집하여 타임스탬프 순 일원화 관리<br>• **터미널 실행 및 윈도우 전면 전환**: Alt 키 시뮬레이션 기반의 활성 콘솔 창 즉각 포커스 및 신규 대화형 터미널 백그라운드 분기 실행<br>• **5ms 논블로킹 활성 락 검사**: `msvcrt.locking` 파일 락 검사로 현재 터미널 실행 중인 세션을 실시간 감지<br>• **실시간 Live Tail 인스펙터**: Rollout JSONL 및 Transcript 스트리밍으로 턴별 프롬프트, 도구 호출, 결과 인앱 실시간 확인<br>• **비차단 영구 삭제**: `showAppConfirm` 모달을 통한 비활성 세션 영구 삭제 및 활성 세션 삭제 방어<br>• **클라우드 대화 필터링**: `codex-dev.db`의 웹 ChatGPT 동기화 내역을 배제하고 로컬 작업 워크스페이스 세션만 선별 노출<br>• **스마트 알림 파이프라인**: 턴 완료(`DONE`) 및 권한 승인 대기(`BypassSandbox`) 발생 시 Windows 트레이 알림 + 토스트 + 차임벨 전송 |
 | **💼 업무 & 협업<br>(Redmine·달력·이메일)** | • **🦊 Redmine**: 내 일감(Issues) 실시간 대시보드, 상태/진척도 인라인 즉시 변경, 프로젝트 위키(Wiki) 뷰어/에디터, 백그라운드 트레이 알림, 관심 프로젝트(⭐ 즐겨찾기) 우선 필터<br>• **📅 달력 & 일정**: Google Calendar 및 iCal(ICS) 실시간 구독, 다크 테마 월간 캘린더 & 오늘의 아젠다<br>• **📧 이메일 아카이브**: 3,100+건 EML 로컬 보관소, 대화별 스레드 묶기(Thread View), 시간순 아코디언 타임라인, 첨부파일 추출 |
 | **📊 뷰어 / 다이어그램<br>(CSV·MD·Mermaid·슬라이서)** | • **📋 CSV / TSV 뷰어**: 인코딩/구분자 자동 감지, 전역 검색/정렬, Markdown/JSON/SQL/CSV 변환<br>• **📝 Markdown 뷰어**: GFM 실시간 에디터, GitHub Alerts 콜아웃, 태스크 체크박스 동기화, 목차(TOC)<br>• **📊 Mermaid 다이어그램**: 16종 프리셋 시각화, 마우스 휠 줌/팬, SVG/PNG 고해상도 이미지 내보내기<br>• **✂️ 이미지 슬라이서**: Pillow 기반 다중 절단선, 고정 px 간격, 균등 N등분, 여백 자동 감지 & ZIP/폴더 저장 |
 | **🧠 AI 시맨틱 검색** | • **로컬 딥러닝 신경망(`intfloat/multilingual-e5-small` ONNX)** 기반 의미론적 문맥 검색<br>• 키워드가 정확히 일치하지 않아도 의미와 문맥으로 전체 데이터(이메일, 메모, 다이어그램 등)를 탐색<br>• 문장 간 유사도 정밀 비교 및 증분 벡터 캐싱 지원 |
@@ -19,7 +19,7 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 | **🧪 JS 실행기** | • JSFiddle / RunJS 스타일의 **JavaScript 코드 샌드박스** (비동기 `async/await` 지원)<br>• `console.log/warn/error` 출력 캡처, 실행 시간 측정, `Ctrl + Enter` 실행, 코드 자동 영구 보존 |
 | **📝 빠른 메모** | • **경량 스크래치패드 / 메모장**<br>• 다중 메모 생성, 실시간 자동 저장(Autosave), 고정(Pin) 기능, 마우스 드래그블 스플리터 제공 |
 | **💾 통합 백업 / 복원** | • **Zero-Memory Python 백엔드 스트리밍 아키텍처** (브라우저 메모리 소모 최소화)<br>• 중앙 SQLite DB 및 설정을 **단일 JSON 및 90% 압축 ZIP 포맷으로 일괄/선택적 내보내기 & 복원(Merge/Replace)** |
-| **🛡️ 시스템 트레이 & 싱글턴** | • **Windows Named Semaphore** 기반 단일 인스턴스 락(중복 실행 방지 및 기존 창 자동 활성화)<br>• 검은색 콘솔 창 없는 GUI 구동(`run.pyw`) 및 Windows 시스템 트레이 상주 (`utiltools.ico` 연동)<br>• V8 힙 128MB 제한 및 Windows WorkingSet 유휴 RAM 자동 회수 엔진 탑재 |
+| **🛡️ 시스템 트레이 & 런타임 제어** | • **웹 UI 기반 백엔드 전원 제어**: 상단 헤더 및 시스템 탭에서 1-클릭 서버 완전 종료 및 즉시 재시작(Hot Reload) 지원<br>• **독립 브라우저 프로파일 격리**: `data/browser_profile` 분리로 Chrome 기본 프로파일 점유 및 확장프로그램 인증키 간섭 100% 방지<br>• **Windows Named Semaphore** 기반 단일 인스턴스 락(중복 실행 방지 및 기존 창 자동 활성화)<br>• 검은색 콘솔 창 없는 GUI 구동(`run.pyw`), Windows 시스템 트레이 상주 (`utiltools.ico`), V8 힙 128MB 제한 및 Windows WorkingSet 유휴 RAM 자동 회수 |
 
 ---
 
@@ -29,7 +29,8 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 
 | 문서명 | 주요 다루는 기술 영역 및 아키텍처 | 바로가기 링크 |
 | :--- | :--- | :--- |
-| **🗄️ Database Architecture & Schema** | • **중앙 SQLite DB(`data/app.db`) 13개 테이블 전체 ERD & 스키마 명세**<br>• WAL 모드 및 고성능 PRAGMA 최적화, 인덱스 커버리지, 파일 기반 JSON 설정 | [📖 `docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) |
+| **🤖 AI Coding Sessions Hub** | • **통합 AI 세션 허브: Antigravity CLI(`agy`) & OpenCodex(`ocx`) 듀얼 엔진 아키텍처**<br>• **5ms 논블로킹 활성 락 검사**, `mode=ro` SQLite 카탈로그 조회, 실시간 Live Tail 파서, 창 전환 | [📖 `docs/AI_CODING_SESSIONS.md`](docs/AI_CODING_SESSIONS.md) |
+| **🗄️ Database Architecture & Schema** | • **중앙 SQLite DB(`data/app.db`) 13개 테이블 전체 ERD & 스키마 명세**<br>• WAL 모드 및 고성능 PRAGMA 최적화, 인덱스 커버리지, 외부 AI CLI DB 연동 규격 | [📖 `docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) |
 | **🦊 Redmine Integration** | • **Redmine REST API 연동, 일감/위키 대시보드, SQLite 오프라인 캐시**<br>• **주요 관심 프로젝트(⭐ 즐겨찾기) 우선순위 필터링**, 백그라운드 폴링 & 트레이 알림 | [📖 `docs/REDMINE_INTEGRATION.md`](docs/REDMINE_INTEGRATION.md) |
 | **📧 Email Archive System** | • **3,100+건 대용량 이메일 아카이브 & 대화별 스레드 타임라인 뷰어**<br>• 비파괴적 제목 정규화 알고리즘, 청크 페이징 & 지연 로딩 아키텍처 | [📖 `docs/EMAIL_ARCHIVE.md`](docs/EMAIL_ARCHIVE.md) |
 | **🧠 AI Semantic Search Engine** | • **로컬 딥러닝 임베딩 신경망(`intfloat/multilingual-e5-small` ONNX)**<br>• 코사인 유사도 연산, 크로스 도메인 증분 벡터 캐시, `Ctrl+K` 검색 & 문장 비교 도구 | [📖 `docs/AI_SEMANTIC_SEARCH.md`](docs/AI_SEMANTIC_SEARCH.md) |
@@ -37,7 +38,7 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 | **✂️ Image Slicer Studio** | • **Pillow 이미지 분할 파이프라인 & 인터랙티브 HTML5 캔버스**<br>• 다중 절단선, 자유 경계 박스, 고정 px, 균등 N등분, 여백 자동 감지 & ZIP 패킹 | [📖 `docs/IMAGE_SLICER.md`](docs/IMAGE_SLICER.md) |
 | **📊 Data & Document Viewers** | • **CSV/TSV 테이블 뷰어** (인코딩/구분자 자동 감지, MD/JSON/SQL 변환)<br>• **Markdown Studio** (GitHub Alerts, 양방향 태스크 동기화, TOC) & **Mermaid 다이어그램** | [📖 `docs/DATA_VIEWERS.md`](docs/DATA_VIEWERS.md) |
 | **💾 Zero-Memory Backup & Restore** | • **Zero-Memory Python 디스크 직접 스트리밍 아키텍처** (브라우저 메모리 소모 최소화)<br>• 90% 압축 ZIP 포맷, 2대 복원 모드(Merge vs Replace) & SQLite 원자적 일괄 복원 | [📖 `docs/BACKUP_AND_RESTORE.md`](docs/BACKUP_AND_RESTORE.md) |
-| **🛠️ Core System & Utilities** | • **단일 인스턴스 세마포어, 무창 런처(`run.pyw`), pystray 시스템 트레이, 메모리 자동 회수**<br>• Google Calendar/iCal 동기화, JS 샌드박스 런너, 빠른 실행 & Antigravity CLI 세션 알림 | [📖 `docs/CORE_AND_UTILITIES.md`](docs/CORE_AND_UTILITIES.md) |
+| **🛠️ Core System & Utilities** | • **웹 UI 서버 전원 제어 & 재시작**, 브라우저 프로파일 격리, 단일 인스턴스 세마포어, pystray 트레이<br>• Google Calendar/iCal 동기화, JS 샌드박스 런너, 빠른 실행 & 데스크톱 UI 런타임 현대화 로드맵 | [📖 `docs/CORE_AND_UTILITIES.md`](docs/CORE_AND_UTILITIES.md) |
 
 ---
 
@@ -53,8 +54,9 @@ D:\python
 ├── requirements.txt            # 필수 Python 패키지 목록
 ├── utiltools.ico               # 애플리케이션 & 시스템 트레이 아이콘
 │
-├── docs/                       # [기술 문서] 9대 기능별 상세 아키텍처 및 기획서
+├── docs/                       # [기술 문서] 10대 기능별 상세 아키텍처 및 기획서
 │   ├── plans/                  # [기획 문서] 세션 센터, 런처 통합 등 구현 기획서 보관소
+│   ├── AI_CODING_SESSIONS.md   # 통합 AI 코딩 세션 허브: Antigravity CLI & OpenCodex 듀얼 엔진 아키텍처
 │   ├── DATABASE_SCHEMA.md      # 중앙 SQLite DB(app.db) 13개 테이블 ERD 및 상세 스키마 명세
 │   ├── REDMINE_INTEGRATION.md  # Redmine REST API 연동, 일감/위키, 주요 프로젝트⭐ 우선순위
 │   ├── EMAIL_ARCHIVE.md        # 대용량 이메일 아카이브 & 대화 스레드 타임라인 아키텍처
@@ -63,12 +65,13 @@ D:\python
 │   ├── IMAGE_SLICER.md         # Pillow 이미지 슬라이서, 다중 절단선 & 여백 감지
 │   ├── DATA_VIEWERS.md         # CSV/TSV 테이블 뷰어, Markdown Studio & Mermaid 렌더러
 │   ├── BACKUP_AND_RESTORE.md   # Zero-Memory 백엔드 스트리밍 백업 & 원자적 복원 엔진
-│   └── CORE_AND_UTILITIES.md   # 시스템 트레이, 세마포어 싱글턴, 캘린더 & agy 실시간 알림
+│   └── CORE_AND_UTILITIES.md   # 시스템 트레이, 웹 UI 전원 제어, 브라우저 격리, 세마포어 싱글턴
 │
 ├── templates/                  # [기본 서식] 최초 실행 시 DB/설정 초기화용 템플릿 (*.example.json 8종)
 │
 ├── data/                       # [사용자 데이터] SQLite 중앙 데이터베이스 (Git 제외)
-│   └── app.db                  # emails, notes, diagrams, redmine, quick_launch 등 13개 테이블
+│   ├── app.db                  # emails, notes, diagrams, redmine, quick_launch 등 13개 테이블
+│   └── browser_profile/        # [브라우저 격리] 독립 사용자 프로파일 디렉토리 (Git 제외)
 │
 ├── emails/                     # [개인 데이터] 로컬 저장된 원본 .eml 파일 보관소 (Git 제외)
 │
@@ -84,7 +87,9 @@ D:\python
 │
 ├── services/                   # [백엔드 서비스 모듈 (Python)]
 │   ├── __init__.py
-│   ├── agy_service.py          # Antigravity CLI 세션 목록, 실시간 감시(알림/권한 대기) & 터미널 런처
+│   ├── agy_service.py          # 통합 AI 세션 컨트롤러, Antigravity CLI 파서, 감시(알림/승인 대기) & 삭제 라우팅
+│   ├── opencodex_service.py    # OpenCodex(ocx) SQLite 세션 카탈로그, 5ms 파일 락, rollout 파서 & 창 전환
+│   ├── system_service.py       # 웹 UI 기반 서버 완전 종료, Hot Reload(재시작) 및 단일 인스턴스 락 인계
 │   ├── db_service.py           # 중앙 SQLite WAL 모드 커넥션 풀 & 스키마 관리자
 │   ├── ai_search_service.py    # ONNX AI 시맨틱 검색 & 벡터 캐시 엔진
 │   ├── email_service.py        # EML 파서, 스레드 정규화, 카테고리 분류 & 첨부파일 추출
@@ -103,12 +108,12 @@ D:\python
 │   └── dialog_service.py       # Tkinter 기반 파일/폴더 선택 대화상자
 │
 └── web/                        # [프론트엔드 리소스]
-    ├── index.html              # 메인 UI 마크업 (업무&협업 / 뷰어 드롭다운, agy 런처)
-    ├── style.css               # 모던 다크 테마 CSS, agy 팝오버 메뉴 & 드롭다운 스타일
+    ├── index.html              # 메인 UI 마크업 (헤더 전원 제어, 드롭다운 메뉴, AI 세션 허브)
+    ├── style.css               # 모던 다크 테마 CSS, AI 세션 뱃지, Live Tail & 헤더 스타일
     ├── utiltools.ico           # 브라우저 창 Favicon
     └── js/                     # [프론트엔드 모듈 (JavaScript)]
         ├── app.js              # 탭 전환 네비게이션, 드롭다운 그룹 제어 및 초기화
-        ├── agy_sessions.js     # agy 세션 테이블, 듀얼 모드 알림 팝오버, 멀티 프로젝트 드롭다운
+        ├── agy_sessions.js     # 통합 AI 세션 테이블, 듀얼 모드 알림, Live Tail 모달 & 영구 삭제
         ├── console.js          # 하단 로그창, 스플리터 조절기 & 고도화된 토스트(Toast) 알림
         ├── drag_drop.js        # 공통 마우스 드래그 앤 드롭 핸들러
         ├── email_viewer.js     # EML 아카이브, 대화 스레드 타임라인 & 온디맨드 뷰어
@@ -126,7 +131,7 @@ D:\python
         ├── quick_launch.js     # 빠른 실행 렌더링, 인라인 편집 & 파일 선택 연동
         ├── shortcuts.js        # 폴더 바로가기 렌더링, 인라인 편집 & 터미널 런처
         ├── backup.js           # 통합 백업/복원 모달 제어 (JSON/ZIP Export/Import)
-        └── system.js           # 시스템 사양 & 타임스탬프 & agy 통합 토글 연동
+        └── system.js           # 시스템 사양, 백엔드 전원 제어([🔄 재시작], [🚪 종료]) 연동
 ```
 
 ---
@@ -176,10 +181,15 @@ python main.py
 
 * **AI 시맨틱 문맥 검색**:
   * `Ctrl + K`: 언제 어디서나 AI 시맨틱 검색 모달 즉시 호출
-* **Antigravity CLI (agy) 세션 런처 & 알림**:
-  * 세션 행의 **`[⚡ 실행]`** 버튼: 해당 프로젝트 디렉토리에서 대화형 터미널 즉시 오픈
+* **통합 AI 코딩 세션 허브 (Antigravity & OpenCodex)**:
+  * 세션 행 **`[⚡ 실행]`**: 해당 프로젝트 디렉토리에서 대화형 터미널 즉시 오픈 또는 이미 열려 있는 콘솔 창 화면 전면 전환
+  * 세션 행 **`[🔍 보기]`**: 인앱 실시간 Live Tail 모달 호출 (프롬프트, 사고 과정, 도구 호출 및 결과 스트리밍 열람)
+  * 세션 행 **`[🗑️]`**: 비활성 세션 영구 삭제 (비차단 확인 모달 후 정리, 실행 중인 활성 세션은 삭제 방어)
+  * 상단 필터 바: 엔진별(`전체`/`AGY`/`OpenCodex`) 라디오 필터 및 `📁 프로젝트 ▾` 멀티 체크박스 고속 필터링
   * 알림 종 모양 클릭: `1회 알림 (One-Shot)` vs `지속 알림 (Persistent)` 선택
-  * 상단 `📁 프로젝트 ▾`: 복수 프로젝트 워크스페이스 체크박스 멀티 필터링
+* **웹 UI 백엔드 전원 제어**:
+  * 상단 헤더 **`[🔄 재시작]`**: SQLite WAL 동기화 및 세마포어 해제 후 수정된 파이썬 코드를 반영하여 즉시 재시동 (Hot Reload)
+  * 상단 헤더 **`[🚪 종료]`**: 비차단 확인 후 백엔드 프로세스 및 시스템 트레이 완전 종료
 * **JS 실행기 단축키**:
   * `Ctrl + Enter` (또는 `Cmd + Enter`): 작성한 자바스크립트 코드 즉시 실행
   * `Tab` 키: 4칸 들여쓰기(`    `) 삽입
