@@ -5,7 +5,7 @@ import os
 import sys
 import eel
 
-from core.paths import WEB_DIR, APP_DIR, BUNDLE_DIR
+from core.paths import WEB_DIR, APP_DIR, BUNDLE_DIR, BROWSER_PROFILE_DIR
 import core.logger
 
 # 0. 백엔드 시스템 로거 초기화
@@ -34,23 +34,26 @@ import services.mock_data_service
 import services.redmine_service
 import services.image_service
 import services.agy_service
+import services.opencodex_service
 
 # 3. 코어 트레이 관리자 모듈 로드
 from core.tray import TrayManager
 
-# 윈도우 실행 옵션 (크롬 메모리 최적화 및 V8 가비지 컬렉터 활성화)
+# 윈도우 실행 옵션 (사용자 기본 브라우저 간섭 방지: 격리 프로파일 및 메모리 최적화)
 start_options = {
     'mode': 'chrome',      # 'chrome' -> 'edge' -> 'default'
     'size': (960, 680),    # 창 크기
     'port': 0,             # 임의 포트 자동 할당
     'cmdline_args': [
+        f'--user-data-dir={BROWSER_PROFILE_DIR}',
+        '--no-first-run',
+        '--no-default-browser-check',
         '--js-flags=--expose-gc --max-old-space-size=128',
         '--disable-extensions',
         '--disable-background-networking',
         '--disable-component-update',
         '--disable-sync',
-        '--disable-default-apps',
-        '--no-default-browser-check'
+        '--disable-default-apps'
     ],
     'close_callback': lambda page, sockets: None  # 창을 닫아도 트레이 상주 유지
 }

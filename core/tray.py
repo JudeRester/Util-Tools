@@ -6,7 +6,7 @@ import threading
 from PIL import Image, ImageDraw
 import pystray
 import eel
-from core.paths import ICON_PATH, BUNDLE_DIR
+from core.paths import ICON_PATH, BUNDLE_DIR, BROWSER_PROFILE_DIR
 
 
 _tray_instance = None
@@ -33,6 +33,18 @@ class TrayManager:
         self.on_exit = on_exit
         self.ico_file = ICON_PATH
         self.tray_icon = None
+
+        # 사용자 기본 브라우저 프로파일 간섭 방지: 격리된 앱 전용 프로파일 디렉토리 강제
+        try:
+            os.makedirs(BROWSER_PROFILE_DIR, exist_ok=True)
+        except Exception:
+            pass
+
+        cmdline_args = self.start_options.setdefault('cmdline_args', [])
+        if not any(arg.startswith('--user-data-dir=') for arg in cmdline_args):
+            cmdline_args.insert(0, f'--user-data-dir={BROWSER_PROFILE_DIR}')
+        if '--no-first-run' not in cmdline_args:
+            cmdline_args.append('--no-first-run')
 
     def get_tray_image(self):
         """트레이 아이콘 이미지 로드 (utiltools.ico 우선 -> 실패 시 기본 이미지 생성)"""

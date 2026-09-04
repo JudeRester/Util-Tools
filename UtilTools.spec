@@ -61,6 +61,7 @@ hidden_imports = [
     'services.redmine_service',
     'services.image_service',
     'services.agy_service',
+    'services.opencodex_service',
 ] + onnx_hidden + tok_hidden
 
 a = Analysis(
