@@ -116,6 +116,8 @@ def get_opencodex_sessions(limit: int = 60) -> list:
                 SELECT thread_id, display_title, cwd, source_created_at, source_updated_at,
                        source_kind, git_branch, model_provider
                 FROM local_thread_catalog
+                WHERE (host_id = 'local' OR source_kind IN ('cli', 'vscode', 'local'))
+                  AND cwd IS NOT NULL AND cwd != ''
                 ORDER BY source_updated_at DESC
                 LIMIT ?
             """, (limit * 2,))
@@ -124,9 +126,12 @@ def get_opencodex_sessions(limit: int = 60) -> list:
                 tid = row["thread_id"]
                 if not tid or tid in seen_ids:
                     continue
-                seen_ids.add(tid)
 
                 cwd = _clean_workspace_path(row["cwd"] or "")
+                if not cwd:
+                    continue
+                seen_ids.add(tid)
+
                 title = (row["display_title"] or "").strip()
                 if not title:
                     title = "제목 없는 OpenCodex 세션"
@@ -167,6 +172,7 @@ def get_opencodex_sessions(limit: int = 60) -> list:
             cursor = conn.execute("""
                 SELECT id, title, cwd, created_at, updated_at, model, tokens_used, rollout_path, first_user_message
                 FROM threads
+                WHERE cwd IS NOT NULL AND cwd != ''
                 ORDER BY updated_at DESC
                 LIMIT ?
             """, (limit * 2,))
@@ -188,8 +194,11 @@ def get_opencodex_sessions(limit: int = 60) -> list:
                 if len(sessions) >= limit:
                     continue
 
-                seen_ids.add(tid)
                 cwd = _clean_workspace_path(row["cwd"] or "")
+                if not cwd:
+                    continue
+                seen_ids.add(tid)
+
                 title = (row["title"] or row["first_user_message"] or "").strip()
                 if not title:
                     title = "제목 없는 OpenCodex 세션"
@@ -223,7 +232,7 @@ def get_opencodex_sessions(limit: int = 60) -> list:
             core.logger.log_event("warn", "ocx", f"state_5.sqlite 조회 오류: {e}")
 
     # 최종 정렬 (최신 수정순)
-    sessions.sort(key=lambda s: s.get("updated_at") or "", reverse=True)
+    sessions.sort(key=lambda s: s.get("sort_timestamp", 0.0), reverse=True)
     return sessions[:limit]
 
 
