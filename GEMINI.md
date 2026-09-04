@@ -13,14 +13,14 @@
 
 3. **작업 완료 처리 전 수정한 파일 목록화 및 Syntax Check 의무 실행**:
    - **① 수정 파일 목록화**: 작업 완료 보고 전 반드시 `git status --short`로 변경된 파일 목록을 확인하고 기록합니다.
-   - **② 파일 유형별 구문 검사 (Syntax Check)**:
+   - **② 통합 원스톱 무결성 검증 (권장)**:
+     - `python scripts/verify_integrity.py`
+     - 동적 탐색(Dynamic Discovery) 기반으로 Python 전수 컴파일, 백엔드 서비스 전수 임포트 & SQLite DB 검증, 프론트엔드 JS 전수 문법 검사(`node -c`), CSS 괄호 검사, 트레이 아이콘 검증을 3초 이내에 자동 일괄 수행합니다. (파일이 추가되어도 스크립트 수정 불필요)
+   - **③ 개별 수동 검증 파이프라인 (필요 시)**:
      - `*.py / *.pyw`: `python -m py_compile <수정된 파이썬 파일들>`
      - `*.js`: `node -c <수정된 JS 파일들>`
-     - `*.css`: 중괄호 짝 일치(`{` == `}`) 및 파싱 검사 `python -c "import re; t=open('web/style.css', encoding='utf-8').read(); c=re.sub(r'/\*.*?\*/','',t,flags=re.DOTALL); assert c.count('{')==c.count('}'), 'CSS brace mismatch!'"`
+     - `*.css`: 중괄호 짝 일치(`{` == `}`) 검사
      - `*.json`: `python -c "import json; json.load(open('<수정된 JSON>', encoding='utf-8'))"`
-   - **③ 진입점 무결성 검증**: `python -c "from core.paths import BUNDLE_DIR; from core.tray import TrayManager; tm = TrayManager(BUNDLE_DIR); assert tm.get_tray_image() is not None"`
-   - **④ 백엔드 서비스 레이어 & SQLite DB 검증**: `python -c "import services.db_service as d, services.redmine_service, services.email_service, services.ai_search_service; d.init_db()"`
-   - **⑤ 프론트엔드 JS 전체 문법 검증**: `node -c web/js/*.js`
 
 4. **직관적·기술적 용어 사용 및 과장 표현 지양 원칙 (Objective Technical Phrasing)**:
    - 코드, 주석, 문서(README, Docs), 커밋 메시지, 기획서 및 사용자 보고 시 **과장되거나 모호한 마케팅성 수식어 사용을 엄격히 금지**합니다.
