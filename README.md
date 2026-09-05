@@ -29,6 +29,7 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 
 | 문서명 | 주요 다루는 기술 영역 및 아키텍처 | 바로가기 링크 |
 | :--- | :--- | :--- |
+| **🤝 Handover Guide (인수인계서)** | • **개발 환경 셋업, 핵심 수명주기 아키텍처, 작업 완료 전 무결성 검증 체크리스트**<br>• 경로 참조 원칙, 비차단 UI 규정 및 무결성 검증 파이프라인 | [📖 `docs/HANDOVER_GUIDE.md`](docs/HANDOVER_GUIDE.md) |
 | **🤖 AI Coding Sessions Hub** | • **통합 AI 세션 허브: Antigravity CLI(`agy`) & OpenCodex(`ocx`) 듀얼 엔진 아키텍처**<br>• **5ms 논블로킹 활성 락 검사**, `mode=ro` SQLite 카탈로그 조회, 실시간 Live Tail 파서, 창 전환 | [📖 `docs/AI_CODING_SESSIONS.md`](docs/AI_CODING_SESSIONS.md) |
 | **🗄️ Database Architecture & Schema** | • **중앙 SQLite DB(`data/app.db`) 13개 테이블 전체 ERD & 스키마 명세**<br>• WAL 모드 및 고성능 PRAGMA 최적화, 인덱스 커버리지, 외부 AI CLI DB 연동 규격 | [📖 `docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) |
 | **🦊 Redmine Integration** | • **Redmine REST API 연동, 일감/위키 대시보드, SQLite 오프라인 캐시**<br>• **주요 관심 프로젝트(⭐ 즐겨찾기) 우선순위 필터링**, 백그라운드 폴링 & 트레이 알림 | [📖 `docs/REDMINE_INTEGRATION.md`](docs/REDMINE_INTEGRATION.md) |
@@ -203,4 +204,4 @@ python main.py
 
 ## 📄 라이선스 (License)
 
-이 프로젝트는 자유롭게 수정하고 사용할 수 있는 개인 유틸리티 툴킷입니다.
+이 프로젝트는 [MIT License](LICENSE)에 따라 자유롭게 사용, 수정, 배포 및 상업적 이용이 가능합니다. 전문은 [LICENSE](LICENSE) 파일을 참조하십시오.
