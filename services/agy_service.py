@@ -993,7 +993,8 @@ def get_agy_session_live_tail(conversation_id: str, max_steps: int = 15):
         latest_step = latest_event.get("step_index", 0) if latest_event else 0
 
         # 권한 대기 여부 실시간 판별
-        is_perm, perm_desc = _check_transcript_permission_requested(latest_event) if latest_event else (False, "")
+        perm_type, perm_desc = _check_transcript_permission_requested(latest_event) if latest_event else ("", "")
+        is_perm = bool(perm_type)
 
         rendered_steps = []
         for s in recent:
@@ -1161,19 +1162,26 @@ def _get_last_valid_transcript_event(t_path: str) -> dict:
 
 def _check_transcript_permission_requested(last_event: dict) -> tuple:
     """
-    마지막 transcript 이벤트가 사용자의 권한 승인(BypassSandbox 등)이나 인터랙티브 질문을 대기 중인지 판별
-    에이전트가 도구를 호출한 직후 터미널 승인을 대기하는 실시간 시점에 정확히 포착합니다.
-    반환값: (is_permission_required: bool, description: str)
+    마지막 transcript 이벤트가 사용자의 권한 승인(BypassSandbox 등)이나 인터랙티브 질문,
+    또는 터미널 도구 실행 승인을 대기 중인지 판별합니다.
+    반환값: (perm_type: str, description: str)
+      - "immediate": 즉시 알림 발송 대상 (BypassSandbox, ask_question, request_feedback)
+      - "pending": 터미널 도구 호출 (1주기 지연 관찰 대상)
+      - "": 권한 대기 아님
     """
     if not isinstance(last_event, dict) or last_event.get("type") != "PLANNER_RESPONSE":
-        return False, ""
+        return "", ""
 
     tool_calls = last_event.get("tool_calls") or []
+    if not tool_calls:
+        return "", ""
+
+    # 1. 구조적 즉시 승인/응답 필요 도구 검사 (즉시 발송 대상)
     for tc in tool_calls:
         if not isinstance(tc, dict):
             continue
 
-        # tc dict 구조 정규화: OpenAI/Protobuf 형태 {"function": {"name":..., "arguments":...}} 및 플랫 형태 {"name":..., "args":...} 모두 지원
+        # tc dict 구조 정규화: OpenAI/Protobuf 형태 및 플랫 형태 모두 지원
         if "function" in tc and isinstance(tc["function"], dict):
             name = tc["function"].get("name", "")
             args = tc["function"].get("arguments", {})
@@ -1191,12 +1199,30 @@ def _check_transcript_permission_requested(last_event: dict) -> tuple:
             bypass = args.get("BypassSandbox")
             if str(bypass).lower() in ("true", "1", "yes"):
                 summary = args.get("toolSummary") or "터미널 명령어 실행 승인"
-                return True, f"명령어 실행 승인 대기 ({summary})"
+                return "immediate", f"명령어 실행 승인 대기 ({summary})"
 
         if name in ("ask_question", "request_feedback"):
-            return True, "사용자 응답/선택 대기"
+            return "immediate", "사용자 응답/선택 대기"
 
-    return False, ""
+    # 2. 일반 터미널 도구 호출 검사 (1주기 지연 관찰 대상)
+    first_tc = tool_calls[0] if isinstance(tool_calls[0], dict) else {}
+    if "function" in first_tc and isinstance(first_tc["function"], dict):
+        fn_name = first_tc["function"].get("name", "")
+        fn_args = first_tc["function"].get("arguments", {})
+    else:
+        fn_name = first_tc.get("name", "")
+        fn_args = first_tc.get("args", {})
+
+    if isinstance(fn_args, str):
+        try:
+            fn_args = json.loads(fn_args)
+        except Exception:
+            fn_args = {}
+
+    summary = fn_args.get("toolSummary") if isinstance(fn_args, dict) else ""
+    desc_tool = summary or fn_name or "도구"
+    return "pending", f"터미널 도구 실행 승인 대기 ({desc_tool})"
+
 
 
 def _check_transcript_turn_completed(conv_id: str, last_step: int):
@@ -1258,19 +1284,43 @@ def _watcher_loop():
             t_path = os.path.join(AGY_BRAIN_DIR, cid, ".system_generated", "logs", "transcript.jsonl")
             last_event = _get_last_valid_transcript_event(t_path)
 
-            is_perm = False
+            perm_type = ""
             perm_step = 0
             perm_desc = ""
 
             if last_event and last_event.get("step_index", 0) > last_step:
-                is_perm, perm_desc = _check_transcript_permission_requested(last_event)
+                perm_type, perm_desc = _check_transcript_permission_requested(last_event)
                 perm_step = last_event.get("step_index", 0)
 
-            # 권한 승인 대기 최초 1회 알림 (동일 스텝 중복 알림 방지)
-            if is_perm and perm_step > last_perm_step:
+            should_notify_perm = False
+
+            if perm_type == "immediate":
+                # 1. 즉시 발송 대상 (BypassSandbox, ask_question 등): 동일 스텝 최초 1회 즉각 발송
+                if perm_step > last_perm_step:
+                    should_notify_perm = True
+            elif perm_type == "pending":
+                # 2. 지연 관찰 대상 (일반 run_command 등): 1주기(2.5초) 이상 동일 스텝 정체 확인 시 실제 터미널 대기로 판정
+                pending_step = info.get("pending_perm_step", 0)
+                if pending_step == perm_step and perm_step > last_perm_step:
+                    should_notify_perm = True
+                elif perm_step > last_perm_step:
+                    # 첫 관찰 시점: pending_perm_step에 스텝 기록 후 다음 주기 관찰
+                    with _watcher_lock:
+                        if cid in _watched_sessions:
+                            _watched_sessions[cid]["pending_perm_step"] = perm_step
+            else:
+                # 대기 상태가 아니면 pending 초기화
+                if info.get("pending_perm_step"):
+                    with _watcher_lock:
+                        if cid in _watched_sessions:
+                            _watched_sessions[cid]["pending_perm_step"] = 0
+
+            # 권한 승인 대기 알림 발송
+            if should_notify_perm:
                 with _watcher_lock:
                     if cid in _watched_sessions:
                         _watched_sessions[cid]["last_perm_step"] = perm_step
+                        _watched_sessions[cid]["pending_perm_step"] = 0
 
                 title = info.get("title") or _get_annotated_title(cid) or "세션"
                 short_id = cid[:8]
@@ -1289,6 +1339,7 @@ def _watcher_loop():
                     pass
 
                 core.logger.log_event("info", "agy", f"세션 권한 승인 대기 알림: #{short_id}", f"사유: {perm_desc}")
+
 
             # [B] 최종 작업 완료 감지
             is_done, latest_step = _check_transcript_turn_completed(cid, last_step)
