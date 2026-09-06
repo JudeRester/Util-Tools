@@ -14,6 +14,8 @@ block_cipher = None
 # Collect ONNX Runtime & Tokenizers native binaries and data files
 onnx_datas, onnx_binaries, onnx_hidden = collect_all('onnxruntime')
 tok_datas, tok_binaries, tok_hidden = collect_all('tokenizers')
+webview_datas, webview_binaries, webview_hidden = collect_all('webview')
+pythonnet_datas, pythonnet_binaries, pythonnet_hidden = collect_all('pythonnet')
 
 # Static Bundled Assets (read via sys._MEIPASS / core.paths.BUNDLE_DIR)
 added_datas = [
@@ -21,7 +23,7 @@ added_datas = [
     ('utiltools.ico', '.'),
     ('templates', 'templates'),
     ('models', 'models'),
-] + onnx_datas + tok_datas
+] + onnx_datas + tok_datas + webview_datas + pythonnet_datas
 
 # Hidden dynamic imports required at runtime
 hidden_imports = [
@@ -41,6 +43,8 @@ hidden_imports = [
     'core.tray',
     'core.logger',
     'core.single_instance',
+    'core.edge_widget',
+    'core.fullscreen_guard',
     'services',
     'services.db_service',
     'services.system_service',
@@ -62,12 +66,13 @@ hidden_imports = [
     'services.image_service',
     'services.agy_service',
     'services.opencodex_service',
-] + onnx_hidden + tok_hidden
+] + onnx_hidden + tok_hidden + webview_hidden + pythonnet_hidden
+
 
 a = Analysis(
     ['main.py'],
     pathex=['.'],
-    binaries=onnx_binaries + tok_binaries,
+    binaries=onnx_binaries + tok_binaries + webview_binaries + pythonnet_binaries,
     datas=added_datas,
     hiddenimports=hidden_imports,
     hookspath=[],
