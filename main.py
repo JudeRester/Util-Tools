@@ -36,8 +36,11 @@ import services.image_service
 import services.agy_service
 import services.opencodex_service
 
-# 3. 코어 트레이 관리자 모듈 로드
+import socket
+import time
+import webview
 from core.tray import TrayManager
+from core.edge_widget import EdgeWidgetManager
 
 # 윈도우 실행 옵션 (사용자 기본 브라우저 간섭 방지: 격리 프로파일 및 메모리 최적화)
 start_options = {
@@ -57,6 +60,18 @@ start_options = {
     ],
     'close_callback': lambda page, sockets: None  # 창을 닫아도 트레이 상주 유지
 }
+
+
+def discover_available_port(start_port: int = 8000, max_attempts: int = 50) -> int:
+    """Eel 및 pywebview 간 통신을 위한 로컬 가용 포트 자동 검색"""
+    for port in range(start_port, start_port + max_attempts):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(('127.0.0.1', port))
+                return port
+            except OSError:
+                continue
+    raise RuntimeError("가용 로컬 포트를 탐색하지 못했습니다.")
 
 
 def app_cleanup():
@@ -92,7 +107,7 @@ def app_cleanup():
         except Exception:
             pass
 
-        core.logger.log_info("Lifecycle", "🛑 Utility Toolkit이 안전하게 종료되었습니다.")
+        core.logger.log_info("Lifecycle", "[Lifecycle] Utility Toolkit 정상 종료 완료")
     except Exception as ex:
         core.logger.log_error("Lifecycle", f"종료 정리 중 예외 발생: {ex}", exc=ex)
 
@@ -102,14 +117,52 @@ def main():
     from core.single_instance import get_single_instance
     single_inst = get_single_instance()
     if not single_inst.acquire():
-        core.logger.log_warn("Lifecycle", "⚠️ 프로그램이 이미 실행 중입니다. 기존 인스턴스를 활성화하고 새 프로세스를 종료합니다.")
+        core.logger.log_warn("Lifecycle", "[Lifecycle] 프로그램이 이미 실행 중입니다. 기존 인스턴스를 활성화하고 프로세스를 종료합니다.")
         single_inst.activate_existing_window()
         sys.exit(0)
 
-    core.logger.log_info("Lifecycle", "🛠️ Utility Toolkit을 시작합니다 (모듈화 아키텍처 / 트레이 상주 모드)...")
-    tray_manager = TrayManager(BUNDLE_DIR, start_options, on_exit=app_cleanup)
+    core.logger.log_info("Lifecycle", "[Lifecycle] Utility Toolkit 시작 (하이브리드 아키텍처: Eel + pywebview Edge Widget)")
+
+    # 1. Eel 가용 포트 탐색 및 주입
+    assigned_port = discover_available_port(8000, 50)
+    start_options['port'] = assigned_port
+
+
+    # 2. Edge Widget Manager 인스턴스화 및 창 등록
+    edge_manager = EdgeWidgetManager()
+    edge_manager.create_window(assigned_port)
+    edge_manager.start_guard()
+
+    # 3. 통합 종료 핸들러 정의
+    def shutdown_all():
+        try:
+            edge_manager.destroy()
+        except Exception:
+            pass
+        app_cleanup()
+
+    # 4. 백그라운드 트레이 및 Eel 웹서버 시작 (Non-blocking)
+    tray_manager = TrayManager(BUNDLE_DIR, start_options, on_exit=shutdown_all)
     tray_manager.start()
+
+    # 5. Eel 서버 포트 바인딩 완료 대기 (최대 3초)
+    for _ in range(30):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(0.1)
+                if s.connect_ex(('127.0.0.1', assigned_port)) == 0:
+                    break
+        except Exception:
+            pass
+        time.sleep(0.1)
+
+    # 6. 메인 스레드: pywebview GUI 이벤트 루프 실행
+    try:
+        webview.start(debug=False)
+    finally:
+        shutdown_all()
 
 
 if __name__ == '__main__':
     main()
+

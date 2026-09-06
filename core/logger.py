@@ -51,13 +51,22 @@ def log_event(level: str, category: str, message: str, details: str = ''):
     }
     _log_buffer.append(entry)
 
-    # 표준 콘솔 출력
-    print(f"[{time_str}] [{level.upper()}] [{category}] {message}")
-    if details:
-        print(f"    {details}")
+    # 표준 콘솔 출력 (인코딩 안전 처리)
+    try:
+        print(f"[{time_str}] [{level.upper()}] [{category}] {message}")
+        if details:
+            print(f"    {details}")
+    except Exception:
+        try:
+            enc = getattr(sys.stdout, 'encoding', None) or 'utf-8'
+            safe_msg = str(message).encode(enc, errors='replace').decode(enc)
+            print(f"[{time_str}] [{level.upper()}] [{category}] {safe_msg}")
+        except Exception:
+            pass
 
     _broadcast_to_frontend(entry)
     return entry
+
 
 
 def log_info(category: str, message: str, details: str = ''):
@@ -97,8 +106,20 @@ def _global_excepthook(exc_type, exc_value, exc_traceback):
 
 def setup_logger():
     """전역 예외 핸들러 등록 및 초기화 로그"""
+    if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+        try:
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+    if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+        try:
+            sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+
     sys.excepthook = _global_excepthook
-    log_info("System", "Utility Toolkit 백엔드 로거가 초기화되었습니다.")
+    log_info("System", "Utility Toolkit 백엔드 로거 초기화 완료")
+
 
 
 @eel.expose
