@@ -1,0 +1,375 @@
+/* ==========================================================================
+   Util-Tools Quick Widget Stylesheet (web/widget.css)
+   ========================================================================== */
+
+:root {
+    --bg-base: #14141e;
+    --bg-surface: #1e1e2d;
+    --bg-card: #252538;
+    --bg-hover: #32324a;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --primary: #6366f1;
+    --primary-hover: #4f46e5;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --danger: #ef4444;
+    --success: #10b981;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Malgun Gothic", sans-serif;
+}
+
+body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: transparent;
+}
+
+/* ==========================================================================
+   1. Edge Handle Mode (20px x 120px)
+   ========================================================================== */
+
+.edge-handle {
+    width: 20px;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(30, 30, 45, 0.88);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.edge-handle:hover {
+    background: rgba(99, 102, 241, 0.9);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.edge-right .edge-handle {
+    border-radius: 8px 0 0 8px;
+    border-right: none;
+}
+
+.edge-left .edge-handle {
+    border-radius: 0 8px 8px 0;
+    border-left: none;
+}
+
+.handle-pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.handle-grip {
+    width: 3px;
+    height: 36px;
+    background: rgba(255, 255, 255, 0.45);
+    border-radius: 2px;
+}
+
+.edge-handle:hover .handle-grip {
+    background: #ffffff;
+}
+
+/* ==========================================================================
+   2. Expanded Widget Panel Mode (380px x 620px)
+   ========================================================================== */
+
+.widget-panel {
+    width: 380px;
+    height: 620px;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+    color: var(--text-main);
+    overflow: hidden;
+}
+
+.edge-right .widget-panel {
+    border-radius: 12px 0 0 12px;
+    border-right: none;
+}
+
+.edge-left .widget-panel {
+    border-radius: 0 12px 12px 0;
+    border-left: none;
+}
+
+/* State Toggling */
+body.state-collapsed .edge-handle {
+    display: flex;
+}
+body.state-collapsed .widget-panel {
+    display: none;
+}
+
+body.state-expanded .edge-handle {
+    display: none;
+}
+body.state-expanded .widget-panel {
+    display: flex;
+}
+
+/* Header */
+.widget-header {
+    height: 44px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-base);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ctrl-btn {
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.12s, color 0.12s;
+}
+
+.ctrl-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-main);
+}
+
+.ctrl-btn.active {
+    background: var(--primary);
+    color: #fff;
+}
+
+/* Tabs */
+.widget-tabs {
+    display: flex;
+    background: var(--bg-base);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0 6px;
+    gap: 2px;
+}
+
+.wtab-btn {
+    flex: 1;
+    padding: 8px 4px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+}
+
+.wtab-btn:hover {
+    color: var(--text-main);
+}
+
+.wtab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+/* Body */
+.widget-body {
+    flex: 1;
+    padding: 12px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.wtab-content {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+}
+
+.wtab-content.active {
+    display: flex;
+}
+
+.section-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.mini-action-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.mini-action-btn:hover {
+    color: var(--text-main);
+    background: var(--bg-hover);
+}
+
+/* Tab 1: Quick Launch */
+.quick-launch-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.launch-item-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.12s, transform 0.08s;
+}
+
+.launch-item-card:hover {
+    background: var(--bg-hover);
+    transform: translateY(-1px);
+}
+
+.launch-item-icon {
+    font-size: 16px;
+}
+
+.launch-item-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.launch-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 30px 10px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+/* Tab 2: Quick Memo */
+.widget-memo-area {
+    flex: 1;
+    width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-main);
+    padding: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+    user-select: text;
+}
+
+.widget-memo-area:focus {
+    border-color: var(--primary);
+}
+
+.status-indicator {
+    font-size: 10px;
+    color: var(--success);
+}
+
+/* Tab 3: System Status */
+.system-metric-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.metric-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 10px 12px;
+}
+
+.metric-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.metric-value-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.metric-val {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-main);
+    min-width: 44px;
+}
+
+.progress-track {
+    flex: 1;
+    height: 8px;
+    background: var(--bg-base);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.metric-detail {
+    font-size: 12px;
+    color: var(--text-main);
+    margin-top: 4px;
+}

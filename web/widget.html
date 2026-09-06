@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UtilTools Quick Widget</title>
+    <link rel="icon" type="image/x-icon" href="utiltools.ico">
+    <link rel="stylesheet" href="widget.css">
+    <!-- Eel RPC 백엔드 연동 -->
+    <script type="text/javascript" src="/eel.js"></script>
+</head>
+<body class="edge-right state-collapsed">
+    <!-- 1. 초슬림 엣지 핸들 (20px x 120px) -->
+    <div id="edge-handle" class="edge-handle pywebview-drag-region" title="마우스 오버 시 확장 / 드래그하여 이동">
+        <div class="handle-pill">
+            <span class="handle-grip"></span>
+        </div>
+    </div>
+
+    <!-- 2. 확장 퀵 위젯 패널 (380px x 620px) -->
+    <div id="widget-panel" class="widget-panel">
+        <!-- 상단 헤더 (드래그 가능 영역) -->
+        <header class="widget-header pywebview-drag-region">
+            <div class="header-title">
+                <span class="header-icon">🛠️</span>
+                <span class="header-text">Quick Widget</span>
+            </div>
+            <div class="header-controls">
+                <button id="btn-pin" class="ctrl-btn" title="창 고정 (마우스 벗어나도 닫히지 않음)">📌</button>
+                <button id="btn-open-main" class="ctrl-btn" title="메인 앱 열기">🗔</button>
+                <button id="btn-collapse" class="ctrl-btn" title="접기">✕</button>
+            </div>
+        </header>
+
+        <!-- 퀵 위젯 탭 네비게이션 -->
+        <nav class="widget-tabs">
+            <button class="wtab-btn active" data-tab="launch">⚡ 빠른 실행</button>
+            <button class="wtab-btn" data-tab="memo">📝 퀵 메모</button>
+            <button class="wtab-btn" data-tab="system">📊 시스템</button>
+        </nav>
+
+        <!-- 탭 컨텐츠 영역 -->
+        <main class="widget-body">
+            <!-- 탭 1: 빠른 실행 -->
+            <section id="wtab-launch" class="wtab-content active">
+                <div class="section-title-row">
+                    <span>자주 쓰는 도구</span>
+                    <button id="btn-refresh-launch" class="mini-action-btn" title="새로고침">🔄</button>
+                </div>
+                <div id="quick-launch-list" class="quick-launch-grid">
+                    <!-- JS 동적 렌더링 -->
+                    <div class="launch-empty">프로그램 목록을 불러오는 중...</div>
+                </div>
+            </section>
+
+            <!-- 탭 2: 퀵 메모 -->
+            <section id="wtab-memo" class="wtab-content">
+                <div class="section-title-row">
+                    <span>간편 메모장</span>
+                    <span id="memo-status" class="status-indicator">자동 저장됨</span>
+                </div>
+                <textarea id="widget-memo-input" class="widget-memo-area" placeholder="여기에 빠른 메모를 작성하세요... (자동 저장)"></textarea>
+            </section>
+
+            <!-- 탭 3: 시스템 상태 -->
+            <section id="wtab-system" class="wtab-content">
+                <div class="section-title-row">
+                    <span>실시간 리소스</span>
+                    <button id="btn-refresh-sys" class="mini-action-btn" title="새로고침">🔄</button>
+                </div>
+                <div class="system-metric-cards">
+                    <div class="metric-card">
+                        <div class="metric-label">CPU 사용률</div>
+                        <div class="metric-value-row">
+                            <span id="metric-cpu-val" class="metric-val">--%</span>
+                            <div class="progress-track"><div id="metric-cpu-bar" class="progress-fill" style="width: 0%"></div></div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">메모리 사용률</div>
+                        <div class="metric-value-row">
+                            <span id="metric-mem-val" class="metric-val">--%</span>
+                            <div class="progress-track"><div id="metric-mem-bar" class="progress-fill" style="width: 0%"></div></div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">배터리 / 전원</div>
+                        <div class="metric-detail" id="metric-power-val">조회 중...</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="js/widget.js"></script>
+</body>
+</html>
