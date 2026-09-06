@@ -11,9 +11,12 @@ import socket
 import datetime
 import urllib.request
 import json
+import ctypes
+from ctypes import wintypes
 import eel
 from core.paths import APP_DIR
 import core.logger
+
 
 
 def _get_public_ip():
@@ -202,6 +205,88 @@ def check_network_ping(host="8.8.8.8"):
         return {"status": "error", "message": str(e)}
 
 
+# ---------------------------------------------------------
+# Win32 시스템 성능 메트릭 (위젯 및 모니터링 공용)
+# ---------------------------------------------------------
+class _FILETIME(ctypes.Structure):
+    _fields_ = [("dwLowDateTime", wintypes.DWORD), ("dwHighDateTime", wintypes.DWORD)]
+
+class _MEMORYSTATUSEX(ctypes.Structure):
+    _fields_ = [
+        ("dwLength", wintypes.DWORD),
+        ("dwMemoryLoad", wintypes.DWORD),
+        ("ullTotalPhys", ctypes.c_uint64),
+        ("ullAvailPhys", ctypes.c_uint64),
+        ("ullTotalPageFile", ctypes.c_uint64),
+        ("ullAvailPageFile", ctypes.c_uint64),
+        ("ullTotalVirtual", ctypes.c_uint64),
+        ("ullAvailVirtual", ctypes.c_uint64),
+        ("sullAvailExtendedVirtual", ctypes.c_uint64),
+    ]
+
+_last_idle_time = 0
+_last_kernel_time = 0
+_last_user_time = 0
+
+@eel.expose
+def get_system_metrics():
+    """실시간 CPU 및 RAM 사용률 조회 (ctypes 기반 초경량 논블로킹)"""
+    global _last_idle_time, _last_kernel_time, _last_user_time
+    mem_load = 0
+    cpu_percent = 0.0
+
+    try:
+        # RAM 사용률
+        stat = _MEMORYSTATUSEX()
+        stat.dwLength = ctypes.sizeof(_MEMORYSTATUSEX)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+            mem_load = int(stat.dwMemoryLoad)
+
+        # CPU 사용률 (직전 호출과의 델타 계산)
+        idle_ft = _FILETIME()
+        kernel_ft = _FILETIME()
+        user_ft = _FILETIME()
+        if ctypes.windll.kernel32.GetSystemTimes(ctypes.byref(idle_ft), ctypes.byref(kernel_ft), ctypes.byref(user_ft)):
+            def _to_i(ft):
+                return (ft.dwHighDateTime << 32) | ft.dwLowDateTime
+
+            i = _to_i(idle_ft)
+            k = _to_i(kernel_ft)
+            u = _to_i(user_ft)
+
+            if _last_idle_time != 0:
+                d_idle = i - _last_idle_time
+                d_total = (k - _last_kernel_time) + (u - _last_user_time)
+                if d_total > 0:
+                    cpu_percent = max(0.0, min(100.0, (1.0 - (d_idle / d_total)) * 100.0))
+            _last_idle_time, _last_kernel_time, _last_user_time = i, k, u
+
+        return {
+            "status": "success",
+            "data": {
+                "cpu_percent": round(cpu_percent, 1),
+                "memory_percent": mem_load,
+                "power_status": "AC 전원 연결됨"
+            }
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@eel.expose
+def open_main_window():
+    """트레이 관리자를 통해 메인 애플리케이션 창 열기/활성화"""
+    try:
+        from core.tray import get_tray_instance
+        tm = get_tray_instance()
+        if tm:
+            tm.open_or_show_window()
+            return {"status": "success"}
+        return {"status": "error", "message": "TrayManager 인스턴스를 찾을 수 없습니다."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @eel.expose
 def shutdown_app():
     """
@@ -214,19 +299,10 @@ def shutdown_app():
         try:
             from core.tray import get_tray_instance
             tm = get_tray_instance()
-            if tm and tm.tray_icon:
-                try:
-                    tm.tray_icon.stop()
-                except Exception:
-                    pass
-            if tm and tm.on_exit:
-                try:
-                    tm.on_exit()
-                except Exception:
-                    pass
+            if tm:
+                tm.request_shutdown()
         except Exception as e:
             core.logger.log_event("warn", "system", f"종료 정리 예외: {e}")
-        os._exit(0)
 
     threading.Thread(target=_do_shutdown, daemon=True).start()
     return {"status": "success", "message": "애플리케이션과 백엔드 서버를 완전히 종료합니다."}
@@ -241,21 +317,6 @@ def restart_app():
     def _do_restart():
         time.sleep(0.4)
         core.logger.log_event("info", "system", "Web UI 요청에 의한 백엔드 서버 재시작 시작")
-        try:
-            from core.tray import get_tray_instance
-            tm = get_tray_instance()
-            if tm and tm.tray_icon:
-                try:
-                    tm.tray_icon.stop()
-                except Exception:
-                    pass
-            if tm and tm.on_exit:
-                try:
-                    tm.on_exit()
-                except Exception:
-                    pass
-        except Exception as e:
-            core.logger.log_event("warn", "system", f"재시작 정리 예외: {e}")
 
         # 신규 프로세스 실행 커맨드 구성
         try:
@@ -274,8 +335,15 @@ def restart_app():
         except Exception as e:
             core.logger.log_event("error", "system", f"신규 프로세스 구동 실패: {e}")
 
-        os._exit(0)
+        try:
+            from core.tray import get_tray_instance
+            tm = get_tray_instance()
+            if tm:
+                tm.request_shutdown()
+        except Exception as e:
+            core.logger.log_event("warn", "system", f"재시작 정리 예외: {e}")
 
     threading.Thread(target=_do_restart, daemon=True).start()
     return {"status": "success", "message": "백엔드 서버를 재시작하는 중입니다..."}
+
 
