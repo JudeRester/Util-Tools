@@ -80,16 +80,23 @@ class TrayManager:
         """트레이 메뉴: 창 열기"""
         self.open_or_show_window()
 
-    def on_tray_quit(self, icon, item):
+    def on_tray_quit(self, icon=None, item=None):
         """트레이 메뉴: 프로그램 완전 종료"""
-        if self.tray_icon:
-            try:
+        self.request_shutdown()
+
+    def request_shutdown(self):
+        """애플리케이션 전역 안전 종료 요청 (os._exit 배제 및 이벤트 루프 정상 회수)"""
+        try:
+            if self.tray_icon:
                 self.tray_icon.stop()
-            except Exception:
-                pass
+        except Exception:
+            pass
+
         if self.on_exit:
-            self.on_exit()
-        os._exit(0)
+            try:
+                self.on_exit()
+            except Exception as e:
+                print(f"[TrayManager] on_exit callback exception: {e}")
 
     def run_eel_server(self):
         """Eel 웹 서버 구동"""
@@ -106,9 +113,9 @@ class TrayManager:
             print(f"Eel 종료/오류: {e}")
 
     def start(self):
-        """서버 스레드 및 트레이 아이콘 메시지 루프 시작"""
+        """서버 스레드 및 트레이 아이콘 메시지 루프를 백그라운드로 비차단 시작"""
         # 1. Eel 서버를 백그라운드 스레드에서 시작
-        eel_thread = threading.Thread(target=self.run_eel_server, daemon=True)
+        eel_thread = threading.Thread(target=self.run_eel_server, name="EelServerThread", daemon=True)
         eel_thread.start()
 
         # 2. 시스템 트레이 메뉴 구성
@@ -126,8 +133,6 @@ class TrayManager:
             menu=menu
         )
 
-        # 3. 메인 스레드에서 트레이 아이콘 메시지 루프 실행 (블로킹)
-        try:
-            self.tray_icon.run()
-        except (KeyboardInterrupt, SystemExit):
-            self.on_tray_quit(self.tray_icon, None)
+        # 3. 백그라운드 스레드에서 트레이 아이콘 메시지 루프 실행 (Non-blocking)
+        self.tray_thread = threading.Thread(target=self.tray_icon.run, name="PystrayLoopThread", daemon=True)
+        self.tray_thread.start()
