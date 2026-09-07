@@ -31,12 +31,13 @@ def get_tray_instance():
 
 
 class TrayManager:
-    def __init__(self, base_dir=None, start_options=None, on_exit=None):
+    def __init__(self, base_dir=None, start_options=None, on_exit=None, edge_manager=None):
         global _tray_instance
         _tray_instance = self
         self.base_dir = base_dir or BUNDLE_DIR
         self.start_options = start_options or {}
         self.on_exit = on_exit
+        self.edge_manager = edge_manager
         self.ico_file = ICON_PATH
         self.tray_icon = None
 
@@ -119,8 +120,37 @@ class TrayManager:
         eel_thread.start()
 
         # 2. 시스템 트레이 메뉴 구성
+        def _get_edge_mgr():
+            if self.edge_manager:
+                return self.edge_manager
+            try:
+                from core.edge_widget import get_edge_widget_manager
+                return get_edge_widget_manager()
+            except Exception:
+                return None
+
+        def _make_size_action(key):
+            def _action(icon, item):
+                mgr = _get_edge_mgr()
+                if mgr:
+                    mgr.set_handle_size(key)
+            return _action
+
+        def _is_size_checked(key):
+            def _checked(item):
+                mgr = _get_edge_mgr()
+                return bool(mgr and mgr.config.handle_size == key)
+            return _checked
+
+        size_menu = pystray.Menu(
+            pystray.MenuItem("슬림 (12×70) [추천]", _make_size_action("slim"), checked=_is_size_checked("slim"), radio=True),
+            pystray.MenuItem("기본 (20×120)", _make_size_action("default"), checked=_is_size_checked("default"), radio=True),
+            pystray.MenuItem("컴팩트 (8×50)", _make_size_action("compact"), checked=_is_size_checked("compact"), radio=True),
+        )
+
         menu = pystray.Menu(
             pystray.MenuItem("🛠️ 도구 모음 열기", self.on_tray_show, default=True),
+            pystray.MenuItem("📏 핸들 크기", size_menu),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("🚪 완전히 종료", self.on_tray_quit)
         )

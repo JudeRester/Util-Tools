@@ -22,6 +22,9 @@
     const body = document.body;
     const edgeHandle = document.getElementById('edge-handle');
     const widgetPanel = document.getElementById('widget-panel');
+    const btnSizeMenu = document.getElementById('btn-size-menu');
+    const sizeMenuDropdown = document.getElementById('size-menu-dropdown');
+    const sizeOptBtns = document.querySelectorAll('.size-opt-btn');
     const btnPin = document.getElementById('btn-pin');
     const btnOpenMain = document.getElementById('btn-open-main');
     const btnCollapse = document.getElementById('btn-collapse');
@@ -61,6 +64,13 @@
             body.classList.remove('edge-left');
             body.classList.add('edge-right');
         }
+    };
+
+    window.onHandleSizeChanged = function (sizeKey) {
+        body.setAttribute('data-handle-size', sizeKey);
+        sizeOptBtns.forEach((btn) => {
+            btn.classList.toggle('active', btn.getAttribute('data-size') === sizeKey);
+        });
     };
 
     // =========================================================================
@@ -218,6 +228,37 @@
     // =========================================================================
     // 3. Header Controls
     // =========================================================================
+
+    if (btnSizeMenu && sizeMenuDropdown) {
+        btnSizeMenu.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sizeMenuDropdown.classList.toggle('open');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!sizeMenuDropdown.contains(e.target) && e.target !== btnSizeMenu) {
+                sizeMenuDropdown.classList.remove('open');
+            }
+        });
+
+        sizeOptBtns.forEach((btn) => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const sizeKey = btn.getAttribute('data-size');
+                if (sizeKey) {
+                    window.onHandleSizeChanged(sizeKey);
+                    if (window.pywebview && window.pywebview.api && window.pywebview.api.set_handle_size) {
+                        try {
+                            await window.pywebview.api.set_handle_size(sizeKey);
+                        } catch (err) {
+                            console.error('Failed to set handle size:', err);
+                        }
+                    }
+                }
+                sizeMenuDropdown.classList.remove('open');
+            });
+        });
+    }
 
     if (btnPin) {
         btnPin.addEventListener('click', () => {
@@ -426,6 +467,12 @@
                     const info = await window.pywebview.api.get_state();
                     if (info && info.edge) {
                         window.onEdgeChanged(info.edge);
+                    }
+                    if (window.pywebview.api.get_handle_size) {
+                        const curSize = await window.pywebview.api.get_handle_size();
+                        if (curSize) {
+                            window.onHandleSizeChanged(curSize);
+                        }
                     }
                 } catch (e) {
                     console.error('Failed to fetch initial widget state:', e);

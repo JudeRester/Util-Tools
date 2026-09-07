@@ -22,8 +22,13 @@ from core.paths import DATA_DIR, WIDGET_CONFIG_PATH
 
 logger = logging.getLogger("UtilTools.EdgeWidget")
 
-HANDLE_WIDTH = 20
-HANDLE_HEIGHT = 120
+HANDLE_PRESETS = {
+    "slim": {"width": 12, "height": 70, "label": "슬림 (12×70)"},
+    "default": {"width": 20, "height": 120, "label": "기본 (20×120)"},
+    "compact": {"width": 8, "height": 50, "label": "컴팩트 (8×50)"}
+}
+
+DEFAULT_HANDLE_PRESET = "slim"
 EXPANDED_WIDTH = 380
 EXPANDED_HEIGHT = 620
 
@@ -45,19 +50,22 @@ class EdgeWidgetConfig:
         edge: str = "right",
         offset_ratio: float = 0.15,
         device_name: Optional[str] = None,
-        enabled: bool = True
+        enabled: bool = True,
+        handle_size: str = DEFAULT_HANDLE_PRESET
     ):
         self.edge = "left" if edge == "left" else "right"
         self.offset_ratio = max(0.0, min(1.0, float(offset_ratio)))
         self.device_name = device_name
         self.enabled = bool(enabled)
+        self.handle_size = handle_size if handle_size in HANDLE_PRESETS else DEFAULT_HANDLE_PRESET
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "edge": self.edge,
             "offset_ratio": round(self.offset_ratio, 4),
             "device_name": self.device_name,
-            "enabled": self.enabled
+            "enabled": self.enabled,
+            "handle_size": self.handle_size
         }
 
     @classmethod
@@ -75,7 +83,8 @@ class EdgeWidgetConfig:
                 edge=data.get("edge", "right"),
                 offset_ratio=data.get("offset_ratio", 0.15),
                 device_name=data.get("device_name"),
-                enabled=data.get("enabled", True)
+                enabled=data.get("enabled", True),
+                handle_size=data.get("handle_size", DEFAULT_HANDLE_PRESET)
             )
         except Exception as e:
             logger.warning("Failed to load widget config, resetting to default: %s", e)
@@ -118,11 +127,31 @@ class EdgeWidgetApi:
     def close(self) -> None:
         self._manager.collapse()
 
+    def set_handle_size(self, size_key: str) -> Dict[str, Any]:
+        return self._manager.set_handle_size(size_key)
+
+    def get_handle_size(self) -> str:
+        return self._manager.config.handle_size
+
+    def get_handle_presets(self) -> Dict[str, Any]:
+        return HANDLE_PRESETS
+
+
+_edge_widget_manager_instance: Optional["EdgeWidgetManager"] = None
+
+
+def get_edge_widget_manager() -> Optional["EdgeWidgetManager"]:
+    """EdgeWidgetManager 전역 싱글톤 인스턴스 반환."""
+    global _edge_widget_manager_instance
+    return _edge_widget_manager_instance
+
 
 class EdgeWidgetManager:
     """단일 Edge Widget 창의 생명주기, 확장/축소 및 스냅 위치를 관리하는 컨트롤러."""
 
     def __init__(self):
+        global _edge_widget_manager_instance
+        _edge_widget_manager_instance = self
         self.config = EdgeWidgetConfig.load()
         self.state = WidgetState.COLLAPSED
         self.window: Optional[webview.Window] = None
@@ -134,6 +163,16 @@ class EdgeWidgetManager:
         self._settle_timer: Optional[threading.Timer] = None
         self._initialized = False
         self._is_settling = False
+
+    @property
+    def handle_width(self) -> int:
+        preset = HANDLE_PRESETS.get(self.config.handle_size, HANDLE_PRESETS[DEFAULT_HANDLE_PRESET])
+        return preset["width"]
+
+    @property
+    def handle_height(self) -> int:
+        preset = HANDLE_PRESETS.get(self.config.handle_size, HANDLE_PRESETS[DEFAULT_HANDLE_PRESET])
+        return preset["height"]
 
     def create_window(self, eel_port: int) -> webview.Window:
         """pywebview 창 생성 (프레임리스, 상단 고정, 초기 화면 가장자리 안착)."""
@@ -149,11 +188,11 @@ class EdgeWidgetManager:
 
         if monitor:
             init_y = monitor.logical_work_top + self.config.offset_ratio * max(
-                1.0, (monitor.logical_work_height - HANDLE_HEIGHT)
+                1.0, (monitor.logical_work_height - self.handle_height)
             )
-            init_y = max(monitor.logical_work_top, min(init_y, monitor.logical_work_bottom - HANDLE_HEIGHT))
+            init_y = max(monitor.logical_work_top, min(init_y, monitor.logical_work_bottom - self.handle_height))
             self.handle_anchor_y = init_y
-            init_x = (monitor.logical_work_right - HANDLE_WIDTH) if self.config.edge == "right" else monitor.logical_work_left
+            init_x = (monitor.logical_work_right - self.handle_width) if self.config.edge == "right" else monitor.logical_work_left
         else:
             init_x, init_y = 1800, 100
 
@@ -162,9 +201,9 @@ class EdgeWidgetManager:
             url=url,
             x=int(init_x),
             y=int(init_y),
-            width=HANDLE_WIDTH,
-            height=HANDLE_HEIGHT,
-            min_size=(14, 120),
+            width=self.handle_width,
+            height=self.handle_height,
+            min_size=(6, 40),
             frameless=True,
             on_top=True,
             easy_drag=False,
@@ -191,9 +230,10 @@ class EdgeWidgetManager:
                 h_val = self.window.native.Handle
                 self._hwnd = int(h_val.ToInt64()) if hasattr(h_val, "ToInt64") else int(h_val)
 
-            # 2. Form.None 후 최소 폭(20x120) 강제 적용 (SM_CXMINTRACK 회피)
+            # 2. Form.None 후 최소 폭 강제 적용 (SM_CXMINTRACK 회피)
             if self.window:
-                self.window.resize(HANDLE_WIDTH, HANDLE_HEIGHT)
+                self.window.resize(self.handle_width, self.handle_height)
+                self._notify_client_handle_size(self.config.handle_size)
 
             self._initialized = True
         except Exception as e:
@@ -258,13 +298,52 @@ class EdgeWidgetManager:
 
             if monitor:
                 anchor = self._get_anchored_fixpoint(monitor)
-                self.window.resize(HANDLE_WIDTH, HANDLE_HEIGHT, fix_point=anchor)
+                self.window.resize(self.handle_width, self.handle_height, fix_point=anchor)
 
             self.state = WidgetState.COLLAPSED
 
         logger.info("Widget state transitioned to COLLAPSED")
         self._notify_client_state(WidgetState.COLLAPSED)
         return {"success": True, "state": self.state}
+
+    def set_handle_size(self, size_key: str) -> Dict[str, Any]:
+        """핸들 크기 프리셋 변경 및 즉시/지연 반영."""
+        if size_key not in HANDLE_PRESETS:
+            return {"success": False, "error": f"Unknown preset: {size_key}"}
+
+        with self._lock:
+            self.config.handle_size = size_key
+            self.config.save()
+
+            # 클라이언트(JS)에 크기 변경 통지
+            self._notify_client_handle_size(size_key)
+
+            # 접힌 상태이면 즉시 창 크기 리사이징 및 엣지 스냅
+            if self.state == WidgetState.COLLAPSED and self.window:
+                monitor = self._get_current_monitor()
+                if not monitor:
+                    all_m = MonitorGeometry.get_all_monitors()
+                    monitor = all_m[0] if all_m else None
+
+                if monitor:
+                    anchor = self._get_anchored_fixpoint(monitor)
+                    self.window.resize(self.handle_width, self.handle_height, fix_point=anchor)
+                    snap_x = (monitor.logical_work_right - self.handle_width) if self.config.edge == "right" else monitor.logical_work_left
+                    clamped_y = max(monitor.logical_work_top, min(self.handle_anchor_y, monitor.logical_work_bottom - self.handle_height))
+                    self._is_settling = True
+                    self.window.move(int(snap_x), int(clamped_y))
+
+        logger.info("Widget handle size updated to: %s (%dx%d)", size_key, self.handle_width, self.handle_height)
+        return {"success": True, "size": size_key, "width": self.handle_width, "height": self.handle_height}
+
+    def _notify_client_handle_size(self, size_key: str) -> None:
+        """프론트엔드 JavaScript에 핸들 크기 프리셋 변경 알림."""
+        if not self.window:
+            return
+        try:
+            self.window.evaluate_js(f"window.onHandleSizeChanged && window.onHandleSizeChanged('{size_key}')")
+        except Exception:
+            pass
 
     def toggle(self) -> Dict[str, Any]:
         if self.state == WidgetState.EXPANDED:
@@ -323,20 +402,20 @@ class EdgeWidgetManager:
 
             # 좌우 중 가장 가까운 엣지 판정
             dist_left = abs(cur_x - monitor.logical_work_left)
-            dist_right = abs((monitor.logical_work_right - HANDLE_WIDTH) - cur_x)
+            dist_right = abs((monitor.logical_work_right - self.handle_width) - cur_x)
             new_edge = "right" if dist_right <= dist_left else "left"
 
-            snap_x = (monitor.logical_work_right - HANDLE_WIDTH) if new_edge == "right" else monitor.logical_work_left
+            snap_x = (monitor.logical_work_right - self.handle_width) if new_edge == "right" else monitor.logical_work_left
 
             # Y축 작업 영역 내 클램핑
-            clamped_y = max(monitor.logical_work_top, min(cur_y, monitor.logical_work_bottom - HANDLE_HEIGHT))
+            clamped_y = max(monitor.logical_work_top, min(cur_y, monitor.logical_work_bottom - self.handle_height))
             self.handle_anchor_y = clamped_y
 
             # 이미 스냅 위치와 거의 일치하면(3px 이내) 재이동 및 파일 저장 스킵
             if abs(cur_x - snap_x) <= 3 and abs(cur_y - clamped_y) <= 3:
                 return
 
-            denom = max(1.0, (monitor.logical_work_height - HANDLE_HEIGHT))
+            denom = max(1.0, (monitor.logical_work_height - self.handle_height))
             offset_ratio = (clamped_y - monitor.logical_work_top) / denom
 
             edge_changed = (new_edge != self.config.edge)
@@ -370,7 +449,7 @@ class EdgeWidgetManager:
                     monitor = self._get_current_monitor()
                     if monitor and self.window:
                         anchor = self._get_anchored_fixpoint(monitor)
-                        self.window.resize(HANDLE_WIDTH, HANDLE_HEIGHT, fix_point=anchor)
+                        self.window.resize(self.handle_width, self.handle_height, fix_point=anchor)
                 self.state = WidgetState.SUPPRESSED
                 if self._hwnd:
                     user32.ShowWindow(self._hwnd, SW_HIDE)

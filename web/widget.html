@@ -26,6 +26,27 @@
                 <span class="header-text">Quick Widget</span>
             </div>
             <div class="header-controls">
+                <div class="size-dropdown-wrapper">
+                    <button id="btn-size-menu" class="ctrl-btn" title="핸들 크기 조절">📏</button>
+                    <div id="size-menu-dropdown" class="size-dropdown">
+                        <div class="size-dropdown-header">핸들 크기 설정</div>
+                        <button class="size-opt-btn active" data-size="slim">
+                            <span class="size-name">슬림 (추천)</span>
+                            <span class="size-dim">12 × 70px</span>
+                            <span class="size-check">✓</span>
+                        </button>
+                        <button class="size-opt-btn" data-size="default">
+                            <span class="size-name">기본</span>
+                            <span class="size-dim">20 × 120px</span>
+                            <span class="size-check">✓</span>
+                        </button>
+                        <button class="size-opt-btn" data-size="compact">
+                            <span class="size-name">컴팩트</span>
+                            <span class="size-dim">8 × 50px</span>
+                            <span class="size-check">✓</span>
+                        </button>
+                    </div>
+                </div>
                 <button id="btn-pin" class="ctrl-btn" title="창 고정 (마우스 벗어나도 닫히지 않음)">📌</button>
                 <button id="btn-open-main" class="ctrl-btn" title="메인 앱 열기">🗔</button>
                 <button id="btn-collapse" class="ctrl-btn" title="접기">✕</button>

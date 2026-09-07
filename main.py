@@ -140,7 +140,7 @@ def main():
         app_cleanup()
 
     # 3. 백그라운드 트레이 및 Eel 웹서버 시작 (Non-blocking)
-    tray_manager = TrayManager(BUNDLE_DIR, start_options, on_exit=shutdown_all)
+    tray_manager = TrayManager(BUNDLE_DIR, start_options, on_exit=shutdown_all, edge_manager=edge_manager)
     tray_manager.start()
 
     # 4. Eel HTTP 서버의 /widget.html 준비 완료 대기 (최대 5초 Health Check)
