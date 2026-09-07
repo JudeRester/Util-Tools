@@ -142,3 +142,61 @@ stateDiagram-v2
 3. **온디맨드 지연 로딩 & 탭 영속화 (`web/js/app.js`)**:
    - 각 기능 화면은 최초 열람 시점에만 초기화(On-demand Initializing)되어 초기 구동 메모리를 절감합니다.
    - 마지막으로 사용자가 작업 중이던 활성 탭은 `app_settings.json`에 영구 기록되어 앱 재시작 시 자동으로 복원됩니다.
+
+---
+
+## 8. 📌 데스크톱 엣지 퀵 위젯 & 전체화면 가드 (Edge Quick Widget & FullscreenGuard)
+
+화면 전환 없이 빠른 메모, 런처 실행, 시스템 모니터링을 지원하는 초경량 데스크톱 상주형 플로팅 위젯 시스템입니다.
+
+```mermaid
+stateDiagram-v2
+    [*] --> COLLAPSED : 창 생성 (12×70 플러시 탭)
+    
+    COLLAPSED --> EXPANDING : 250ms Hover Dwell 만료 / 클릭
+    EXPANDING --> EXPANDED : FixPoint 동적 앵커 확장 (380×620)
+    
+    EXPANDED --> COLLAPSED : 마우스 이탈 (400ms 대기) / 패널 ✕ 클릭
+    EXPANDED --> PINNED : 📌 고정 버튼 클릭
+    PINNED --> EXPANDED : 📌 고정 해제
+    
+    COLLAPSED --> SUPPRESSED : FullscreenGuard 전체화면 감지
+    EXPANDED --> SUPPRESSED : FullscreenGuard 전체화면 감지
+    PINNED --> SUPPRESSED : FullscreenGuard 전체화면 감지
+    
+    SUPPRESSED --> COLLAPSED : 전체화면 종료 (SW_SHOWNOACTIVATE 비탈취 복원)
+```
+
+### 8-1. pywebview 하이브리드 아키텍처 및 동적 리사이징 (`core/edge_widget.py`)
+- **Eel-pywebview 병렬 브리지**: Eel 메인 창과 pywebview 위젯 창이 동일한 백엔드 포트를 공유하며, `<script src="/eel.js"></script>`를 통해 20개 기존 서비스의 RPC를 그대로 재사용합니다.
+- **단일 HWND 생명주기 관리**: 창을 파괴하고 다시 생성하지 않고, 단일 OS 네이티브 창의 크기를 `resize(width, height, fix_point)`로 전환합니다.
+- **수직/수평 FixPoint 동적 앵커**:
+  - 수평 앵커: 우측 엣지(`FixPoint.EAST`, 좌측으로 확장) / 좌측 엣지(`FixPoint.WEST`, 우측으로 확장).
+  - 수직 앵커: 화면 하단 작업영역 이탈 시 `FixPoint.SOUTH`(위쪽으로 확장), 여유 시 `FixPoint.NORTH`(아래쪽으로 확장).
+  - `handle_anchor_y` 복원: 확장 후 축소 시 사용자가 배치한 원래 Y 좌표 위치로 정확히 복귀합니다.
+
+### 8-2. 플러시 엣지 탭 (Flush Edge Tab) & 3단계 크기 프리셋
+- **플러시 엣지 탭 디자인**:
+  - Windows WinForms WebView2의 데스크톱 투명화 한계를 해결하기 위해 `border-radius: 0`을 적용하여 윈도우 사각 캔버스를 100% 채우는 화면 가장자리 밀착형 직각 도크 탭 구조를 채택했습니다.
+  - `background_color="#1e1e2d"` 설정을 통해 윈도우 기본 캔버스와 웹 UI 테마 배경색을 일치시켜 렌더링 간 색상 불일치 및 잔여물 노출을 제거했습니다.
+- **3단계 동적 크기 프리셋**:
+  | 프리셋 키 | 표시 명칭 | 규격 (폭 × 높이) | 특징 |
+  | :--- | :--- | :---: | :--- |
+  | `slim` | **슬림 (기본값)** | **12px × 70px** | 화면 가림 최소화 & 마우스 호버 편의성 균형 |
+  | `default` | **기본** | **20px × 120px** | 마우스 포인터 조준이 가장 편안한 규격 |
+  | `compact` | **컴팩트** | **8px × 50px** | 모니터 베젤 수준의 극소형 규격 |
+- **2중 런타임 제어 & 영속화**:
+  - 위젯 헤더 우측의 `📏` 팝오버 메뉴 및 시스템 트레이 우클릭 `📏 핸들 크기` 서브메뉴에서 실시간으로 전환 가능합니다.
+  - 엣지 방향(`edge`), Y축 위치 비율(`offset_ratio`), 대상 모니터(`device_name`), 선택된 크기(`handle_size`)는 `data/widget_config.json`에 영구 저장됩니다.
+
+### 8-3. 상호작용 제어 및 제스처 중재 (`web/js/widget.js`)
+- **250ms Hover Dwell**: 마우스가 핸들에 진입했을 때 250ms 동안 머무를 경우에만 확장을 개시하여 작업 중 스쳐 지나가는 마우스에 의한 의도치 않은 팝업을 방어합니다.
+- **네이티브 드래그 위임**: `.pywebview-drag-region`을 통해 Windows OS 네이티브 윈도우 드래그 메커니즘을 사용하며, 드래그 중에는 호버 팝업이 전면 차단됩니다.
+- **400ms 제스처 쿨다운**: 핸들 드래그 이동을 마친 직후 400ms 동안 호버 확장을 일시 억제하여 불필요한 자동 팝업을 방지합니다.
+- **150ms Settle Debounce**: 윈도우 이동 정지 후 150ms 시점에 현재 모니터 작업영역(`rcWork`) 기준 가장 가까운 화면 가장자리로 자동 스냅(Nearest-Edge Snap)됩니다.
+
+### 8-4. FullscreenGuard 전체화면 감지 및 No-Activate 복원 (`core/fullscreen_guard.py`)
+- **Win32 SetWinEventHook 전용 스레드**: 전용 메시지 펌프(`GetMessage`) 루프에서 `EVENT_SYSTEM_FOREGROUND` 이벤트를 실시간 감지합니다.
+- **500ms Fallback 폴링**: 이벤트 누락을 대비하여 500ms 주기 저빈도 타이머로 상태 일관성을 교차 검증합니다.
+- **다중 모니터 `_fullscreen_hwnd` 추적**: 포그라운드가 다른 모니터로 이동하더라도, 기존 모니터에 전체화면 앱(게임, 동영상)이 유지되고 있으면 위젯을 숨김(`SUPPRESSED`) 상태로 유지합니다.
+- **포커스 비탈취 복원 (`SW_SHOWNOACTIVATE`)**: 전체화면이 종료되어 위젯이 복원될 때 `user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE)`를 사용하여 활성 창의 키보드/마우스 포커스를 가로채지 않고 비활성 상태로 조용히 화면에 복귀합니다.

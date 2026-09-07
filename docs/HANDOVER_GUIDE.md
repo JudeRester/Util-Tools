@@ -105,6 +105,12 @@ pip install -r requirements.txt
 - 파이썬 코드 수정 시 트레이 우클릭을 거치지 않고 웹 화면 상단의 **`[🔄 재시작]`** 버튼을 누르면 0.5초 내에 현재 프로세스를 정상 종료하고 신규 프로세스를 띄웁니다.
 - **`[🚪 종료]`** 버튼 클릭 시 트레이 아이콘 및 백엔드 프로세스가 완전히 종료됩니다.
 
+### 5) 데스크톱 엣지 퀵 위젯 & FullscreenGuard (pywebview 하이브리드)
+- **Eel-pywebview 병렬 브리지**: Eel 메인 창과 pywebview 위젯 창(`core/edge_widget.py`)이 동일한 백엔드 포트를 공유하여 20개 기존 서비스의 RPC를 그대로 재사용합니다.
+- **플러시 엣지 도크 탭 (Flush Edge Tab)**: 윈도우 사각 캔버스를 100% 채우는 밀착형 직각 탭(`border-radius: 0`)과 `background_color="#1e1e2d"` 동기화로 모서리 잔여물 없이 깔끔하게 렌더링됩니다.
+- **3단계 크기 프리셋**: `slim`(12×70, 기본값), `default`(20×120), `compact`(8×50) 지원 및 헤더 📏 메뉴 / 트레이 메뉴를 통한 런타임 실시간 리사이징.
+- **FullscreenGuard**: Win32 `SetWinEventHook` 전용 스레드로 게임/동영상 전체화면 시 위젯을 자동 숨김 처리하고, 전체화면 종료 시 `SW_SHOWNOACTIVATE`로 포커스 탈취 없이 복원합니다.
+
 ---
 
 ## 4. 프로젝트 디렉토리 및 핵심 모듈 맵
@@ -123,8 +129,15 @@ D:\python
 ├── core/                       # [코어 시스템]
 │   ├── paths.py                # 🌟 경로 참조의 단일 진실 공급원 (SSOT)
 │   ├── single_instance.py      # Windows Named Semaphore 기반 단일 인스턴스 락
+│   ├── edge_widget.py          # pywebview 단일 창 엣지 핸들 ↔ 380x620 퀵 위젯 생명주기 관리자
+│   ├── fullscreen_guard.py     # Win32 SetWinEventHook 기반 전체화면 감지 및 No-activate 복원
 │   ├── tray.py                 # pystray 시스템 트레이, 알림 및 브라우저 창 생명주기 관리
 │   └── logger.py               # 콘솔 및 파일 로깅 관리자
+│
+├── data/                       # [사용자 영속 데이터]
+│   ├── app.db                  # 중앙 SQLite DB (13개 테이블)
+│   ├── browser_profile/        # 독립 브라우저 프로파일 디렉토리
+│   └── widget_config.json      # 엣지 위젯 위치(edge, offset_ratio) 및 크기(handle_size) 설정
 │
 ├── services/                   # [백엔드 서비스 레이어] (@eel.expose 바인딩 모듈)
 │   ├── db_service.py           # 중앙 SQLite 커넥션 풀, WAL 모드, 테이블 초기화
@@ -149,8 +162,11 @@ D:\python
 ├── web/                        # [프론트엔드 정적 리소스]
 │   ├── index.html              # 단일 페이지 애플리케이션 (SPA) 메인 레이아웃
 │   ├── style.css               # 전역 다크 테마 디자인 시스템 및 컴포넌트 스타일
-│   └── js/                     # 기능별 프론트엔드 모듈 (22개 파일)
+│   ├── widget.html             # [신규] 엣지 핸들 및 확장 퀵 위젯 전용 마크업 (Eel RPC 공유)
+│   ├── widget.css              # [신규] 플러시 엣지 탭 및 다크 프레임리스 위젯 전용 스타일
+│   └── js/                     # 기능별 프론트엔드 모듈 (23개 파일)
 │       ├── app.js              # 탭 전환, 토스트, 공통 인레이어 모달 엔진
+│       ├── widget.js           # [신규] 엣지 위젯 클라이언트 로직 (호버 Dwell, 드래그 쿨다운, 크기 메뉴)
 │       ├── agy_sessions.js     # AI 세션 허브 대시보드, 필터, Live Tail 모달
 │       ├── redmine.js          # Redmine 일감/위키 대시보드 및 인라인 편집기
 │       ├── email_viewer.js     # 이메일 스레드 타임라인 뷰어 & 첨부파일 추출기

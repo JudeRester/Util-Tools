@@ -19,6 +19,7 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 | **🧪 JS 실행기** | • JSFiddle / RunJS 스타일의 **JavaScript 코드 샌드박스** (비동기 `async/await` 지원)<br>• `console.log/warn/error` 출력 캡처, 실행 시간 측정, `Ctrl + Enter` 실행, 코드 자동 영구 보존 |
 | **📝 빠른 메모** | • **경량 스크래치패드 / 메모장**<br>• 다중 메모 생성, 실시간 자동 저장(Autosave), 고정(Pin) 기능, 마우스 드래그블 스플리터 제공 |
 | **💾 통합 백업 / 복원** | • **Zero-Memory Python 백엔드 스트리밍 아키텍처** (브라우저 메모리 소모 최소화)<br>• 중앙 SQLite DB 및 설정을 **단일 JSON 및 90% 압축 ZIP 포맷으로 일괄/선택적 내보내기 & 복원(Merge/Replace)** |
+| **📌 데스크톱 엣지 퀵 위젯<br>(Edge Handle & FullscreenGuard)** | • **초경량 화면 모서리 플로팅 도크 탭 (Edge Handle)**: 화면 가장자리 밀착형 플러시 사각 도크 탭, 3단계 규격(슬림 12×70, 기본 20×120, 컴팩트 8×50), 250ms Hover Dwell 자동 확장, 네이티브 드래그 및 반대편 가장자리 자동 스냅<br>• **380×620 프레임리스 퀵 위젯 패널**: 빠른 실행, 퀵 메모, 시스템 모니터링 탭 통합 제공, 상단 헤더 📏 크기 조절 메뉴 및 상시 고정(📌 Pin)<br>• **전체화면 애플리케이션 자동 억제 및 복원 (FullscreenGuard)**: Win32 `SetWinEventHook` 기반 전용 메시지 루프 스레드로 게임/동영상 전체화면 자동 감지(Hide), 전체화면 종료 시 `SW_SHOWNOACTIVATE` 비탈취 조용한 복원<br>• **트레이 및 웹 UI 2중 제어**: 트레이 메뉴 `📏 핸들 크기` 서브메뉴 및 위젯 헤더 팝오버 메뉴를 통한 런타임 실시간 크기 변경 및 영속화(`data/widget_config.json`) |
 | **🛡️ 시스템 트레이 & 런타임 제어** | • **웹 UI 기반 백엔드 전원 제어**: 상단 헤더 및 시스템 탭에서 1-클릭 서버 완전 종료 및 즉시 재시작(Hot Reload) 지원<br>• **독립 브라우저 프로파일 격리**: `data/browser_profile` 분리로 Chrome 기본 프로파일 점유 및 확장프로그램 인증키 간섭 100% 방지<br>• **Windows Named Semaphore** 기반 단일 인스턴스 락(중복 실행 방지 및 기존 창 자동 활성화)<br>• 검은색 콘솔 창 없는 GUI 구동(`run.pyw`), Windows 시스템 트레이 상주 (`utiltools.ico`), V8 힙 128MB 제한 및 Windows WorkingSet 유휴 RAM 자동 회수 |
 
 ---
@@ -72,7 +73,8 @@ D:\python
 │
 ├── data/                       # [사용자 데이터] SQLite 중앙 데이터베이스 (Git 제외)
 │   ├── app.db                  # emails, notes, diagrams, redmine, quick_launch 등 13개 테이블
-│   └── browser_profile/        # [브라우저 격리] 독립 사용자 프로파일 디렉토리 (Git 제외)
+│   ├── browser_profile/        # [브라우저 격리] 독립 사용자 프로파일 디렉토리 (Git 제외)
+│   └── widget_config.json      # [위젯 영속화] 엣지 핸들 위치(edge, offset_ratio), 크기(handle_size), 모니터 정보
 │
 ├── emails/                     # [개인 데이터] 로컬 저장된 원본 .eml 파일 보관소 (Git 제외)
 │
@@ -83,6 +85,8 @@ D:\python
 │   ├── __init__.py
 │   ├── paths.py                # 개발 모드 & 배포본(.exe) 중앙 표준 경로 관리자
 │   ├── single_instance.py      # Windows Named Semaphore 기반 단일 인스턴스 중복 방지 매니저
+│   ├── edge_widget.py          # pywebview 단일 창 엣지 핸들 ↔ 380x620 퀵 위젯 생명주기 관리자
+│   ├── fullscreen_guard.py     # Win32 SetWinEventHook 기반 전체화면 감지 및 No-activate 복원
 │   ├── logger.py               # 백엔드/프론트엔드 통합 시스템 이벤트 로거
 │   └── tray.py                 # pystray 트레이 아이콘, 윈도우 생명주기 및 트레이 알림 관리자
 │
@@ -111,9 +115,12 @@ D:\python
 └── web/                        # [프론트엔드 리소스]
     ├── index.html              # 메인 UI 마크업 (헤더 전원 제어, 드롭다운 메뉴, AI 세션 허브)
     ├── style.css               # 모던 다크 테마 CSS, AI 세션 뱃지, Live Tail & 헤더 스타일
+    ├── widget.html             # [신규] 엣지 핸들 및 확장 퀵 위젯 전용 마크업 (Eel RPC 공유)
+    ├── widget.css              # [신규] 플러시 엣지 탭 및 다크 프레임리스 위젯 전용 스타일
     ├── utiltools.ico           # 브라우저 창 Favicon
     └── js/                     # [프론트엔드 모듈 (JavaScript)]
         ├── app.js              # 탭 전환 네비게이션, 드롭다운 그룹 제어 및 초기화
+        ├── widget.js           # [신규] 엣지 위젯 클라이언트 로직 (호버 Dwell, 드래그 쿨다운, 크기 메뉴)
         ├── agy_sessions.js     # 통합 AI 세션 테이블, 듀얼 모드 알림, Live Tail 모달 & 영구 삭제
         ├── console.js          # 하단 로그창, 스플리터 조절기 & 고도화된 토스트(Toast) 알림
         ├── drag_drop.js        # 공통 마우스 드래그 앤 드롭 핸들러
