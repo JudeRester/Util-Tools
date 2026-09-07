@@ -28,7 +28,7 @@ body {
     width: 100vw;
     height: 100vh;
     overflow: hidden;
-    background: transparent;
+    background: var(--bg-surface);
 }
 
 /* ==========================================================================
@@ -40,7 +40,7 @@ body[data-handle-size="default"] {
     --handle-height: 120px;
     --grip-width: 3px;
     --grip-height: 36px;
-    --handle-radius: 8px;
+    --handle-radius: 0px;
 }
 
 body[data-handle-size="slim"], body:not([data-handle-size]) {
@@ -48,7 +48,7 @@ body[data-handle-size="slim"], body:not([data-handle-size]) {
     --handle-height: 70px;
     --grip-width: 2px;
     --grip-height: 24px;
-    --handle-radius: 6px;
+    --handle-radius: 0px;
 }
 
 body[data-handle-size="compact"] {
@@ -56,7 +56,7 @@ body[data-handle-size="compact"] {
     --handle-height: 50px;
     --grip-width: 2px;
     --grip-height: 16px;
-    --handle-radius: 4px;
+    --handle-radius: 0px;
 }
 
 .edge-handle {
@@ -65,7 +65,7 @@ body[data-handle-size="compact"] {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(30, 30, 45, 0.88);
+    background: var(--bg-surface);
     backdrop-filter: blur(8px);
     border: 1px solid rgba(255, 255, 255, 0.15);
     cursor: pointer;
@@ -78,12 +78,12 @@ body[data-handle-size="compact"] {
 }
 
 .edge-right .edge-handle {
-    border-radius: var(--handle-radius, 6px) 0 0 var(--handle-radius, 6px);
+    border-radius: 0;
     border-right: none;
 }
 
 .edge-left .edge-handle {
-    border-radius: 0 var(--handle-radius, 6px) var(--handle-radius, 6px) 0;
+    border-radius: 0;
     border-left: none;
 }
 

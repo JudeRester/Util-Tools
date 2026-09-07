@@ -207,7 +207,7 @@ class EdgeWidgetManager:
             frameless=True,
             on_top=True,
             easy_drag=False,
-            transparent=True,
+            background_color="#1e1e2d",
             js_api=EdgeWidgetApi(self)
         )
 
