@@ -68,13 +68,45 @@
     // =========================================================================
 
     let isPointerDown = false;
+    let dragCooldown = false;
+    let dragCooldownTimer = null;
+
+    function isMouseButtonActive(e) {
+        if (isPointerDown) return true;
+        if (e && typeof e.buttons === 'number' && e.buttons !== 0) return true;
+        return false;
+    }
+
+    function cancelDwell() {
+        if (dwellTimer) {
+            clearTimeout(dwellTimer);
+            dwellTimer = null;
+        }
+    }
+
+    function cancelDragCooldown() {
+        if (dragCooldownTimer) {
+            clearTimeout(dragCooldownTimer);
+            dragCooldownTimer = null;
+        }
+        dragCooldown = false;
+    }
 
     if (edgeHandle) {
         // Hover Dwell (250ms)
-        const startDwell = () => {
+        const startDwell = (e) => {
+            // 1. 마우스 다운 중이거나 드래그 쿨다운 상태면 호버 확장 원천 차단
+            if (isMouseButtonActive(e) || dragCooldown) {
+                cancelDwell();
+                return;
+            }
+
+            // 2. 축소 상태이며 이미 대기 중인 타이머가 없는 경우에만 Dwell 개시
             if (isCollapsed() && !dwellTimer) {
                 dwellTimer = setTimeout(() => {
                     dwellTimer = null;
+                    // 3. 만료 시점 2중 방어 (마우스 다운, 드래그 쿨다운, 또는 드래그 발생 시 확장 취소)
+                    if (isPointerDown || dragCooldown || dragOccurred) return;
                     expandWidget();
                 }, 250);
             }
@@ -84,37 +116,62 @@
         edgeHandle.addEventListener('mouseover', startDwell);
 
         edgeHandle.addEventListener('mouseleave', () => {
-            if (dwellTimer) {
-                clearTimeout(dwellTimer);
-                dwellTimer = null;
-            }
+            cancelDwell();
+            cancelDragCooldown();
         });
 
-        // Mousedown 취소 (드래그 제스처 시작 시 호버 확장 즉시 취소)
-        edgeHandle.addEventListener('mousedown', (e) => {
-            if (dwellTimer) {
-                clearTimeout(dwellTimer);
-                dwellTimer = null;
-            }
+        // Mousedown (드래그 제스처 시작 시 모든 대기 호버 확장 즉시 취소)
+        const onPointerDown = (e) => {
+            cancelDwell();
+            cancelDragCooldown();
             isPointerDown = true;
             pointerDownPos = { x: e.screenX, y: e.screenY };
             dragOccurred = false;
+        };
+
+        edgeHandle.addEventListener('mousedown', onPointerDown);
+        window.addEventListener('mousedown', (e) => {
+            // 창 내부 어디서든 마우스가 눌리면 호버 타이머 즉시 취소
+            cancelDwell();
+            if (e.target === edgeHandle || edgeHandle.contains(e.target)) {
+                onPointerDown(e);
+            }
         });
 
         window.addEventListener('mousemove', (e) => {
+            // 마우스 버튼 릴리즈 동기화 (창 밖에서 업이 발생한 경우 대비)
+            if (e.buttons === 0 && isPointerDown) {
+                isPointerDown = false;
+            }
+
             if (isPointerDown) {
+                // 마우스가 눌려있는 동안 발생하는 모든 호버 확장 억제
+                cancelDwell();
+
                 if (Math.abs(e.screenX - pointerDownPos.x) > 6 || Math.abs(e.screenY - pointerDownPos.y) > 6) {
                     dragOccurred = true;
                 }
             }
         });
 
-        window.addEventListener('mouseup', () => {
+        window.addEventListener('mouseup', (e) => {
+            cancelDwell();
             isPointerDown = false;
+
+            if (dragOccurred) {
+                // 드래그 완료 후 손을 뗀 직후(mouseup) 400ms 동안 의도치 않은 자동 호버 팝업 억제
+                dragCooldown = true;
+                if (dragCooldownTimer) clearTimeout(dragCooldownTimer);
+                dragCooldownTimer = setTimeout(() => {
+                    dragCooldown = false;
+                    dragCooldownTimer = null;
+                }, 400);
+            }
         });
 
         // 클릭 토글 (드래그하지 않고 클릭했을 때 즉시 확장)
         edgeHandle.addEventListener('click', (e) => {
+            cancelDwell();
             if (dragOccurred) {
                 dragOccurred = false;
                 return;
