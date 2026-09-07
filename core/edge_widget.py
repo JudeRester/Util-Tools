@@ -133,13 +133,35 @@ class EdgeWidgetManager:
         self._lock = threading.Lock()
         self._settle_timer: Optional[threading.Timer] = None
         self._initialized = False
+        self._is_settling = False
 
     def create_window(self, eel_port: int) -> webview.Window:
-        """pywebview 창 생성 (프레임리스, 상단 고정)."""
+        """pywebview 창 생성 (프레임리스, 상단 고정, 초기 화면 가장자리 안착)."""
         url = f"http://127.0.0.1:{eel_port}/widget.html"
+
+        # 모니터 작업 영역 기반 초기 좌표 산출
+        monitor = None
+        if self.config.device_name:
+            monitor = MonitorGeometry.from_device_name(self.config.device_name)
+        if not monitor:
+            all_m = MonitorGeometry.get_all_monitors()
+            monitor = all_m[0] if all_m else None
+
+        if monitor:
+            init_y = monitor.logical_work_top + self.config.offset_ratio * max(
+                1.0, (monitor.logical_work_height - HANDLE_HEIGHT)
+            )
+            init_y = max(monitor.logical_work_top, min(init_y, monitor.logical_work_bottom - HANDLE_HEIGHT))
+            self.handle_anchor_y = init_y
+            init_x = (monitor.logical_work_right - HANDLE_WIDTH) if self.config.edge == "right" else monitor.logical_work_left
+        else:
+            init_x, init_y = 1800, 100
+
         self.window = webview.create_window(
             title="UtilTools_EdgeWidget",
             url=url,
+            x=int(init_x),
+            y=int(init_y),
             width=HANDLE_WIDTH,
             height=HANDLE_HEIGHT,
             min_size=(14, 120),
@@ -163,7 +185,6 @@ class EdgeWidgetManager:
 
     def _on_window_shown(self) -> None:
         """창 표시 직후 WinForms Form 초기화 및 위치/크기 확정."""
-        time.sleep(0.3)
         try:
             # 1. HWND 획득
             if self.window and self.window.native and hasattr(self.window.native, "Handle"):
@@ -174,34 +195,10 @@ class EdgeWidgetManager:
             if self.window:
                 self.window.resize(HANDLE_WIDTH, HANDLE_HEIGHT)
 
-            # 3. 모니터 매핑 및 초기 위치 산출
-            monitor = None
-            if self.config.device_name:
-                monitor = MonitorGeometry.from_device_name(self.config.device_name)
-            if not monitor:
-                all_m = MonitorGeometry.get_all_monitors()
-                monitor = all_m[0] if all_m else None
-
-            if monitor and self.window:
-                # Y 좌표 복원
-                y = monitor.logical_work_top + self.config.offset_ratio * max(
-                    1.0, (monitor.logical_work_height - HANDLE_HEIGHT)
-                )
-                y = max(monitor.logical_work_top, min(y, monitor.logical_work_bottom - HANDLE_HEIGHT))
-                self.handle_anchor_y = y
-
-                # X 좌표 결정
-                if self.config.edge == "right":
-                    x = monitor.logical_work_right - HANDLE_WIDTH
-                else:
-                    x = monitor.logical_work_left
-
-                self.window.move(int(x), int(y))
-                logger.info("Widget positioned at (%d, %d) on monitor %s", int(x), int(y), monitor.device_name)
-
             self._initialized = True
         except Exception as e:
             logger.error("Error during _on_window_shown initialization: %s", e)
+
 
     def _get_current_monitor(self) -> Optional[MonitorGeometry]:
         """현재 창의 logical 좌표가 위치한 MonitorGeometry 반환."""
@@ -299,6 +296,10 @@ class EdgeWidgetManager:
         if not self._initialized or self.state == WidgetState.EXPANDED:
             return
 
+        if self._is_settling:
+            self._is_settling = False
+            return
+
         with self._lock:
             if self._settle_timer:
                 self._settle_timer.cancel()
@@ -331,6 +332,10 @@ class EdgeWidgetManager:
             clamped_y = max(monitor.logical_work_top, min(cur_y, monitor.logical_work_bottom - HANDLE_HEIGHT))
             self.handle_anchor_y = clamped_y
 
+            # 이미 스냅 위치와 거의 일치하면(3px 이내) 재이동 및 파일 저장 스킵
+            if abs(cur_x - snap_x) <= 3 and abs(cur_y - clamped_y) <= 3:
+                return
+
             denom = max(1.0, (monitor.logical_work_height - HANDLE_HEIGHT))
             offset_ratio = (clamped_y - monitor.logical_work_top) / denom
 
@@ -340,12 +345,14 @@ class EdgeWidgetManager:
             self.config.device_name = monitor.device_name
             self.config.save()
 
-            # 창 실제 이동
+            # 창 실제 이동 (이동 이벤트 재귀 방지 플래그 설정)
+            self._is_settling = True
             self.window.move(int(snap_x), int(clamped_y))
 
             # FullscreenGuard 타겟 디바이스 갱신
             if self.guard:
                 self.guard.set_target_device_name(monitor.device_name)
+
 
         if edge_changed:
             self._notify_client_edge(new_edge)

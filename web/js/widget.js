@@ -67,15 +67,21 @@
     // 2. Hover Dwell & Gesture Mediation
     // =========================================================================
 
+    let isPointerDown = false;
+
     if (edgeHandle) {
         // Hover Dwell (250ms)
-        edgeHandle.addEventListener('mouseenter', () => {
-            if (isCollapsed()) {
+        const startDwell = () => {
+            if (isCollapsed() && !dwellTimer) {
                 dwellTimer = setTimeout(() => {
+                    dwellTimer = null;
                     expandWidget();
                 }, 250);
             }
-        });
+        };
+
+        edgeHandle.addEventListener('mouseenter', startDwell);
+        edgeHandle.addEventListener('mouseover', startDwell);
 
         edgeHandle.addEventListener('mouseleave', () => {
             if (dwellTimer) {
@@ -84,23 +90,30 @@
             }
         });
 
-        // Mousedown 취소 (드래그 제스처 시 확장을 원천 차단)
+        // Mousedown 취소 (드래그 제스처 시작 시 호버 확장 즉시 취소)
         edgeHandle.addEventListener('mousedown', (e) => {
             if (dwellTimer) {
                 clearTimeout(dwellTimer);
                 dwellTimer = null;
             }
+            isPointerDown = true;
             pointerDownPos = { x: e.screenX, y: e.screenY };
             dragOccurred = false;
         });
 
         window.addEventListener('mousemove', (e) => {
-            if (Math.abs(e.screenX - pointerDownPos.x) > 4 || Math.abs(e.screenY - pointerDownPos.y) > 4) {
-                dragOccurred = true;
+            if (isPointerDown) {
+                if (Math.abs(e.screenX - pointerDownPos.x) > 6 || Math.abs(e.screenY - pointerDownPos.y) > 6) {
+                    dragOccurred = true;
+                }
             }
         });
 
-        // 클릭 토글 (단, 드래그 직후 발생한 클릭은 무시)
+        window.addEventListener('mouseup', () => {
+            isPointerDown = false;
+        });
+
+        // 클릭 토글 (드래그하지 않고 클릭했을 때 즉시 확장)
         edgeHandle.addEventListener('click', (e) => {
             if (dragOccurred) {
                 dragOccurred = false;
@@ -109,6 +122,7 @@
             expandWidget();
         });
     }
+
 
     // Auto-collapse on MouseLeave (400ms delay if not pinned)
     if (widgetPanel) {

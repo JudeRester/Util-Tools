@@ -38,9 +38,11 @@ import services.opencodex_service
 
 import socket
 import time
+import urllib.request
 import webview
 from core.tray import TrayManager
 from core.edge_widget import EdgeWidgetManager
+
 
 # 윈도우 실행 옵션 (사용자 기본 브라우저 간섭 방지: 격리 프로파일 및 메모리 최적화)
 start_options = {
@@ -127,13 +129,9 @@ def main():
     assigned_port = discover_available_port(8000, 50)
     start_options['port'] = assigned_port
 
-
-    # 2. Edge Widget Manager 인스턴스화 및 창 등록
     edge_manager = EdgeWidgetManager()
-    edge_manager.create_window(assigned_port)
-    edge_manager.start_guard()
 
-    # 3. 통합 종료 핸들러 정의
+    # 2. 통합 종료 핸들러 정의
     def shutdown_all():
         try:
             edge_manager.destroy()
@@ -141,26 +139,35 @@ def main():
             pass
         app_cleanup()
 
-    # 4. 백그라운드 트레이 및 Eel 웹서버 시작 (Non-blocking)
+    # 3. 백그라운드 트레이 및 Eel 웹서버 시작 (Non-blocking)
     tray_manager = TrayManager(BUNDLE_DIR, start_options, on_exit=shutdown_all)
     tray_manager.start()
 
-    # 5. Eel 서버 포트 바인딩 완료 대기 (최대 3초)
-    for _ in range(30):
+    # 4. Eel HTTP 서버의 /widget.html 준비 완료 대기 (최대 5초 Health Check)
+    server_ready = False
+    for _ in range(50):
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(0.1)
-                if s.connect_ex(('127.0.0.1', assigned_port)) == 0:
+            with urllib.request.urlopen(f"http://127.0.0.1:{assigned_port}/widget.html", timeout=0.2) as resp:
+                if resp.status == 200:
+                    server_ready = True
                     break
         except Exception:
             pass
         time.sleep(0.1)
+
+    if not server_ready:
+        core.logger.log_warn("Lifecycle", f"[Lifecycle] Eel 웹서버 응답 지연 (port {assigned_port})")
+
+    # 5. Edge Widget Window 생성 및 Guard 시작 (Eel 준비 완료 후 안전 생성)
+    edge_manager.create_window(assigned_port)
+    edge_manager.start_guard()
 
     # 6. 메인 스레드: pywebview GUI 이벤트 루프 실행
     try:
         webview.start(debug=False)
     finally:
         shutdown_all()
+
 
 
 if __name__ == '__main__':
