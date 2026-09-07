@@ -207,6 +207,7 @@ class EdgeWidgetManager:
             frameless=True,
             on_top=True,
             easy_drag=False,
+            transparent=True,
             js_api=EdgeWidgetApi(self)
         )
 
