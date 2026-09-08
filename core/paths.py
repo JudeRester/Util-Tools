@@ -46,4 +46,7 @@ APP_SETTINGS_PATH = os.path.join(APP_DIR, "app_settings.json")
 APP_SETTINGS_EXAMPLE_PATH = os.path.join(TEMPLATES_DIR, "app_settings.example.json")
 WIDGET_CONFIG_PATH = os.path.join(DATA_DIR, "widget_config.json")
 BROWSER_PROFILE_DIR = os.path.join(DATA_DIR, "browser_profile")
+WHISPER_MODELS_DIR = os.path.join(DATA_DIR, "models", "whisper")
+DIARIZATION_MODELS_DIR = os.path.join(DATA_DIR, "models", "diarization")
+AUDIO_DIR = os.path.join(DATA_DIR, "audio")
 

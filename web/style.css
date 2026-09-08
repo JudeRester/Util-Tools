@@ -9319,6 +9319,696 @@ input[type="checkbox"] {
     margin-top: 4px;
 }
 
+/* ==========================================================================
+   13. 음성 전사 & 다중 화자 분리 스튜디오 (Whisper & Diarization Studio)
+   ========================================================================== */
+.whisper-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-color);
+}
+
+.whisper-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    gap: 12px;
+}
+
+.whisper-toolbar-left,
+.whisper-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.whisper-badge-gpu,
+.whisper-badge-model {
+    font-size: 0.76rem;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+}
+
+.whisper-badge-gpu.ready,
+.whisper-badge-model.ready {
+    border-color: rgba(52, 211, 153, 0.4);
+    background: rgba(52, 211, 153, 0.1);
+    color: #34d399;
+}
+
+.whisper-badge-gpu.cpu {
+    border-color: rgba(56, 189, 248, 0.4);
+    background: rgba(56, 189, 248, 0.1);
+    color: #38bdf8;
+}
+
+.whisper-badge-model.need-download {
+    border-color: rgba(251, 146, 60, 0.4);
+    background: rgba(251, 146, 60, 0.1);
+    color: #fb923c;
+}
+
+.whisper-main-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* 좌측 사이드바 */
+.whisper-sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--card-bg);
+    border-right: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+.whisper-sidebar-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.whisper-sub-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 8px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.whisper-sub-tab:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.whisper-sub-tab.active {
+    color: var(--primary-color, #6366f1);
+    border-bottom-color: var(--primary-color, #6366f1);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.whisper-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+}
+
+.whisper-side-panel {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.whisper-side-panel.active {
+    display: flex;
+}
+
+.whisper-search-box {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.whisper-item-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.whisper-list-item {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    transition: background 0.15s ease;
+    border-left: 3px solid transparent;
+}
+
+.whisper-list-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.whisper-list-item.active {
+    background: rgba(99, 102, 241, 0.1);
+    border-left-color: var(--primary-color, #6366f1);
+}
+
+.item-main-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.item-audio-icon,
+.item-run-icon {
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+.item-filename,
+.item-run-title {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+
+.item-del-btn {
+    opacity: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 2px 4px;
+    transition: opacity 0.15s ease;
+}
+
+.whisper-list-item:hover .item-del-btn {
+    opacity: 0.6;
+}
+
+.whisper-list-item:hover .item-del-btn:hover {
+    opacity: 1;
+}
+
+.item-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+    font-size: 0.74rem;
+    color: var(--text-secondary);
+}
+
+.status-pill {
+    margin-left: auto;
+    font-size: 0.68rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.status-pill.completed {
+    background: rgba(52, 211, 153, 0.2);
+    color: #34d399;
+}
+
+.status-pill.in-progress {
+    background: rgba(99, 102, 241, 0.2);
+    color: #818cf8;
+}
+
+.status-pill.failed {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.status-pill.cancelled {
+    background: rgba(148, 163, 184, 0.2);
+    color: #94a3b8;
+}
+
+.whisper-empty-state {
+    padding: 36px 16px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.84rem;
+    line-height: 1.5;
+}
+
+/* 우측 작업 영역 */
+.whisper-workspace {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.whisper-player-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.whisper-current-audio-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+}
+
+.whisper-audio-title {
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.whisper-audio-meta {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.whisper-audio-player-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.whisper-playback-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.whisper-rate-buttons {
+    display: flex;
+    gap: 4px;
+}
+
+.rate-btn {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.rate-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.rate-btn.active {
+    background: var(--primary-color, #6366f1);
+    color: #ffffff;
+    border-color: var(--primary-color, #6366f1);
+}
+
+.whisper-config-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.whisper-config-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.whisper-config-field label {
+    font-size: 0.74rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.whisper-config-field .form-select {
+    padding: 5px 10px;
+    font-size: 0.82rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: #1e2433;
+    color: var(--text-primary);
+}
+
+.whisper-checkbox-lbl {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+    user-select: none;
+    padding-bottom: 4px;
+}
+
+.whisper-run-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+}
+
+/* 실시간 프로그레스 바 */
+.whisper-progress-section {
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.whisper-progress-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 0.82rem;
+}
+
+.whisper-phase-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.whisper-phase-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: #4f46e5;
+    color: #ffffff;
+}
+
+.whisper-phase-badge.phase-stt {
+    background: #2563eb;
+}
+
+.whisper-phase-badge.phase-diarization {
+    background: #7c3aed;
+}
+
+.whisper-phase-badge.phase-alignment {
+    background: #d97706;
+}
+
+.whisper-phase-msg {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.whisper-metrics {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.whisper-metric-pct {
+    font-weight: 700;
+    color: #818cf8;
+    font-size: 0.9rem;
+}
+
+.whisper-progress-bar-track {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 9999px;
+    overflow: hidden;
+}
+
+.whisper-progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #8b5cf6, #10b981);
+    border-radius: 9999px;
+    transition: width 0.25s ease;
+}
+
+/* 자막 세그먼트 타임라인 카드 */
+.whisper-segments-card {
+    flex: 1;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.whisper-segments-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.1);
+    flex-shrink: 0;
+    gap: 12px;
+}
+
+.whisper-segments-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.whisper-segments-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.whisper-segments-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.whisper-seg-search input {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: #1e2433;
+    color: var(--text-primary);
+    width: 160px;
+}
+
+.whisper-segments-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.whisper-segment-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    transition: all 0.15s ease;
+}
+
+.whisper-segment-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.whisper-segment-item.playing-active {
+    background: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.4);
+}
+
+.seg-time-speaker-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+    width: 110px;
+}
+
+.seg-time-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    font-family: monospace;
+    font-size: 0.74rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.seg-time-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.4);
+}
+
+.play-mini-icon {
+    font-size: 0.65rem;
+}
+
+.seg-speaker-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.seg-content-col {
+    flex: 1;
+    min-width: 0;
+}
+
+.seg-text-display {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+    padding: 4px 6px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    outline: none;
+    transition: all 0.15s ease;
+}
+
+.seg-text-display:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.seg-text-display:focus {
+    background: #181d28;
+    border-color: var(--primary-color, #6366f1);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.seg-text-display.save-flash {
+    background: rgba(52, 211, 153, 0.2) !important;
+    border-color: #34d399 !important;
+}
+
+.seg-actions-col {
+    flex-shrink: 0;
+    display: flex;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.whisper-segment-item:hover .seg-actions-col {
+    opacity: 1;
+}
+
+.whisper-empty-segments {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 16px;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    gap: 12px;
+}
+
+.whisper-empty-segments .empty-icon {
+    font-size: 2.2rem;
+    opacity: 0.4;
+}
+
+/* 자막 내보내기 드롭다운 */
+.whisper-export-dropdown {
+    position: relative;
+}
+
+.whisper-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    background: #1c2230;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    z-index: 50;
+    min-width: 170px;
+    overflow: hidden;
+}
+
+.whisper-dropdown-menu.open {
+    display: flex;
+    flex-direction: column;
+}
+
+.whisper-dropdown-menu button {
+    padding: 8px 14px;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+.whisper-dropdown-menu button:hover {
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+}
+
+
 
 
 

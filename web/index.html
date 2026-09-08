@@ -113,6 +113,13 @@
                                 <span class="item-desc">경계선 분할, 다중 자르기 & ZIP 저장</span>
                             </div>
                         </button>
+                        <button type="button" class="tab-dropdown-item" data-tab="whisper" onclick="selectDropdownTab('whisper', '🎙️', '음성 전사 & 화자 분리', event)">
+                            <span class="item-icon">🎙️</span>
+                            <div class="item-text">
+                                <span class="item-title">음성 전사 & 화자 분리</span>
+                                <span class="item-desc">faster-whisper STT & sherpa 화자 분리</span>
+                            </div>
+                        </button>
                     </div>
                 </div>
                 <button class="header-ai-btn" onclick="openAiSearchModal()" title="AI 문맥 검색 & 의미 유사도 비교 (단축키: Ctrl+K)">
@@ -1419,6 +1426,205 @@
                     </div>
                 </div>
             </section>
+
+            <!-- 12. 음성 전사 및 화자 분리 (Whisper & Diarization Studio) -->
+            <section id="tab-whisper" class="tab-pane">
+                <div class="whisper-container">
+                    <!-- 상단 헤더 툴바 -->
+                    <div class="whisper-toolbar">
+                        <div class="whisper-toolbar-left">
+                            <button type="button" class="form-btn add-btn" onclick="openWhisperFilePicker()">
+                                <span>➕</span> 오디오 파일 추가
+                            </button>
+                            <button type="button" class="mini-tool-btn" onclick="refreshAudioLibrary()" title="오디오 라이브러리 및 런 이력 새로고침">
+                                <span>🔄</span> 새로고침
+                            </button>
+                            <span id="whisper-hardware-badge" class="whisper-badge-gpu" title="하드웨어 가속 상태">
+                                <span>⚡</span> 하드웨어 확인 중...
+                            </span>
+                            <span id="whisper-diar-model-badge" class="whisper-badge-model" title="화자 분리 모델 상태">
+                                <span>🧠</span> 모델 확인 중...
+                            </span>
+                        </div>
+                        <div class="whisper-toolbar-right">
+                            <button type="button" class="mini-tool-btn" id="whisper-dl-models-btn" onclick="triggerDiarizationModelDownload()" style="display: none;">
+                                <span>📥</span> 화자 분리 모델 다운로드
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 메인 분할 레이아웃 (좌: 오디오 & 런 목록 320px, 우: 플레이어 & 자막 타임라인) -->
+                    <div class="whisper-main-layout">
+                        <!-- 좌측 사이드바: 원본 오디오 라이브러리 & 전사 런 이력 -->
+                        <aside class="whisper-sidebar">
+                            <div class="whisper-sidebar-tabs">
+                                <button type="button" id="whisper-tab-audio-btn" class="whisper-sub-tab active" onclick="switchWhisperSidebarTab('audio')">
+                                    <span>🎵 오디오 목록</span>
+                                    <span id="whisper-audio-count-badge" class="whisper-count-badge">0</span>
+                                </button>
+                                <button type="button" id="whisper-tab-runs-btn" class="whisper-sub-tab" onclick="switchWhisperSidebarTab('runs')">
+                                    <span>📋 전사 이력</span>
+                                    <span id="whisper-runs-count-badge" class="whisper-count-badge">0</span>
+                                </button>
+                            </div>
+
+                            <!-- 오디오 파일 목록 패널 -->
+                            <div id="whisper-audio-list-panel" class="whisper-side-panel active">
+                                <div class="whisper-search-box">
+                                    <input type="text" id="whisper-audio-search" class="form-input" placeholder="오디오 파일명 검색..." oninput="filterAudioList(this.value)">
+                                </div>
+                                <div id="whisper-audio-items" class="whisper-item-list">
+                                    <!-- 동적 렌더링 -->
+                                    <div class="whisper-empty-state">등록된 오디오 파일이 없습니다.<br>오디오 파일을 추가하거나 드래그 앤 드롭하세요.</div>
+                                </div>
+                            </div>
+
+                            <!-- 전사 런 이력 패널 -->
+                            <div id="whisper-runs-list-panel" class="whisper-side-panel">
+                                <div id="whisper-runs-items" class="whisper-item-list">
+                                    <!-- 동적 렌더링 -->
+                                    <div class="whisper-empty-state">선택된 오디오의 전사 런 이력이 없습니다.</div>
+                                </div>
+                            </div>
+                        </aside>
+
+                        <!-- 우측 메인 뷰: 플레이어 + 실행 설정 + 자막 뷰어 -->
+                        <div class="whisper-workspace">
+                            <!-- 상단: 오디오 플레이어 & 제어/전사 패널 -->
+                            <div class="whisper-player-card">
+                                <div class="whisper-current-audio-info">
+                                    <span class="whisper-audio-title" id="whisper-current-filename">오디오 파일을 선택해주세요</span>
+                                    <span class="whisper-audio-meta" id="whisper-current-meta">-</span>
+                                </div>
+
+                                <!-- 네이티브 오디오 플레이어 (Bottle 206 Partial Content 스트리밍) -->
+                                <div class="whisper-audio-player-wrapper">
+                                    <audio id="whisper-audio-player" controls preload="metadata" style="width: 100%; height: 42px; outline: none;"></audio>
+                                    <div class="whisper-playback-controls">
+                                        <span class="whisper-rate-label">재생 배속:</span>
+                                        <div class="whisper-rate-buttons">
+                                            <button type="button" class="rate-btn" onclick="setWhisperPlaybackRate(0.75)">0.75x</button>
+                                            <button type="button" class="rate-btn active" onclick="setWhisperPlaybackRate(1.0)">1.0x</button>
+                                            <button type="button" class="rate-btn" onclick="setWhisperPlaybackRate(1.25)">1.25x</button>
+                                            <button type="button" class="rate-btn" onclick="setWhisperPlaybackRate(1.5)">1.5x</button>
+                                            <button type="button" class="rate-btn" onclick="setWhisperPlaybackRate(2.0)">2.0x</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 전사 실행 설정 툴바 -->
+                                <div class="whisper-config-row">
+                                    <div class="whisper-config-field">
+                                        <label>STT 모델</label>
+                                        <select id="whisper-model-select" class="form-select">
+                                            <option value="tiny">tiny (초경량/고속)</option>
+                                            <option value="base">base (경량/일반)</option>
+                                            <option value="small" selected>small (권장/고정밀)</option>
+                                            <option value="medium">medium (고품질/무거움)</option>
+                                            <option value="large-v3">large-v3 (최고품질/대용량)</option>
+                                        </select>
+                                    </div>
+                                    <div class="whisper-config-field">
+                                        <label>언어</label>
+                                        <select id="whisper-lang-select" class="form-select">
+                                            <option value="ko" selected>한국어 (ko)</option>
+                                            <option value="en">영어 (en)</option>
+                                            <option value="ja">일본어 (ja)</option>
+                                            <option value="auto">자동 감지 (auto)</option>
+                                        </select>
+                                    </div>
+                                    <div class="whisper-config-field">
+                                        <label>디바이스</label>
+                                        <select id="whisper-device-select" class="form-select">
+                                            <option value="cuda" selected>CUDA (GPU float16)</option>
+                                            <option value="cpu">CPU (int8)</option>
+                                        </select>
+                                    </div>
+                                    <div class="whisper-config-field whisper-diar-toggle">
+                                        <label class="whisper-checkbox-lbl">
+                                            <input type="checkbox" id="whisper-diar-checkbox" onchange="onToggleDiarizationCheckbox(this.checked)">
+                                            <span>다중 화자 분리 (Diarization)</span>
+                                        </label>
+                                    </div>
+                                    <div class="whisper-config-field" id="whisper-speakers-field" style="display: none;">
+                                        <label>화자 수</label>
+                                        <select id="whisper-speakers-select" class="form-select">
+                                            <option value="0" selected>자동 감지 (Auto)</option>
+                                            <option value="2">2명</option>
+                                            <option value="3">3명</option>
+                                            <option value="4">4명</option>
+                                            <option value="5">5명</option>
+                                            <option value="6">6명 이상</option>
+                                        </select>
+                                    </div>
+                                    <div class="whisper-run-actions">
+                                        <button type="button" class="form-btn add-btn" id="whisper-start-run-btn" onclick="startWhisperRun()">
+                                            <span>▶</span> 전사 실행
+                                        </button>
+                                        <button type="button" class="form-btn danger-btn" id="whisper-cancel-run-btn" onclick="cancelWhisperRun()" style="display: none;">
+                                            <span>⏹</span> 취소
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 실시간 다단계 프로그레스 바 (STT -> Diarization -> Alignment) -->
+                                <div class="whisper-progress-section" id="whisper-progress-section" style="display: none;">
+                                    <div class="whisper-progress-info-row">
+                                        <div class="whisper-phase-indicator">
+                                            <span class="whisper-phase-badge" id="whisper-phase-badge">STT</span>
+                                            <span class="whisper-phase-msg" id="whisper-phase-msg">음성 변환 준비 중...</span>
+                                        </div>
+                                        <div class="whisper-metrics">
+                                            <span id="whisper-metric-rtf" class="whisper-metric-item">RTF: -</span>
+                                            <span id="whisper-metric-eta" class="whisper-metric-item">ETA: -</span>
+                                            <span id="whisper-metric-pct" class="whisper-metric-pct">0%</span>
+                                        </div>
+                                    </div>
+                                    <div class="whisper-progress-bar-track">
+                                        <div class="whisper-progress-bar-fill" id="whisper-progress-bar-fill" style="width: 0%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 하단: 전사 결과 및 자막 타임라인 뷰어 -->
+                            <div class="whisper-segments-card">
+                                <div class="whisper-segments-header">
+                                    <div class="whisper-segments-title-group">
+                                        <span class="whisper-segments-title">📝 전사 텍스트 / 세그먼트 타임라인</span>
+                                        <span id="whisper-segment-count-badge" class="whisper-count-badge">0개 세그먼트</span>
+                                    </div>
+                                    <div class="whisper-segments-toolbar">
+                                        <div class="whisper-seg-search">
+                                            <input type="text" id="whisper-seg-search-input" placeholder="자막 내용 검색..." oninput="filterSegmentsList(this.value)">
+                                        </div>
+                                        <button type="button" class="mini-tool-btn" onclick="openSpeakerRenameModal()" id="whisper-rename-speaker-btn" style="display: none;">
+                                            <span>🏷️</span> 화자 이름 설정
+                                        </button>
+                                        <div class="whisper-export-dropdown">
+                                            <button type="button" class="mini-tool-btn primary" onclick="toggleExportSubtitlesDropdown(event)">
+                                                <span>💾</span> 자막 다운로드 ▾
+                                            </button>
+                                            <div id="whisper-export-menu" class="whisper-dropdown-menu">
+                                                <button type="button" onclick="exportSubtitlesRun('srt')">📄 SRT 자막 (.srt)</button>
+                                                <button type="button" onclick="exportSubtitlesRun('vtt')">🌐 WebVTT 자막 (.vtt)</button>
+                                                <button type="button" onclick="exportSubtitlesRun('txt')">📝 텍스트 대본 (.txt)</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 세그먼트 타임라인 목록 뷰 -->
+                                <div id="whisper-segments-list" class="whisper-segments-list">
+                                    <div class="whisper-empty-segments">
+                                        <span class="empty-icon">🎙️</span>
+                                        <p>전사 결과를 선택하거나 상단에서 [전사 실행]을 눌러주세요.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
 
         <!-- 콘솔 높이 드래그 조절 바 -->
@@ -2246,6 +2452,22 @@
         </div>
     </div>
 
+    <!-- 화자 이름 설정 모달 -->
+    <div id="whisper-speaker-modal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 480px; width: 92%;">
+            <div class="modal-header">
+                <h3>🏷️ 화자 표시 이름 변경</h3>
+                <button class="modal-close-btn" onclick="closeSpeakerRenameModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="whisper-speaker-modal-body" style="padding: 16px 20px;">
+                <!-- 동적 화자 입력 목록 -->
+            </div>
+            <div class="modal-footer">
+                <button class="form-btn close-btn" onclick="closeSpeakerRenameModal()">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 공통 인레이어 팝업 다이얼로그 (Alert / Confirm / Prompt) -->
     <div id="app-dialog-modal" class="modal-overlay dialog-modal-overlay">
         <div class="modal-card dialog-card">
@@ -2289,6 +2511,7 @@
     <script src="js/image_slicer.js"></script>
     <script src="js/ai_search.js"></script>
     <script src="js/agy_sessions.js"></script>
+    <script src="js/whisper.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

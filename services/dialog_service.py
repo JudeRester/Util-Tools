@@ -51,3 +51,31 @@ def select_file_dialog():
         return {"status": "cancelled", "path": ""}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@eel.expose
+def select_audio_files_dialog():
+    """전사할 오디오 파일(복수 선택 지원) 대화상자 열기 (tkinter)"""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        files_selected = filedialog.askopenfilenames(
+            title="전사할 오디오 파일 선택",
+            filetypes=[
+                ("오디오 및 비디오 파일", "*.mp3;*.wav;*.m4a;*.flac;*.ogg;*.aac;*.wma;*.mp4;*.mkv;*.webm;*.avi"),
+                ("모든 파일", "*.*")
+            ]
+        )
+        root.destroy()
+        
+        if files_selected:
+            normalized_paths = [os.path.normpath(p) for p in files_selected]
+            return {"status": "success", "paths": normalized_paths}
+        return {"status": "cancelled", "paths": []}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+

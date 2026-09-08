@@ -190,6 +190,9 @@ function initTabOnDemand(tabName) {
         case 'slicer':
             if (typeof initImageSlicer === 'function') initImageSlicer();
             break;
+        case 'whisper':
+            if (typeof initWhisperStudio === 'function') initWhisperStudio();
+            break;
     }
 }
 
@@ -203,6 +206,10 @@ function teardownTab(tabName) {
     } else if (tabName === 'emails') {
         if (typeof teardownEmailViewer === 'function') {
             teardownEmailViewer();
+        }
+    } else if (tabName === 'whisper') {
+        if (typeof teardownWhisperStudio === 'function') {
+            teardownWhisperStudio();
         }
     }
 
@@ -253,7 +260,8 @@ function switchTab(targetTab) {
         csv: { icon: '📋', label: 'CSV 뷰어' },
         markdown: { icon: '📝', label: 'Markdown 뷰어' },
         mermaid: { icon: '📊', label: '다이어그램' },
-        slicer: { icon: '✂️', label: '이미지 슬라이서' }
+        slicer: { icon: '✂️', label: '이미지 슬라이서' },
+        whisper: { icon: '🎙️', label: '음성 전사' }
     };
 
     if (WORKSPACE_TABS[targetTab]) {

@@ -74,6 +74,7 @@ def get_db_connection():
     - PRAGMA journal_mode=WAL (동시 읽기/쓰기 지원)
     - PRAGMA synchronous=NORMAL (디스크 I/O 최적화 및 크래시 안전)
     - PRAGMA busy_timeout=5000 (동시성 락 대기 5초)
+    - PRAGMA foreign_keys=ON (외래 키 제약 조건 활성화)
     """
     _ensure_data_dir()
     conn = sqlite3.connect(DB_PATH, timeout=10.0, check_same_thread=False)
@@ -81,6 +82,7 @@ def get_db_connection():
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA busy_timeout=5000;")
+    conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
 
@@ -701,6 +703,55 @@ def init_db():
                         data_json TEXT,
                         updated_at TEXT
                     );
+                """)
+
+                # 14. audio_files 테이블 (오디오 원본 파일 관리)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS audio_files (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        file_path TEXT NOT NULL UNIQUE,
+                        filename TEXT NOT NULL,
+                        file_size INTEGER NOT NULL,
+                        duration_sec REAL DEFAULT 0.0,
+                        created_at TEXT DEFAULT (datetime('now', 'localtime'))
+                    );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_audio_files_created ON audio_files(created_at DESC);")
+
+                # 15. transcription_runs 테이블 (전사 및 화자 분리 실행 이력)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS transcription_runs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        audio_id INTEGER NOT NULL,
+                        model_name TEXT DEFAULT 'small',
+                        language TEXT DEFAULT 'ko',
+                        stt_device TEXT DEFAULT 'cuda',
+                        enable_diarization INTEGER DEFAULT 0,
+                        diarization_provider TEXT DEFAULT 'cpu',
+                        num_speakers INTEGER DEFAULT 0,
+                        cluster_threshold REAL DEFAULT 0.5,
+                        status TEXT DEFAULT 'PENDING',
+                        progress REAL DEFAULT 0.0,
+                        current_phase TEXT DEFAULT 'PENDING',
+                        rtf REAL DEFAULT 0.0,
+                        eta_sec REAL DEFAULT 0.0,
+                        segments_json TEXT DEFAULT '[]',
+                        speaker_names_json TEXT DEFAULT '{}',
+                        error_message TEXT DEFAULT '',
+                        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+                        FOREIGN KEY(audio_id) REFERENCES audio_files(id) ON DELETE CASCADE
+                    );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_audio ON transcription_runs(audio_id);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_status ON transcription_runs(status);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_updated ON transcription_runs(updated_at DESC);")
+
+                # 비정상 종료 등으로 진행 중 상태에 머물러 있는 오래된 작업 복구 (Stale Run Recovery)
+                conn.execute("""
+                    UPDATE transcription_runs
+                    SET status = 'FAILED', current_phase = 'INTERRUPTED', error_message = '애플리케이션 비정상 종료로 중단됨', updated_at = datetime('now', 'localtime')
+                    WHERE status IN ('PENDING', 'TRANSCRIBING', 'DIARIZING', 'ALIGNING');
                 """)
 
             # 1회 자동 마이그레이션 실행
