@@ -9501,6 +9501,60 @@ input[type="checkbox"] {
     display: flex;
 }
 
+/* 오디오 파일 드래그 앤 드롭 영역 */
+.whisper-drop-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 10px;
+    margin: 10px 12px 6px 12px;
+    border: 2px dashed rgba(99, 102, 241, 0.4);
+    border-radius: var(--radius-md, 8px);
+    background: rgba(99, 102, 241, 0.04);
+    cursor: pointer;
+    transition: var(--transition, all 0.2s ease-in-out);
+    text-align: center;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.whisper-drop-zone:hover {
+    border-color: var(--accent-color, #6366f1);
+    background: rgba(99, 102, 241, 0.1);
+    transform: translateY(-1px);
+}
+
+.whisper-drop-zone.drag-over {
+    border-color: #818cf8;
+    background: rgba(99, 102, 241, 0.22);
+    box-shadow: 0 0 16px rgba(99, 102, 241, 0.4);
+    transform: scale(1.02);
+}
+
+.whisper-drop-icon {
+    font-size: 1.8rem;
+    margin-bottom: 4px;
+    transition: transform 0.2s ease;
+    line-height: 1;
+}
+
+.whisper-drop-zone.drag-over .whisper-drop-icon {
+    transform: scale(1.25);
+}
+
+.whisper-drop-text {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.whisper-drop-sub {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
 .whisper-search-box {
     padding: 8px 12px;
     border-bottom: 1px solid var(--border-color);

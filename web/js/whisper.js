@@ -173,29 +173,125 @@ async function importAudioFiles(paths) {
     }
 }
 
+const ALLOWED_AUDIO_EXTENSIONS = new Set([
+    'mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac', 'wma', 'opus', 'mp4', 'mkv', 'webm', 'avi'
+]);
+const MAX_AUDIO_FILE_SIZE_BYTES = 2 * 1024 * 1024 * 1024; // 2GB
+
 function setupAudioDropZone() {
     const container = document.getElementById('tab-whisper');
+    const dropZone = document.getElementById('whisper-drop-zone');
+    const dropIcon = document.getElementById('whisper-drop-icon');
+    const dropText = document.getElementById('whisper-drop-text');
+    const dropSub = document.getElementById('whisper-drop-sub');
     if (!container) return;
 
-    container.ondragover = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-    };
+    let dragCounter = 0;
 
-    container.ondrop = async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            const paths = [];
-            for (let i = 0; i < e.dataTransfer.files.length; i++) {
-                const f = e.dataTransfer.files[i];
-                if (f.path) paths.push(f.path);
-            }
-            if (paths.length > 0) {
-                await importAudioFiles(paths);
-            }
+    const setDragVisual = (isOver) => {
+        if (!dropZone) return;
+        if (isOver) {
+            dropZone.classList.add('drag-over');
+            if (dropIcon) dropIcon.textContent = '📥';
+            if (dropText) dropText.innerHTML = '<b>여기에 오디오 파일을 놓으세요</b>';
+            if (dropSub) dropSub.textContent = '드롭 시 라이브러리에 즉시 등록됩니다';
+        } else {
+            dropZone.classList.remove('drag-over');
+            if (dropIcon) dropIcon.textContent = '🎙️';
+            if (dropText) dropText.innerHTML = '<b>오디오 파일 드래그 앤 드롭</b>';
+            if (dropSub) dropSub.textContent = '또는 클릭하여 파일 선택 (MP3, WAV, M4A 등)';
         }
     };
+
+    // 브라우저 기본 파일 열기 동작 전역 방지
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        container.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    });
+
+    container.addEventListener('dragenter', (e) => {
+        dragCounter++;
+        setDragVisual(true);
+    });
+
+    container.addEventListener('dragover', (e) => {
+        e.dataTransfer.dropEffect = 'copy';
+        if (dragCounter === 0) {
+            dragCounter = 1;
+            setDragVisual(true);
+        }
+    });
+
+    container.addEventListener('dragleave', (e) => {
+        dragCounter--;
+        if (dragCounter <= 0) {
+            dragCounter = 0;
+            setDragVisual(false);
+        }
+    });
+
+    container.addEventListener('drop', async (e) => {
+        dragCounter = 0;
+        setDragVisual(false);
+
+        const dt = e.dataTransfer;
+        if (!dt || !dt.files || dt.files.length === 0) return;
+
+        // 드롭 시 사이드바 탭을 '오디오 목록'으로 자동 전환
+        if (typeof switchWhisperSidebarTab === 'function') {
+            switchWhisperSidebarTab('audio');
+        }
+
+        const validPaths = [];
+        const invalidExtFiles = [];
+        const emptyFiles = [];
+        const oversizedFiles = [];
+
+        for (let i = 0; i < dt.files.length; i++) {
+            const file = dt.files[i];
+            const filename = file.name || '';
+            const ext = filename.split('.').pop()?.toLowerCase() || '';
+
+            if (!ALLOWED_AUDIO_EXTENSIONS.has(ext)) {
+                invalidExtFiles.push(filename);
+                continue;
+            }
+
+            if (file.size === 0) {
+                emptyFiles.push(filename);
+                continue;
+            }
+
+            if (file.size > MAX_AUDIO_FILE_SIZE_BYTES) {
+                oversizedFiles.push(filename);
+                continue;
+            }
+
+            if (file.path) {
+                validPaths.push(file.path);
+            }
+        }
+
+        if (invalidExtFiles.length > 0) {
+            const preview = invalidExtFiles.slice(0, 2).join(', ');
+            const extra = invalidExtFiles.length > 2 ? ` 외 ${invalidExtFiles.length - 2}개` : '';
+            showToast('지원되지 않는 파일 형식', `${preview}${extra}은(는) 지원되지 않는 오디오/비디오 형식입니다.`, 'warning');
+        }
+
+        if (emptyFiles.length > 0) {
+            showToast('빈 파일 제외', `${emptyFiles.slice(0, 2).join(', ')} 파일 크기가 0바이트입니다.`, 'warning');
+        }
+
+        if (oversizedFiles.length > 0) {
+            showToast('파일 크기 초과', `${oversizedFiles.join(', ')} 파일이 2GB 제한을 초과했습니다.`, 'warning');
+        }
+
+        if (validPaths.length > 0) {
+            await importAudioFiles(validPaths);
+        }
+    });
 }
 
 async function refreshAudioLibrary() {
@@ -237,8 +333,9 @@ function renderAudioList() {
 
     if (filtered.length === 0) {
         container.innerHTML = `
-            <div class="whisper-empty-state">
-                ${whisperState.audioLibrary.length === 0 ? '등록된 오디오 파일이 없습니다.<br>상단 [+ 오디오 파일 추가] 버튼을 눌러주세요.' : '검색 결과와 일치하는 오디오 파일이 없습니다.'}
+            <div class="whisper-empty-state" onclick="openWhisperFilePicker()" style="cursor: pointer;" title="클릭하여 오디오 파일 선택">
+                <div style="font-size: 1.6rem; margin-bottom: 6px;">🎙️</div>
+                ${whisperState.audioLibrary.length === 0 ? '등록된 오디오 파일이 없습니다.<br>상단 드롭 영역으로 드래그하거나 <b>여기를 클릭</b>하세요.' : '검색 결과와 일치하는 오디오 파일이 없습니다.'}
             </div>
         `;
         return;
