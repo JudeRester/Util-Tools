@@ -87,9 +87,19 @@ git commit -m "feat(module): 작업 내용 요약 (#이슈번호)"
 - **원자적 커밋 원칙**: 기능 구현, 결함 조치, 리팩토링 등 단일 목적의 작업 단위가 끝날 때마다 즉시 독립 커밋을 생성합니다.
 - **배치 커밋(몰아서 커밋) 전면 금지**: 여러 작업이나 수정을 커밋 없이 누적한 뒤 한 번에 묶어서 커밋하는 행위를 엄격히 금지합니다.
 
+### 4단계: 하이브리드 기능 검증 및 사용자 UI 승인 게이트 (Hybrid Verification & User Sign-off Gate)
+작업 단위 커밋 완료 후 `develop` 병합 전 반드시 통과해야 하는 2단계 검증 게이트입니다:
+1. **백엔드 로직/API 자동화 기능 검증**:
+   - 신규/수정된 Python 서비스 및 DB 쿼리는 실제 런타임 동작을 검증하는 단위/기능 테스트(Unit/Functional Test)를 필수 실행하여 100% PASS 확인.
+   - 단순 구문 검사(`verify_integrity.py`) 통과를 기능 검증 완료로 간주하는 것을 엄격히 금지합니다.
+2. **프론트엔드 UI/인터랙션 수동 검수 요청**:
+   - 화면 렌더링, 이벤트 핸들링, 스타일, 사용자 체감 동작은 작업 브랜치 상태를 유지하고 사용자에게 실화면 검수를 요청합니다.
+3. **🚨 사용자 승인 전 독단적 병합 전면 금지**:
+   - 사용자의 명시적 승인("확인 완료, 병합 진행" 등) 없이 AI가 독단적으로 develop 병합을 실행하는 행위를 전면 금지합니다.
+
 ---
 
-## 4. 직관적·기술적 용어 사용 및 과장 표현 지양 원칙 (Objective Technical Phrasing)
+## 5. 직관적·기술적 용어 사용 및 과장 표현 지양 원칙 (Objective Technical Phrasing)
 
 코드베이스, 주석, 기술 문서, 기획서, Git 커밋 메시지 및 사용자 커뮤니케이션 작성 시 아래의 **직관적 기술 용어 표준화 원칙**을 엄격히 준수합니다:
 
@@ -106,7 +116,7 @@ git commit -m "feat(module): 작업 내용 요약 (#이슈번호)"
 
 ---
 
-## 5. 비차단 인레이어 UI 원칙 (Non-blocking In-layer UI Mandate)
+## 6. 비차단 인레이어 UI 원칙 (Non-blocking In-layer UI Mandate)
 
 프론트엔드 자바스크립트 코드 작성 시 아래의 **비차단 인레이어 UI 원칙**을 엄격히 준수합니다:
 
@@ -121,7 +131,7 @@ git commit -m "feat(module): 작업 내용 요약 (#이슈번호)"
 
 ---
 
-## 6. 연계 규정 참조
+## 7. 연계 규정 참조
 
 - [`.agents/rules/git_flow.md`](file:///F:/D_Tool/Util/Util-Tools/.agents/rules/git_flow.md) : GitFlow 브랜치 전략 및 main 브랜치 보호 규정
 - [`GEMINI.md`](file:///F:/D_Tool/Util/Util-Tools/GEMINI.md) : Util-Tools 통합 개발 가이드라인
