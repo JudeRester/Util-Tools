@@ -16,6 +16,8 @@ onnx_datas, onnx_binaries, onnx_hidden = collect_all('onnxruntime')
 tok_datas, tok_binaries, tok_hidden = collect_all('tokenizers')
 webview_datas, webview_binaries, webview_hidden = collect_all('webview')
 pythonnet_datas, pythonnet_binaries, pythonnet_hidden = collect_all('pythonnet')
+winocr_datas, winocr_binaries, winocr_hidden = collect_all('winocr')
+winrt_datas, winrt_binaries, winrt_hidden = collect_all('winrt')
 
 # Static Bundled Assets (read via sys._MEIPASS / core.paths.BUNDLE_DIR)
 added_datas = [
@@ -23,7 +25,7 @@ added_datas = [
     ('utiltools.ico', '.'),
     ('templates', 'templates'),
     ('models', 'models'),
-] + onnx_datas + tok_datas + webview_datas + pythonnet_datas
+] + onnx_datas + tok_datas + webview_datas + pythonnet_datas + winocr_datas + winrt_datas
 
 # Hidden dynamic imports required at runtime
 hidden_imports = [
@@ -66,13 +68,20 @@ hidden_imports = [
     'services.image_service',
     'services.agy_service',
     'services.opencodex_service',
-] + onnx_hidden + tok_hidden + webview_hidden + pythonnet_hidden
+    'services.whisper_service',
+    'services.ocr_service',
+    'winocr',
+    'winrt.windows.media.ocr',
+    'winrt.windows.globalization',
+    'winrt.windows.storage.streams',
+    'winrt.windows.graphics.imaging',
+] + onnx_hidden + tok_hidden + webview_hidden + pythonnet_hidden + winocr_hidden + winrt_hidden
 
 
 a = Analysis(
     ['main.py'],
     pathex=['.'],
-    binaries=onnx_binaries + tok_binaries + webview_binaries + pythonnet_binaries,
+    binaries=onnx_binaries + tok_binaries + webview_binaries + pythonnet_binaries + winocr_binaries + winrt_binaries,
     datas=added_datas,
     hiddenimports=hidden_imports,
     hookspath=[],

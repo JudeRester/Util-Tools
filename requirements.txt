@@ -9,3 +9,4 @@ pywebview>=6.2.1,<7
 pythonnet>=3.0.0
 faster-whisper==1.2.1
 sherpa-onnx==1.12.27
+winocr==0.0.15
