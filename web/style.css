@@ -10652,15 +10652,28 @@ input[type="checkbox"] {
     background: linear-gradient(135deg, #4f46e5, #6366f1);
     color: #ffffff;
     border: none;
-    padding: 6px 14px;
+    padding: 5px 12px;
     border-radius: 6px;
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+    line-height: 1.2;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     transition: var(--transition);
+    white-space: nowrap;
+}
+
+.diff-run-icon {
+    font-size: 0.78rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 0;
+    background: transparent;
 }
 
 .diff-btn-run:hover:not(:disabled) {

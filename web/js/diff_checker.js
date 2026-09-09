@@ -189,7 +189,7 @@ async function runDiffComparison() {
     diffState.isComparing = true;
     if (runBtn) {
         runBtn.disabled = true;
-        runBtn.innerHTML = '<span class="spinner-inline"></span> 비교 분석 중...';
+        runBtn.innerHTML = '<span class="spinner-inline"></span> 비교 중...';
     }
 
     const startTime = performance.now();
@@ -225,7 +225,7 @@ async function runDiffComparison() {
         diffState.isComparing = false;
         if (runBtn) {
             runBtn.disabled = false;
-            runBtn.innerHTML = '<span class="btn-icon">▶️</span><span class="btn-text">차이점 비교 실행</span>';
+            runBtn.innerHTML = '<span class="diff-run-icon">▶️</span> <span>차이점 비교 실행</span>';
         }
     }
 }
