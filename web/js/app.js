@@ -200,6 +200,9 @@ function initTabOnDemand(tabName) {
         case 'ocr':
             if (typeof initOcrStudio === 'function') initOcrStudio();
             break;
+        case 'diff':
+            if (typeof initDiffChecker === 'function') initDiffChecker();
+            break;
     }
 }
 
@@ -273,7 +276,8 @@ function switchTab(targetTab) {
         mermaid: { icon: '📊', label: '다이어그램' },
         slicer: { icon: '✂️', label: '이미지 슬라이서' },
         whisper: { icon: '🎙️', label: '음성 전사' },
-        ocr: { icon: '📷', label: 'OCR 텍스트 추출' }
+        ocr: { icon: '📷', label: 'OCR 텍스트 추출' },
+        diff: { icon: '🔀', label: '텍스트 Diff 비교' }
     };
 
     if (WORKSPACE_TABS[targetTab]) {

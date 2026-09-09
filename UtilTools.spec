@@ -70,6 +70,7 @@ hidden_imports = [
     'services.opencodex_service',
     'services.whisper_service',
     'services.ocr_service',
+    'services.diff_service',
     'winocr',
     'winrt.windows.media.ocr',
     'winrt.windows.globalization',
