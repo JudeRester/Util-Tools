@@ -145,12 +145,26 @@ async function openWhisperFilePicker() {
                 await importAudioFiles(res.paths);
             }
         } else {
-            showToast('파일 선택', '오디오 선택 대화상자를 열 수 없습니다.', '⚠️');
+            openBrowserAudioFilePicker();
         }
     } catch (e) {
         console.error('[Whisper] 파일 선택 오류:', e);
         showAppAlert(`오디오 파일 선택 중 오류가 발생했습니다:\n${e.message}`, '오류', '❌');
     }
+}
+
+function openBrowserAudioFilePicker() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.accept = '.mp3,.wav,.m4a,.flac,.ogg,.aac,.wma,.opus,.mp4,.mkv,.webm,.avi';
+    input.onchange = async (e) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length > 0) {
+            await uploadAudioFiles(files);
+        }
+    };
+    input.click();
 }
 
 async function importAudioFiles(paths) {
@@ -170,6 +184,66 @@ async function importAudioFiles(paths) {
     } catch (e) {
         console.error('[Whisper] add_audio_files 오류:', e);
         showAppAlert(`오디오 등록 중 오류가 발생했습니다:\n${e.message}`, '오류', '❌');
+    }
+}
+
+async function uploadAudioFiles(files) {
+    if (!files || files.length === 0) return;
+
+    const fileCount = files.length;
+    const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0);
+    const sizeStr = formatFileSize(totalBytes);
+
+    const dropText = document.getElementById('whisper-drop-text');
+    const dropSub = document.getElementById('whisper-drop-sub');
+    const origText = dropText ? dropText.innerHTML : '';
+    const origSub = dropSub ? dropSub.textContent : '';
+
+    if (dropText) dropText.innerHTML = `<b>오디오 업로드 중 (${fileCount}개, ${sizeStr})...</b>`;
+    if (dropSub) dropSub.textContent = '잠시만 기다려 주세요...';
+    showToast('오디오 업로드 시작', `${fileCount}개 파일 (${sizeStr}) 업로드 중입니다...`, '⏳');
+
+    try {
+        const formData = new FormData();
+        for (const file of files) {
+            formData.append('file', file, file.name);
+        }
+
+        const resp = await fetch('/api/whisper/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!resp.ok) {
+            let errorMsg = `HTTP ${resp.status}`;
+            try {
+                const errJson = await resp.json();
+                errorMsg = errJson.message || errorMsg;
+            } catch (e) {
+                const text = await resp.text();
+                if (text) errorMsg = text;
+            }
+            showAppAlert(`오디오 업로드 실패:\n${errorMsg}`, '오류', '❌');
+            return;
+        }
+
+        const res = await resp.json();
+        if (res.success) {
+            const added = res.added || [];
+            showToast('오디오 등록 완료', `${added.length}개 파일이 라이브러리에 등록되었습니다.`, '🎵');
+            await refreshAudioLibrary();
+            if (added.length > 0 && added[0].id) {
+                selectAudioFile(added[0].id);
+            }
+        } else {
+            showAppAlert(res.message || '오디오 등록에 실패했습니다.', '오류', '❌');
+        }
+    } catch (e) {
+        console.error('[Whisper] uploadAudioFiles 오류:', e);
+        showAppAlert(`오디오 파일 업로드 중 오류가 발생했습니다:\n${e.message}`, '오류', '❌');
+    } finally {
+        if (dropText && origText) dropText.innerHTML = origText;
+        if (dropSub && origSub) dropSub.textContent = origSub;
     }
 }
 
@@ -203,36 +277,36 @@ function setupAudioDropZone() {
         }
     };
 
-    // 브라우저 기본 파일 열기 동작 전역 방지
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        container.addEventListener(eventName, (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-        });
-    });
-
-    container.addEventListener('dragenter', (e) => {
+    const handleDragEnter = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         dragCounter++;
         setDragVisual(true);
-    });
+    };
 
-    container.addEventListener('dragover', (e) => {
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         e.dataTransfer.dropEffect = 'copy';
         if (dragCounter === 0) {
             dragCounter = 1;
             setDragVisual(true);
         }
-    });
+    };
 
-    container.addEventListener('dragleave', (e) => {
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         dragCounter--;
         if (dragCounter <= 0) {
             dragCounter = 0;
             setDragVisual(false);
         }
-    });
+    };
 
-    container.addEventListener('drop', async (e) => {
+    const handleFileDrop = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         dragCounter = 0;
         setDragVisual(false);
 
@@ -244,7 +318,8 @@ function setupAudioDropZone() {
             switchWhisperSidebarTab('audio');
         }
 
-        const validPaths = [];
+        const validLocalPaths = [];
+        const filesToUpload = [];
         const invalidExtFiles = [];
         const emptyFiles = [];
         const oversizedFiles = [];
@@ -270,7 +345,9 @@ function setupAudioDropZone() {
             }
 
             if (file.path) {
-                validPaths.push(file.path);
+                validLocalPaths.push(file.path);
+            } else {
+                filesToUpload.push(file);
             }
         }
 
@@ -288,9 +365,21 @@ function setupAudioDropZone() {
             showToast('파일 크기 초과', `${oversizedFiles.join(', ')} 파일이 2GB 제한을 초과했습니다.`, 'warning');
         }
 
-        if (validPaths.length > 0) {
-            await importAudioFiles(validPaths);
+        if (validLocalPaths.length > 0) {
+            await importAudioFiles(validLocalPaths);
         }
+
+        if (filesToUpload.length > 0) {
+            await uploadAudioFiles(filesToUpload);
+        }
+    };
+
+    [container, dropZone].forEach(el => {
+        if (!el) return;
+        el.addEventListener('dragenter', handleDragEnter);
+        el.addEventListener('dragover', handleDragOver);
+        el.addEventListener('dragleave', handleDragLeave);
+        el.addEventListener('drop', handleFileDrop);
     });
 }
 

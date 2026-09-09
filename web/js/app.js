@@ -401,6 +401,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 공통 콘솔 높이 조절기 초기화
     initConsoleResizer();
 
+    // 윈도우 전역 드래그 앤 드롭 파일 탐색기 열기 방지 (작업 공간 외부 드롭 시 브라우저 이동 방지)
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    }, false);
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+    }, false);
+
     // 마지막으로 사용했던 탭 1개만 온디맨드 로드 (초기 램 500MB -> 40MB 대폭 감축)
     const savedTab = appSettings.active_tab_id || localStorage.getItem('active_tab_id') || 'system';
     switchTab(savedTab);
