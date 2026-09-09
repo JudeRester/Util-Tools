@@ -1477,12 +1477,21 @@
 
                             <!-- 오디오 파일 목록 패널 -->
                             <div id="whisper-audio-list-panel" class="whisper-side-panel active">
+                                <!-- 오디오 파일 드래그 앤 드롭 영역 -->
+                                <div id="whisper-drop-zone" class="whisper-drop-zone" onclick="openWhisperFilePicker()" title="클릭하여 오디오 파일 선택 또는 드래그 앤 드롭">
+                                    <div class="whisper-drop-icon" id="whisper-drop-icon">🎙️</div>
+                                    <div class="whisper-drop-text" id="whisper-drop-text"><b>오디오 파일 드래그 앤 드롭</b></div>
+                                    <div class="whisper-drop-sub" id="whisper-drop-sub">또는 클릭하여 파일 선택 (MP3, WAV, M4A 등)</div>
+                                </div>
                                 <div class="whisper-search-box">
                                     <input type="text" id="whisper-audio-search" class="form-input" placeholder="오디오 파일명 검색..." oninput="filterAudioList(this.value)">
                                 </div>
                                 <div id="whisper-audio-items" class="whisper-item-list">
                                     <!-- 동적 렌더링 -->
-                                    <div class="whisper-empty-state">등록된 오디오 파일이 없습니다.<br>오디오 파일을 추가하거나 드래그 앤 드롭하세요.</div>
+                                    <div class="whisper-empty-state" onclick="openWhisperFilePicker()" style="cursor: pointer;" title="클릭하여 오디오 파일 선택">
+                                        <div style="font-size: 1.6rem; margin-bottom: 6px;">🎙️</div>
+                                        등록된 오디오 파일이 없습니다.<br>상단 영역으로 파일을 드래그하거나 <b>여기를 클릭</b>하세요.
+                                    </div>
                                 </div>
                             </div>
 
