@@ -38,7 +38,12 @@
      - 여러 작업이나 수정을 하나의 커밋으로 몰아서 처리하는 배치 커밋을 엄격히 금지하며, 작업 단위별 독립 커밋을 보장합니다.
      - Conventional Commits 규격 준수 (`feat:`, `fix:`, `refactor:`, `docs:`, `test:` 등) 및 이슈 번호 연동 (`(#이슈번호)`).
 
-5. **직관적·기술적 용어 사용 및 과장 표현 지양 원칙 (Objective Technical Phrasing)**:
+5. **하이브리드 기능 검증 게이트 및 사용자 승인 후 병합 원칙 (Hybrid Verification & User Sign-off Gate)**:
+   - **백엔드 로직/API 자동화 검증**: 백엔드 서비스, DB 쿼리, API 변경 시 단순 문법 검사를 넘어 실제 런타임 동작을 검증하는 단위/기능 테스트(Unit/Functional Test)를 필수 수행하여 통과해야 합니다.
+   - **프론트엔드 UI/인터랙션 수동 검수 요청**: 화면 렌더링, 스타일, 이벤트 핸들러 등 프론트엔드 변경 사항은 작업 브랜치(`feature/*`, `bugfix/*`) 상태를 유지한 채 사용자에게 실화면 검수를 요청합니다.
+   - **임의 병합 절대 금지 (No Autonomous Merge)**: AI는 사용자의 명시적인 검수 완료 승인(예: "확인 완료, 병합 진행")을 받기 전까지 절대로 작업 브랜치를 `develop`에 임의로 병합하지 않습니다.
+
+6. **직관적·기술적 용어 사용 및 과장 표현 지양 원칙 (Objective Technical Phrasing)**:
    - 코드, 주석, 문서(README, Docs), 커밋 메시지, 기획서 및 사용자 보고 시 **과장되거나 모호한 마케팅성 수식어 사용을 엄격히 금지**합니다.
    - **금지/지양 표현**:
      - `원클릭`, `마법 같은`, `혁신적인` 등 실제 동작 메커니즘을 모호하게 만드는 마케팅 버즈워드
@@ -46,12 +51,12 @@
    - **표준 표현 원칙**:
      - 시스템의 실제 엔지니어링 동작, 프로토콜, 정량적 수치(예: "5ms 파일 락 검사", "인라인 즉시 갱신", "터미널 직접 실행")를 사실에 기반하여 직관적이고 담백하게 기술합니다.
 
-6. **비차단 인레이어 UI 원칙 (Non-blocking In-layer UI Mandate)**:
+7. **비차단 인레이어 UI 원칙 (Non-blocking In-layer UI Mandate)**:
    - 브라우저 자바스크립트 실행 흐름 및 렌더링을 차단(block)하는 브라우저 네이티브 대화상자(`alert()`, `confirm()`, `prompt()`)의 사용을 **전면 금지**합니다.
    - 사용자 입력, 확인, 단순 알림이 필요한 모든 상호작용은 비동기 Promise 기반의 **인레이어 모달 팝업(`showAppAlert()`, `showAppConfirm()`, `showAppPrompt()`) 또는 실시간 토스트(`showToast()`)**만을 사용해야 합니다.
 
-7. **자세한 규정 참조**:
-   - [`.agents/rules/git_flow.md`](file:///F:/D_Tool/Util/Util-Tools/.agents/rules/git_flow.md) : GitFlow 브랜치 전략 및 main 브랜치 보호 규정
-   - [`.agents/rules/code_integrity.md`](file:///F:/D_Tool/Util/Util-Tools/.agents/rules/code_integrity.md) : 코드 무결성 및 영향도 검사 규정
+8. **자세한 규정 참조**:
+   - [`.agents/rules/git_flow.md`](file:///F:/D_Tool/Util/Util-Tools/.agents/rules/git_flow.md) : GitFlow 브랜치 전략, main 브랜치 보호 및 사용자 승인 병합 규정
+   - [`.agents/rules/code_integrity.md`](file:///F:/D_Tool/Util/Util-Tools/.agents/rules/code_integrity.md) : 코드 무결성, 하이브리드 기능 검증 및 영향도 검사 규정
 
 
