@@ -13,7 +13,7 @@ trigger: always_on
 ## 1. 전역 변수 및 경로 참조 표준화 원칙
 
 1. **중앙 경로 관리자(`core.paths`) 필수 사용**:
-   - 모든 파일 경로(정적 자산 `web/`, AI 모델 `models/`, SQLite DB `data/app.db`, 이메일 `emails/`, 설정 파일 등)는 반드시 [`core.paths`](file:///D:/python/core/paths.py)의 상수를 통해 참조해야 합니다.
+   - 모든 파일 경로(정적 자산 `web/`, AI 모델 `models/`, SQLite DB `data/app.db`, 이메일 `emails/`, 설정 파일 등)는 반드시 [`core.paths`](file:///F:/D_Tool/Util/Util-Tools/core/paths.py)의 상수를 통해 참조해야 합니다.
    - 개별 모듈에서 `base_dir`, `os.path.dirname(__file__)` 등을 임의로 선언하여 사용하는 것을 엄격히 금지합니다.
 2. **모듈 임포트 및 의존성 격리**:
    - 신규 전역 변수나 상수를 도입할 때는 기존 전역 네임스페이스와 충돌하지 않도록 모듈 단위 캡슐화를 유지합니다.
@@ -30,13 +30,20 @@ trigger: always_on
    - 트레이 관리자(`TrayManager`) 생성자 인자 및 Eel 초기화 파라미터가 올바르게 전달되는지 반드시 검증합니다.
 3. **서비스 레이어(`services/*.py`) API 수정 시**:
    - `@eel.expose` 함수 시그니처 변경 시 프론트엔드(`web/js/*.js`) 호출부와 일치하는지 확인합니다.
-   - 백업 레지스트리([`services/backup_service.py`](file:///D:/python/services/backup_service.py)), AI 검색([`services/ai_search_service.py`](file:///D:/python/services/ai_search_service.py)), 패키징 정의서([`UtilTools.spec`](file:///D:/python/UtilTools.spec))에 누락 없이 등록되었는지 검사합니다.
+   - 백업 레지스트리([`services/backup_service.py`](file:///F:/D_Tool/Util/Util-Tools/services/backup_service.py)), AI 검색([`services/ai_search_service.py`](file:///F:/D_Tool/Util/Util-Tools/services/ai_search_service.py)), 패키징 정의서([`UtilTools.spec`](file:///F:/D_Tool/Util/Util-Tools/UtilTools.spec))에 누락 없이 등록되었는지 검사합니다.
 
 ---
 
 ## 3. 작업 완료 전 필수 검증 및 Syntax Check 파이프라인
 
-사용자에게 작업 완료를 보고하기 전, 반드시 아래의 **수정 파일 목록화 및 전수 Syntax Check 파이프라인**을 모두 실행하고 통과해야 합니다:
+사용자에게 작업 완료를 보고하기 전, 반드시 아래의 **브랜치 상태 점검, 수정 파일 목록화 및 전수 Syntax Check 파이프라인**을 모두 실행하고 통과해야 합니다:
+
+### 사전 단계: GitFlow 작업 브랜치 검증 (Pre-work Branch Check)
+```powershell
+# 현재 브랜치가 main이 아님을 확인 (main 브랜치 직접 작업 엄격 금지)
+git branch --show-current
+# main인 경우 즉시 작업 목적에 맞는 브랜치로 전환: git switch -c feature/<작업명>
+```
 
 ### 0단계: 수정한 파일 전수 목록화 (Modified Files Listing)
 ```powershell
@@ -98,6 +105,14 @@ python -c "import json; json.load(open('<수정된_JSON_파일>', encoding='utf-
    - 단순 알림(`alert` 대체): `await showAppAlert(message, title, icon)` 또는 `showToast(title, message, icon)`
 3. **Promise 기반 비동기 흐름 제어**:
    - 모든 사용자 입력 확인 로직은 `async/await` 비동기 흐름으로 처리하여 UI 렌더링 지연 및 이벤트 루프 중단을 완벽히 방지합니다.
+
+---
+
+## 6. 연계 규정 참조
+
+- [`.agents/rules/git_flow.md`](file:///F:/D_Tool/Util/Util-Tools/.agents/rules/git_flow.md) : GitFlow 브랜치 전략 및 main 브랜치 보호 규정
+- [`GEMINI.md`](file:///F:/D_Tool/Util/Util-Tools/GEMINI.md) : Util-Tools 통합 개발 가이드라인
+
 
 
 
