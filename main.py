@@ -36,6 +36,7 @@ import services.image_service
 import services.agy_service
 import services.opencodex_service
 import services.whisper_service
+import services.ocr_service
 
 import socket
 import time

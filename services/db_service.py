@@ -747,6 +747,23 @@ def init_db():
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_status ON transcription_runs(status);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_updated ON transcription_runs(updated_at DESC);")
 
+                # 16. ocr_history 테이블 (OCR 인식 이력 관리)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS ocr_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        source_type TEXT NOT NULL,
+                        filename TEXT DEFAULT '',
+                        image_width INTEGER DEFAULT 0,
+                        image_height INTEGER DEFAULT 0,
+                        extracted_text TEXT NOT NULL,
+                        blocks_json TEXT DEFAULT '[]',
+                        thumbnail_path TEXT DEFAULT '',
+                        latency_ms REAL DEFAULT 0.0,
+                        created_at TEXT DEFAULT (datetime('now', 'localtime'))
+                    );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_ocr_history_created ON ocr_history(created_at DESC);")
+
                 # 비정상 종료 등으로 진행 중 상태에 머물러 있는 오래된 작업 복구 (Stale Run Recovery)
                 conn.execute("""
                     UPDATE transcription_runs

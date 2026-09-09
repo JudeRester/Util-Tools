@@ -49,4 +49,6 @@ BROWSER_PROFILE_DIR = os.path.join(DATA_DIR, "browser_profile")
 WHISPER_MODELS_DIR = os.path.join(DATA_DIR, "models", "whisper")
 DIARIZATION_MODELS_DIR = os.path.join(DATA_DIR, "models", "diarization")
 AUDIO_DIR = os.path.join(DATA_DIR, "audio")
+OCR_DIR = os.path.join(DATA_DIR, "ocr")
+OCR_THUMBS_DIR = os.path.join(OCR_DIR, "thumbnails")
 
