@@ -226,10 +226,13 @@ def verify_javascript_syntax(files: list[Path], reporter: VerificationReporter) 
         if reporter.verbose:
             print(f"  {DIM}Checking JS: {rel_path}{RESET}")
         try:
+            # stdin을 통해 코드를 전달하여 드라이브 루트 lstat EPERM(샌드박스 제약) 회피 및 완전한 V8 구문 검사 수행
+            code = f.read_text(encoding="utf-8")
             res = subprocess.run(
-                ["node", "-c", str(f)],
+                ["node", "--check"],
+                input=code,
+                encoding="utf-8",
                 capture_output=True,
-                text=True,
                 check=False
             )
             if res.returncode != 0:
