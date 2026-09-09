@@ -1776,13 +1776,49 @@
             <!-- 텍스트 차이점 비교 (Diff Checker) 탭 -->
             <section id="tab-diff" class="tab-pane">
                 <div class="diff-studio-container">
-                    <!-- 상단 헤더 및 안내 -->
-                    <div class="tab-pane-header">
-                        <div class="tab-pane-title-group">
-                            <h2>🔀 텍스트 차이점 비교 (Diff Checker)</h2>
-                            <p class="tab-pane-desc">두 텍스트나 소스 코드의 추가·삭제·수정 내역을 행 및 단어/문자 단위로 정밀 비교합니다.</p>
+                    <!-- 단일 통합 상단 툴바 (비교 실행, 뷰 모드, 옵션 및 액션 버튼 일원화) -->
+                    <div class="diff-toolbar">
+                        <div class="diff-toolbar-left">
+                            <button type="button" id="diff-run-btn" class="diff-btn-run" onclick="runDiffComparison()" title="텍스트/코드 차이점 비교 실행">
+                                <span class="btn-icon">▶️</span>
+                                <span class="btn-text">차이점 비교 실행</span>
+                            </button>
+
+                            <div class="diff-view-mode-group" role="group" aria-label="뷰 모드 선택">
+                                <button type="button" id="diff-mode-split-btn" class="diff-mode-btn active" onclick="setDiffViewMode('split')" title="나란히 보기 (좌/우 분할)">
+                                    <span>▥</span> Split
+                                </button>
+                                <button type="button" id="diff-mode-unified-btn" class="diff-mode-btn" onclick="setDiffViewMode('unified')" title="통합 보기 (단일 스트림)">
+                                    <span>☰</span> Unified
+                                </button>
+                            </div>
+
+                            <div class="diff-option-item">
+                                <label for="diff-granularity-select" class="diff-option-label">단위:</label>
+                                <select id="diff-granularity-select" class="diff-select" onchange="runDiffComparison()" title="인라인 하이라이트 단위">
+                                    <option value="word" selected>단어 (Word)</option>
+                                    <option value="char">문자 (Char)</option>
+                                    <option value="line">행 (Line)</option>
+                                </select>
+                            </div>
+
+                            <div class="diff-options-checkboxes">
+                                <label class="diff-checkbox-label" title="앞뒤 공백이나 연속 공백 차이를 무시합니다.">
+                                    <input type="checkbox" id="diff-opt-whitespace" onchange="runDiffComparison()">
+                                    <span>공백 무시</span>
+                                </label>
+                                <label class="diff-checkbox-label" title="대문자와 소문자를 구분하지 않고 비교합니다.">
+                                    <input type="checkbox" id="diff-opt-case" onchange="runDiffComparison()">
+                                    <span>대소문자 무시</span>
+                                </label>
+                                <label class="diff-checkbox-label" title="내용이 없는 빈 줄은 비교 대상에서 제외합니다.">
+                                    <input type="checkbox" id="diff-opt-blank" onchange="runDiffComparison()">
+                                    <span>빈 줄 무시</span>
+                                </label>
+                            </div>
                         </div>
-                        <div class="tab-pane-actions">
+
+                        <div class="diff-toolbar-right">
                             <button type="button" class="btn-diff-action" onclick="loadDiffSample()" title="예시 코드 불러오기">
                                 <span>📄</span> 샘플 불러오기
                             </button>
@@ -1795,50 +1831,7 @@
                             <button type="button" class="btn-diff-action btn-diff-danger" onclick="clearDiffAll()" title="입력 및 비교 결과 전체 초기화">
                                 <span>🧹</span> 전체 비우기
                             </button>
-                        </div>
-                    </div>
-
-                    <!-- 툴바: 뷰 모드, 정밀도, 비교 옵션, 실행 버튼 -->
-                    <div class="diff-toolbar">
-                        <div class="diff-toolbar-left">
-                            <button type="button" id="diff-run-btn" class="diff-btn-run" onclick="runDiffComparison()">
-                                <span class="btn-icon">▶️</span>
-                                <span class="btn-text">차이점 비교 실행</span>
-                            </button>
-
-                            <div class="diff-view-mode-group" role="group" aria-label="뷰 모드 선택">
-                                <button type="button" id="diff-mode-split-btn" class="diff-mode-btn active" onclick="setDiffViewMode('split')">
-                                    <span>▥</span> 나란히 보기 (Split)
-                                </button>
-                                <button type="button" id="diff-mode-unified-btn" class="diff-mode-btn" onclick="setDiffViewMode('unified')">
-                                    <span>☰</span> 통합 보기 (Unified)
-                                </button>
-                            </div>
-
-                            <div class="diff-option-item">
-                                <label for="diff-granularity-select" class="diff-option-label">비교 단위:</label>
-                                <select id="diff-granularity-select" class="diff-select" onchange="runDiffComparison()">
-                                    <option value="word" selected>단어 단위 (Word)</option>
-                                    <option value="char">문자 단위 (Character)</option>
-                                    <option value="line">행 단위 (Line)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="diff-toolbar-right">
-                            <label class="diff-checkbox-label" title="앞뒤 공백이나 연속 공백 차이를 무시합니다.">
-                                <input type="checkbox" id="diff-opt-whitespace" onchange="runDiffComparison()">
-                                <span>공백 차이 무시</span>
-                            </label>
-                            <label class="diff-checkbox-label" title="대문자와 소문자를 구분하지 않고 비교합니다.">
-                                <input type="checkbox" id="diff-opt-case" onchange="runDiffComparison()">
-                                <span>대소문자 무시</span>
-                            </label>
-                            <label class="diff-checkbox-label" title="내용이 없는 빈 줄은 비교 대상에서 제외합니다.">
-                                <input type="checkbox" id="diff-opt-blank" onchange="runDiffComparison()">
-                                <span>빈 줄 무시</span>
-                            </label>
-                            <button type="button" id="diff-toggle-input-btn" class="mini-tool-btn" onclick="toggleDiffInputPanels()" title="입력창 접기/펼치기">
+                            <button type="button" id="diff-toggle-input-btn" class="btn-diff-action" onclick="toggleDiffInputPanels()" title="입력창 접기/펼치기">
                                 <span id="diff-toggle-input-icon">🔼</span> <span id="diff-toggle-input-text">입력창 접기</span>
                             </button>
                         </div>

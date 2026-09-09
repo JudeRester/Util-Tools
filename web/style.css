@@ -10725,14 +10725,23 @@ input[type="checkbox"] {
     outline: none;
 }
 
+.diff-options-checkboxes {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 6px;
+    border-left: 1px solid var(--border-color);
+}
+
 .diff-checkbox-label {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    font-size: 0.8rem;
+    gap: 4px;
+    font-size: 0.78rem;
     color: var(--text-secondary);
     cursor: pointer;
     user-select: none;
+    white-space: nowrap;
 }
 
 .diff-checkbox-label input[type="checkbox"] {
@@ -10744,14 +10753,15 @@ input[type="checkbox"] {
     background: var(--bg-card);
     color: var(--text-primary);
     border: 1px solid var(--border-color);
-    padding: 5px 12px;
+    padding: 5px 10px;
     border-radius: 6px;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     transition: var(--transition);
+    white-space: nowrap;
 }
 
 .btn-diff-action:hover {
