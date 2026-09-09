@@ -145,6 +145,8 @@ function initTabOnDemand(tabName) {
             renderSlicerCanvas();
         } else if (tabName === 'ocr' && typeof resumeOcrStudio === 'function') {
             resumeOcrStudio();
+        } else if (tabName === 'calendar' && typeof resumeCalendar === 'function') {
+            resumeCalendar();
         }
         return;
     }

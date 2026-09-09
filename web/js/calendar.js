@@ -54,6 +54,28 @@ function initCalendarYearMonthSelect() {
     }
 }
 
+// 좌측 월간 달력 너비 클램핑 (뷰포트/컨테이너 초과 방지)
+function clampCalendarMonthWidth() {
+    const monthView = document.getElementById('calendar-month-view');
+    const container = document.getElementById('calendar-main-grid');
+    if (!monthView || !container) return;
+
+    // flex가 none인 경우(사용자가 리사이저를 조절했거나 저장된 너비가 있는 경우)
+    if (monthView.style.flex === 'none') {
+        const containerWidth = container.getBoundingClientRect().width;
+        if (containerWidth <= 0) return;
+
+        const maxAllowed = Math.max(320, containerWidth - 210);
+        const saved = (typeof appSettings !== 'undefined' && appSettings.calendar_month_width) || localStorage.getItem('calendar_month_width');
+        const targetWidth = saved ? parseInt(saved, 10) : parseInt(monthView.style.width, 10);
+
+        if (!isNaN(targetWidth) && targetWidth > 0) {
+            const clamped = Math.min(Math.max(320, targetWidth), maxAllowed);
+            monthView.style.width = `${clamped}px`;
+        }
+    }
+}
+
 // 좌우 스플리터(Resizer) 초기화 및 너비 드래그 제어
 function initCalendarResizer() {
     const resizer = document.getElementById('calendar-resizer');
@@ -61,11 +83,17 @@ function initCalendarResizer() {
     const container = document.getElementById('calendar-main-grid');
     if (!resizer || !monthView || !container) return;
 
-    // 저장된 좌측 너비 복원
+    // 저장된 좌측 너비 복원 (컨테이너 가용 너비 내로 클램핑)
     const savedWidth = (typeof appSettings !== 'undefined' && appSettings.calendar_month_width) || localStorage.getItem('calendar_month_width');
     if (savedWidth) {
-        monthView.style.flex = 'none';
-        monthView.style.width = `${savedWidth}px`;
+        const parsedWidth = parseInt(savedWidth, 10);
+        if (!isNaN(parsedWidth) && parsedWidth > 0) {
+            const containerWidth = container.getBoundingClientRect().width;
+            const maxAllowed = containerWidth > 0 ? Math.max(320, containerWidth - 210) : parsedWidth;
+            const appliedWidth = Math.min(Math.max(320, parsedWidth), maxAllowed);
+            monthView.style.flex = 'none';
+            monthView.style.width = `${appliedWidth}px`;
+        }
     }
 
     let isDragging = false;
@@ -88,7 +116,7 @@ function initCalendarResizer() {
 
             const containerWidth = container.getBoundingClientRect().width;
             const minWidth = 320;
-            const maxWidth = containerWidth - 220; // 우측 일정 패널 최소 220px 확보
+            const maxWidth = Math.max(minWidth, containerWidth - 210); // 우측 일정 패널 최소 200px + resizer 10px 확보
 
             if (newWidth < minWidth) newWidth = minWidth;
             if (newWidth > maxWidth) newWidth = maxWidth;
@@ -117,6 +145,29 @@ function initCalendarResizer() {
 
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
+    });
+
+    // 리사이저 더블클릭 시 기본 비율(1.5 : 1) 복원
+    resizer.addEventListener('dblclick', () => {
+        monthView.style.flex = '1.5';
+        monthView.style.width = '';
+        if (typeof saveAppSettingKey === 'function') {
+            saveAppSettingKey('calendar_month_width', null);
+        }
+        localStorage.removeItem('calendar_month_width');
+        if (typeof showToast === 'function') {
+            showToast('달력 너비 초기화', '달력과 일정 패널 비율이 기본값(1.5 : 1)으로 복원되었습니다.', 'info');
+        }
+    });
+
+    // 뷰포트 크기 변경 시 좌측 너비 자동 보정
+    window.addEventListener('resize', clampCalendarMonthWidth);
+}
+
+// 탭 복귀 시 화면 재개(Resume)
+function resumeCalendar() {
+    requestAnimationFrame(() => {
+        clampCalendarMonthWidth();
     });
 }
 
