@@ -48,9 +48,10 @@ def _compute_inline_tokens(
     orig_str: str,
     mod_str: str,
     granularity: str,
-    ignore_case: bool
+    ignore_case: bool,
+    ignore_whitespace: bool = False
 ) -> Tuple[List[Dict[str, str]], List[Dict[str, str]]]:
-    """변경된 행 내부의 단어/문자 세부 차이점 토큰 계산"""
+    """변경된 행 내부의 단어/문자 세부 차이점 토큰 계산 (공백 무시 옵션 지원)"""
     if granularity == "line":
         op = [{"text": orig_str, "type": "del"}] if orig_str else []
         mp = [{"text": mod_str, "type": "ins"}] if mod_str else []
@@ -64,7 +65,12 @@ def _compute_inline_tokens(
         mod_tokens = re.findall(r'\w+|\s+|[^\w\s]', mod_str)
 
     def tok_norm(t: str) -> str:
-        return t.lower() if ignore_case else t
+        val = t
+        if ignore_case:
+            val = val.lower()
+        if ignore_whitespace and val.isspace():
+            val = ' '
+        return val
 
     comp_orig = [tok_norm(t) for t in orig_tokens]
     comp_mod = [tok_norm(t) for t in mod_tokens]
@@ -83,16 +89,24 @@ def _compute_inline_tokens(
             if mt:
                 mod_parts.append({"text": mt, "type": "equal"})
         elif tag == 'delete':
-            if ot:
+            if ignore_whitespace and ot.isspace():
+                orig_parts.append({"text": ot, "type": "equal"})
+            elif ot:
                 orig_parts.append({"text": ot, "type": "del"})
         elif tag == 'insert':
-            if mt:
+            if ignore_whitespace and mt.isspace():
+                mod_parts.append({"text": mt, "type": "equal"})
+            elif mt:
                 mod_parts.append({"text": mt, "type": "ins"})
         elif tag == 'replace':
-            if ot:
-                orig_parts.append({"text": ot, "type": "del"})
-            if mt:
-                mod_parts.append({"text": mt, "type": "ins"})
+            if ignore_whitespace and ot.isspace() and mt.isspace():
+                orig_parts.append({"text": ot, "type": "equal"})
+                mod_parts.append({"text": mt, "type": "equal"})
+            else:
+                if ot:
+                    orig_parts.append({"text": ot, "type": "del"})
+                if mt:
+                    mod_parts.append({"text": mt, "type": "ins"})
 
     return _merge_consecutive_parts(orig_parts), _merge_consecutive_parts(mod_parts)
 
@@ -171,17 +185,33 @@ def compute_text_diff(orig_text: str, mod_text: str, options: Optional[Dict[str,
                     m_num, m_text, _ = mod_indexed[j1 + idx] if has_m else (None, "", "")
 
                     if has_o and has_m:
-                        modifications += 1
-                        op, mp = _compute_inline_tokens(o_text, m_text, granularity, ignore_case)
-                        diff_items.append({
-                            "type": "replace",
-                            "orig_line_num": o_num,
-                            "orig_text": o_text,
-                            "orig_parts": op,
-                            "mod_line_num": m_num,
-                            "mod_text": m_text,
-                            "mod_parts": mp
-                        })
+                        op, mp = _compute_inline_tokens(o_text, m_text, granularity, ignore_case, ignore_whitespace)
+                        has_del = any(p["type"] == "del" for p in op)
+                        has_ins = any(p["type"] == "ins" for p in mp)
+
+                        if not has_del and not has_ins:
+                            # 공백/대소문자 무시 옵션 하에서 실질적 내용이 동일한 경우 equal 처리
+                            unchanged += 1
+                            diff_items.append({
+                                "type": "equal",
+                                "orig_line_num": o_num,
+                                "orig_text": o_text,
+                                "orig_parts": [{"text": o_text, "type": "equal"}],
+                                "mod_line_num": m_num,
+                                "mod_text": m_text,
+                                "mod_parts": [{"text": m_text, "type": "equal"}]
+                            })
+                        else:
+                            modifications += 1
+                            diff_items.append({
+                                "type": "replace",
+                                "orig_line_num": o_num,
+                                "orig_text": o_text,
+                                "orig_parts": op,
+                                "mod_line_num": m_num,
+                                "mod_text": m_text,
+                                "mod_parts": mp
+                            })
                     elif has_o:
                         deletions += 1
                         diff_items.append({
