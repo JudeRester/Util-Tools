@@ -74,6 +74,19 @@ python scripts/verify_integrity.py --step 3   # 프론트엔드 JS만
 python -c "import json; json.load(open('<수정된_JSON_파일>', encoding='utf-8')); print('JSON Syntax OK')"
 ```
 
+### 3단계: 매 작업 단위 완료 즉시 원자적 단위 커밋 (Immediate Atomic Commit Mandate)
+무결성 검증을 통과한 직후, 코드를 미커밋(Dirty/Uncommitted) 상태로 방치하지 않고 즉시 규격 커밋을 실행합니다:
+```powershell
+# 1. 변경 파일 확인
+git status --short
+
+# 2. 변경 파일 스테이징 및 규격 커밋 (Conventional Commits + 이슈 번호)
+git add <수정된_파일들>
+git commit -m "feat(module): 작업 내용 요약 (#이슈번호)"
+```
+- **원자적 커밋 원칙**: 기능 구현, 결함 조치, 리팩토링 등 단일 목적의 작업 단위가 끝날 때마다 즉시 독립 커밋을 생성합니다.
+- **배치 커밋(몰아서 커밋) 전면 금지**: 여러 작업이나 수정을 커밋 없이 누적한 뒤 한 번에 묶어서 커밋하는 행위를 엄격히 금지합니다.
+
 ---
 
 ## 4. 직관적·기술적 용어 사용 및 과장 표현 지양 원칙 (Objective Technical Phrasing)

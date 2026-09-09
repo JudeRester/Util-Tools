@@ -98,13 +98,18 @@ git switch -c hotfix/<패치명>
 python scripts/verify_integrity.py
 ```
 
-### 4단계: 변경 사항 스테이징 및 규격 커밋
-검증이 완료되면 명확하고 객관적인 엔지니어링 용어로 커밋 메시지를 작성합니다:
+### 4단계: 매 작업 단위 완료 즉시 스테이징 및 원자적 규격 커밋 (Immediate Atomic Commit Mandate)
+무결성 검증이 완료되면 코드를 미커밋(Dirty/Uncommitted) 상태로 방치하지 않고 즉시 원자적 단위 커밋을 수행합니다:
 ```powershell
+# 1. 변경 파일 확인
 git status --short
+
+# 2. 파일 스테이징 및 Conventional Commit 작성
 git add <수정된_파일들>
-git commit -m "feat(calendar): 반복 일정 동기화 로직 구현"
+git commit -m "feat(calendar): 반복 일정 동기화 로직 구현 (#이슈번호)"
 ```
+- **원자적 단위 커밋 원칙**: 기능 추가, 버그 수정, 리팩토링 등 단일 목적의 작업이 끝날 때마다 즉시 독립 커밋을 기록합니다.
+- **몰아서 커밋(배치 커밋) 금지**: 여러 작업 내역을 커밋 없이 누적한 채 한 번에 커밋하는 행위를 전면 금지합니다.
 *(과장된 마케팅성 표현 금지: `code_integrity.md` 제4원칙 준수)*
 
 ### 5단계: 기준 브랜치 병합 및 작업 브랜치 정리
@@ -159,5 +164,6 @@ git switch feature/<작업명>
 * [ ] 작업 전 현재 브랜치가 `main`이 아닌지 확인했는가? (`git branch --show-current`)
 * [ ] 작업 목적에 부합하는 접두사(`feature/`, `bugfix/`, `hotfix/`, `release/`)를 사용하여 브랜치를 생성하고 이동했는가?
 * [ ] 코드 수정 후 `python scripts/verify_integrity.py`를 실행하여 무결성을 검증했는가?
+* [ ] 매 작업 단위(기능/결함/리팩토링) 완료 및 검증 즉시 미커밋 상태를 남기지 않고 원자적 단위 커밋(Atomic Commit)을 실행했는가?
 * [ ] 커밋 메시지는 객관적이고 직관적인 엔지니어링 사실을 기반으로 작성했는가?
 * [ ] 작업 완료 후 해당 브랜치를 적절한 타깃(`develop` 또는 `main`)으로 병합 또는 PR을 진행했는가?

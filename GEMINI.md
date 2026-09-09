@@ -33,6 +33,10 @@
      - `*.js`: `node -c <수정된 JS 파일들>`
      - `*.css`: 중괄호 짝 일치(`{` == `}`) 검사
      - `*.json`: `python -c "import json; json.load(open('<수정된 JSON>', encoding='utf-8'))"`
+   - **④ 매 작업 단위 완료 즉시 단위 커밋(Atomic Commit) 의무 실행**:
+     - 기능 추가, 결함 조치, 리팩토링 등 **모든 작업 단위가 완료되고 무결성 검증을 통과한 직후, 코드를 미커밋(Uncommitted/Dirty) 상태로 방치하지 않고 즉시 규격 커밋(`git commit`)을 수행**합니다.
+     - 여러 작업이나 수정을 하나의 커밋으로 몰아서 처리하는 배치 커밋을 엄격히 금지하며, 작업 단위별 독립 커밋을 보장합니다.
+     - Conventional Commits 규격 준수 (`feat:`, `fix:`, `refactor:`, `docs:`, `test:` 등) 및 이슈 번호 연동 (`(#이슈번호)`).
 
 5. **직관적·기술적 용어 사용 및 과장 표현 지양 원칙 (Objective Technical Phrasing)**:
    - 코드, 주석, 문서(README, Docs), 커밋 메시지, 기획서 및 사용자 보고 시 **과장되거나 모호한 마케팅성 수식어 사용을 엄격히 금지**합니다.
