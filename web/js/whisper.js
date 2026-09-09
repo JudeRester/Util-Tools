@@ -19,7 +19,8 @@ const whisperState = {
     searchQueryAudio: '',
     searchQuerySegments: '',
     isTranscribing: false,
-    activeRunId: null
+    activeRunId: null,
+    isUploading: false
 };
 
 // 화자별 고유 테마 색상 팔레트
@@ -187,18 +188,37 @@ async function importAudioFiles(paths) {
     }
 }
 
+const DEFAULT_DROP_HTML = '<b>오디오 파일 드래그 앤 드롭</b>';
+const DEFAULT_DROP_SUB = '또는 클릭하여 파일 선택 (MP3, WAV, M4A 등)';
+const DEFAULT_DROP_ICON = '🎙️';
+
+function resetDropZoneText() {
+    const dropIcon = document.getElementById('whisper-drop-icon');
+    const dropText = document.getElementById('whisper-drop-text');
+    const dropSub = document.getElementById('whisper-drop-sub');
+    if (dropIcon) dropIcon.textContent = DEFAULT_DROP_ICON;
+    if (dropText) dropText.innerHTML = DEFAULT_DROP_HTML;
+    if (dropSub) dropSub.textContent = DEFAULT_DROP_SUB;
+}
+
 async function uploadAudioFiles(files) {
     if (!files || files.length === 0) return;
 
+    if (whisperState.isUploading) {
+        showToast('업로드 진행 중', '이전 오디오 업로드가 아직 진행 중입니다. 잠시 후 다시 시도해 주세요.', '⚠️');
+        return;
+    }
+
+    whisperState.isUploading = true;
     const fileCount = files.length;
     const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0);
     const sizeStr = formatFileSize(totalBytes);
 
+    const dropIcon = document.getElementById('whisper-drop-icon');
     const dropText = document.getElementById('whisper-drop-text');
     const dropSub = document.getElementById('whisper-drop-sub');
-    const origText = dropText ? dropText.innerHTML : '';
-    const origSub = dropSub ? dropSub.textContent : '';
 
+    if (dropIcon) dropIcon.textContent = '⏳';
     if (dropText) dropText.innerHTML = `<b>오디오 업로드 중 (${fileCount}개, ${sizeStr})...</b>`;
     if (dropSub) dropSub.textContent = '잠시만 기다려 주세요...';
     showToast('오디오 업로드 시작', `${fileCount}개 파일 (${sizeStr}) 업로드 중입니다...`, '⏳');
@@ -242,8 +262,8 @@ async function uploadAudioFiles(files) {
         console.error('[Whisper] uploadAudioFiles 오류:', e);
         showAppAlert(`오디오 파일 업로드 중 오류가 발생했습니다:\n${e.message}`, '오류', '❌');
     } finally {
-        if (dropText && origText) dropText.innerHTML = origText;
-        if (dropSub && origSub) dropSub.textContent = origSub;
+        whisperState.isUploading = false;
+        resetDropZoneText();
     }
 }
 
@@ -260,55 +280,76 @@ function setupAudioDropZone() {
     const dropSub = document.getElementById('whisper-drop-sub');
     if (!container) return;
 
-    let dragCounter = 0;
+    let dragOverTimeout = null;
+    let isDragActive = false;
 
     const setDragVisual = (isOver) => {
         if (!dropZone) return;
         if (isOver) {
-            dropZone.classList.add('drag-over');
+            if (!dropZone.classList.contains('drag-over')) {
+                dropZone.classList.add('drag-over');
+            }
             if (dropIcon) dropIcon.textContent = '📥';
             if (dropText) dropText.innerHTML = '<b>여기에 오디오 파일을 놓으세요</b>';
             if (dropSub) dropSub.textContent = '드롭 시 라이브러리에 즉시 등록됩니다';
         } else {
             dropZone.classList.remove('drag-over');
-            if (dropIcon) dropIcon.textContent = '🎙️';
-            if (dropText) dropText.innerHTML = '<b>오디오 파일 드래그 앤 드롭</b>';
-            if (dropSub) dropSub.textContent = '또는 클릭하여 파일 선택 (MP3, WAV, M4A 등)';
+            if (!whisperState.isUploading) {
+                resetDropZoneText();
+            }
         }
     };
 
-    const handleDragEnter = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        dragCounter++;
-        setDragVisual(true);
+    const resetDragState = () => {
+        if (dragOverTimeout) {
+            clearTimeout(dragOverTimeout);
+            dragOverTimeout = null;
+        }
+        isDragActive = false;
+        setDragVisual(false);
     };
+
+    // 윈도우 전역 및 외부에서 드래그 해제 시 호출 가능하도록 전역 노출
+    window.resetWhisperDragState = resetDragState;
 
     const handleDragOver = (e) => {
         e.preventDefault();
         e.stopPropagation();
         e.dataTransfer.dropEffect = 'copy';
-        if (dragCounter === 0) {
-            dragCounter = 1;
+
+        if (!isDragActive) {
+            isDragActive = true;
             setDragVisual(true);
         }
+
+        // 350ms 동안 후속 dragover 이벤트가 없으면(Esc 취소, 창 외부 이탈, drop 유실 등) 자동 복구되는 자기 치유 와치독
+        if (dragOverTimeout) {
+            clearTimeout(dragOverTimeout);
+        }
+        dragOverTimeout = setTimeout(() => {
+            resetDragState();
+        }, 350);
     };
 
     const handleDragLeave = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        dragCounter--;
-        if (dragCounter <= 0) {
-            dragCounter = 0;
-            setDragVisual(false);
+
+        // 마우스 포인터가 container 경계 밖으로 벗어난 경우 즉시 해제
+        if (!e.relatedTarget || !container.contains(e.relatedTarget)) {
+            resetDragState();
         }
     };
 
     const handleFileDrop = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        dragCounter = 0;
-        setDragVisual(false);
+        resetDragState();
+
+        if (whisperState.isUploading) {
+            showToast('업로드 진행 중', '현재 다른 오디오 파일 업로드가 진행 중입니다. 완료 후 시도해주세요.', 'warning');
+            return;
+        }
 
         const dt = e.dataTransfer;
         if (!dt || !dt.files || dt.files.length === 0) return;
@@ -374,13 +415,15 @@ function setupAudioDropZone() {
         }
     };
 
-    [container, dropZone].forEach(el => {
-        if (!el) return;
-        el.addEventListener('dragenter', handleDragEnter);
-        el.addEventListener('dragover', handleDragOver);
-        el.addEventListener('dragleave', handleDragLeave);
-        el.addEventListener('drop', handleFileDrop);
+    // container에 단일 바인딩 (이벤트 중복 수신 및 교차 버블링 차단)
+    container.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleDragOver(e);
     });
+    container.addEventListener('dragover', handleDragOver);
+    container.addEventListener('dragleave', handleDragLeave);
+    container.addEventListener('drop', handleFileDrop);
 }
 
 async function refreshAudioLibrary() {

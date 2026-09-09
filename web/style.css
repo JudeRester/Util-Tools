@@ -9519,6 +9519,10 @@ input[type="checkbox"] {
     flex-shrink: 0;
 }
 
+.whisper-drop-zone * {
+    pointer-events: none;
+}
+
 .whisper-drop-zone:hover {
     border-color: var(--accent-color, #6366f1);
     background: rgba(99, 102, 241, 0.1);
