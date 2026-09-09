@@ -813,6 +813,7 @@ function renderSlicesGallery() {
                     <div class="slice-card-res">${slice.w} × ${slice.h} px</div>
                     <div class="slice-card-actions">
                         <button type="button" class="mini-tool-btn" onclick="copySingleSliceToClipboard(${idx})" title="이 조각 클립보드 복사">📋 복사</button>
+                        <button type="button" class="mini-tool-btn" onclick="sendSliceToOcr(${idx})" title="이 조각 텍스트 추출(OCR)">📷 OCR</button>
                         <button type="button" class="mini-tool-btn primary" onclick="downloadSingleSlice(${idx})" title="이 조각 파일 다운로드">💾 저장</button>
                     </div>
                 </div>
@@ -968,4 +969,26 @@ function downloadSingleSlice(sliceIdx) {
     a.click();
     document.body.removeChild(a);
     showToast('다운로드 완료', `${filename} 파일이 다운로드되었습니다! 💾`, '✅', 2000);
+}
+
+function sendSliceToOcr(sliceIdx) {
+    const slice = slicerState.slices[sliceIdx];
+    if (!slice || !slicerState.dataUrl) {
+        showToast('알림', '유효한 조각 데이터를 찾을 수 없습니다.', '⚠️');
+        return;
+    }
+
+    if (typeof loadOcrFromSlice === 'function') {
+        const title = slicerState.fileName
+            ? `${slicerState.fileName.replace(/\.[^/.]+$/, '')} 조각 #${sliceIdx + 1}`
+            : `조각 #${sliceIdx + 1}`;
+        loadOcrFromSlice(slicerState.dataUrl, {
+            x: slice.x,
+            y: slice.y,
+            width: slice.w,
+            height: slice.h
+        }, title);
+    } else {
+        showToast('알림', 'OCR 모듈을 찾을 수 없습니다.', '⚠️');
+    }
 }

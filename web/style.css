@@ -10008,6 +10008,517 @@ input[type="checkbox"] {
     color: #818cf8;
 }
 
+/* ==============================================================================
+   📷 OCR (광학 문자 인식) 스튜디오 스타일
+   ============================================================================== */
+.ocr-studio-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-primary);
+}
+
+.ocr-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.ocr-toolbar-left,
+.ocr-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ocr-toolbar-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.ocr-select-sm {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    height: 28px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+
+.ocr-btn-toggle-group {
+    display: inline-flex;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.ocr-toggle-btn {
+    background: transparent;
+    border: none;
+    padding: 2px 8px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.ocr-toggle-btn.active {
+    background: var(--primary-color, #3b82f6);
+    color: #fff;
+    font-weight: 600;
+}
+
+.ocr-stats-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ocr-stat-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-family: var(--font-mono, monospace);
+}
+
+.ocr-stat-badge.badge-latency {
+    border-color: rgba(234, 179, 8, 0.4);
+    color: #facc15;
+    background: rgba(234, 179, 8, 0.08);
+}
+
+.ocr-stat-badge.badge-res {
+    border-color: rgba(59, 130, 246, 0.4);
+    color: #60a5fa;
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.ocr-stat-badge.badge-count {
+    border-color: rgba(168, 85, 247, 0.4);
+    color: #c084fc;
+    background: rgba(168, 85, 247, 0.08);
+}
+
+.ocr-stat-badge.badge-scale {
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.08);
+}
+
+.ocr-stat-badge.badge-angle {
+    border-color: rgba(249, 115, 22, 0.4);
+    color: #fb923c;
+    background: rgba(249, 115, 22, 0.08);
+}
+
+.ocr-capability-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: rgba(245, 158, 11, 0.12);
+    border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+    color: #f59e0b;
+    font-size: 0.82rem;
+}
+
+.ocr-banner-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.ocr-banner-message {
+    line-height: 1.4;
+}
+
+.ocr-workspace {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+.ocr-canvas-pane {
+    flex: 0 0 58%;
+    display: flex;
+    flex-direction: column;
+    background: #0f131a;
+    position: relative;
+    overflow: hidden;
+    border-right: 1px solid var(--border-color);
+}
+
+.ocr-canvas-dropzone {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: auto;
+    padding: 16px;
+    border: 2px dashed transparent;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.ocr-canvas-dropzone.drag-over {
+    border-color: #3b82f6;
+    background-color: rgba(59, 130, 246, 0.06);
+}
+
+.ocr-empty-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 40px 20px;
+}
+
+.ocr-empty-placeholder .placeholder-icon {
+    font-size: 3.5rem;
+    margin-bottom: 12px;
+    opacity: 0.8;
+}
+
+.ocr-empty-placeholder h3 {
+    margin: 0 0 8px 0;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+}
+
+.ocr-empty-placeholder p {
+    margin: 0 0 20px 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.ocr-empty-placeholder code {
+    background: var(--bg-card);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    color: #60a5fa;
+}
+
+.ocr-empty-placeholder .placeholder-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.ocr-interactive-canvas {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+    border-radius: 4px;
+    user-select: none;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.ocr-canvas-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 19, 26, 0.75);
+    backdrop-filter: blur(2px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    z-index: 10;
+}
+
+.ocr-canvas-tip {
+    padding: 6px 14px;
+    background: rgba(15, 19, 26, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 0.76rem;
+    color: var(--text-secondary);
+}
+
+.ocr-resizer {
+    width: 6px;
+    cursor: col-resize;
+    background: var(--border-color);
+    transition: background 0.15s ease;
+    z-index: 5;
+    flex-shrink: 0;
+}
+
+.ocr-resizer:hover {
+    background: var(--primary-color, #3b82f6);
+}
+
+.ocr-editor-pane {
+    flex: 0 0 42%;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary);
+    min-width: 260px;
+    overflow: hidden;
+}
+
+.ocr-editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ocr-editor-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.badge-text-length {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-family: var(--font-mono, monospace);
+    font-weight: normal;
+}
+
+.ocr-editor-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.ocr-text-output {
+    flex: 1;
+    width: 100%;
+    border: none;
+    outline: none;
+    resize: none;
+    padding: 14px;
+    background: transparent;
+    color: var(--text-primary);
+    font-family: var(--font-mono, 'Consolas', 'Courier New', monospace);
+    font-size: 0.88rem;
+    line-height: 1.6;
+    box-sizing: border-box;
+}
+
+.ocr-history-drawer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 320px;
+    max-width: 85%;
+    background: #161b24;
+    border-left: 1px solid var(--border-color);
+    box-shadow: -6px 0 24px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    z-index: 40;
+}
+
+.history-drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.history-drawer-header h3 {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.history-drawer-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-clean-history {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.btn-clean-history:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.history-drawer-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.history-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 16px;
+    color: var(--text-secondary);
+    text-align: center;
+    gap: 8px;
+}
+
+.history-empty span {
+    font-size: 2rem;
+    opacity: 0.6;
+}
+
+.ocr-history-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.12s ease;
+}
+
+.ocr-history-item:hover {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.06);
+}
+
+.history-thumb-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 4px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #0f131a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.history-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.history-thumb-placeholder {
+    font-size: 1.2rem;
+    opacity: 0.6;
+}
+
+.history-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.history-title-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.history-source-badge {
+    font-size: 0.7rem;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--text-secondary);
+}
+
+.history-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-preview-text {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+
+.history-meta-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.history-latency {
+    color: #facc15;
+    font-family: var(--font-mono, monospace);
+}
+
+.history-delete-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    opacity: 0.4;
+    transition: all 0.12s ease;
+}
+
+.history-delete-btn:hover {
+    opacity: 1;
+    color: #ef4444;
+}
+
 
 
 
