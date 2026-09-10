@@ -200,6 +200,9 @@ function initTabOnDemand(tabName) {
         case 'ocr':
             if (typeof initOcrStudio === 'function') initOcrStudio();
             break;
+        case 'diff':
+            if (typeof initDiffChecker === 'function') initDiffChecker();
+            break;
     }
 }
 
@@ -273,7 +276,8 @@ function switchTab(targetTab) {
         mermaid: { icon: '📊', label: '다이어그램' },
         slicer: { icon: '✂️', label: '이미지 슬라이서' },
         whisper: { icon: '🎙️', label: '음성 전사' },
-        ocr: { icon: '📷', label: 'OCR 텍스트 추출' }
+        ocr: { icon: '📷', label: 'OCR 텍스트 추출' },
+        diff: { icon: '🔀', label: '텍스트 Diff 비교' }
     };
 
     if (WORKSPACE_TABS[targetTab]) {
@@ -396,6 +400,41 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 공통 콘솔 높이 조절기 초기화
     initConsoleResizer();
+
+    // 윈도우 전역 드래그 앤 드롭 파일 탐색기 열기 방지 및 유실된 드롭 상태 전역 복구
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    }, false);
+
+    window.addEventListener('dragleave', (e) => {
+        // 브라우저 윈도우 창 외부로 포인터가 이탈했을 때 모든 드래그 오버 시각 효과 즉시 해제
+        if (!e.relatedTarget || e.relatedTarget === document.documentElement) {
+            document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+            if (typeof resetWhisperDragState === 'function') {
+                resetWhisperDragState();
+            }
+        }
+    }, false);
+
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        // 드롭 완료 또는 드롭 유실 후 잔존 시각 상태 안전 복구
+        setTimeout(() => {
+            document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+            if (typeof resetWhisperDragState === 'function') {
+                resetWhisperDragState();
+            }
+        }, 50);
+    }, false);
+
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+            if (typeof resetWhisperDragState === 'function') {
+                resetWhisperDragState();
+            }
+        }
+    });
 
     // 마지막으로 사용했던 탭 1개만 온디맨드 로드 (초기 램 500MB -> 40MB 대폭 감축)
     const savedTab = appSettings.active_tab_id || localStorage.getItem('active_tab_id') || 'system';

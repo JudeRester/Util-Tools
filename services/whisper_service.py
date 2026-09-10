@@ -17,11 +17,13 @@ import queue
 import urllib.request
 import threading
 import traceback
+import hashlib
 from typing import List, Dict, Any, Optional
 
 import av
 import numpy as np
 import eel
+from bottle import request, response
 import ctranslate2
 from faster_whisper import WhisperModel, decode_audio
 import sherpa_onnx
@@ -34,6 +36,7 @@ from core.paths import (
     DIARIZATION_MODELS_DIR,
     AUDIO_DIR
 )
+from core.logger import log_info, log_warn, log_error, log_success
 from services.db_service import get_db_connection
 
 # ==============================================================================
@@ -54,6 +57,11 @@ PYANNOTE_MODEL_URL = "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-seg
 SPEAKER_3D_MODEL_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
 SPEAKER_3D_MODEL_BACKUP_URL = "https://huggingface.co/csukuangfj/speaker-recongition-models/resolve/main/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
 
+ALLOWED_AUDIO_EXTENSIONS = {
+    "mp3", "wav", "m4a", "flac", "ogg", "aac", "wma", "opus", "mp4", "mkv", "webm", "avi"
+}
+MAX_AUDIO_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024  # 2GB
+
 # ==============================================================================
 # 2. 오디오 전처리 모듈 (PyAV 기반)
 # ==============================================================================
@@ -73,7 +81,7 @@ class AudioPreprocessor:
                     if stream.duration is not None and stream.time_base is not None:
                         return float(stream.duration * stream.time_base)
         except Exception as e:
-            print(f"[AudioPreprocessor] get_audio_duration 오류 ({file_path}): {e}")
+            log_error("Whisper", f"오디오 메타데이터 추출 오류 ({file_path}): {e}", exc=e)
         return 0.0
 
     @staticmethod
@@ -158,7 +166,7 @@ class ModelManager:
                             progress_callback=progress_callback
                         )
                     except Exception as e1:
-                        print(f"[ModelManager] 1차 다운로드 실패({SPEAKER_3D_MODEL_URL}): {e1}, 미러 사이트 시도...")
+                        log_warn("Whisper", f"화자 분리 모델 1차 다운로드 실패({SPEAKER_3D_MODEL_URL}): {e1}, 미러 사이트로 재시도합니다.")
                         cls._download_file_atomic(
                             url=SPEAKER_3D_MODEL_BACKUP_URL,
                             target_path=spk_path,
@@ -180,7 +188,7 @@ class ModelManager:
             except Exception:
                 pass
 
-        print(f"[ModelManager] {label} 다운로드 시작: {url}")
+        log_info("Whisper", f"{label} 다운로드 시작: {url}")
         req = urllib.request.Request(
             url,
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) UtilTools/1.0"}
@@ -208,7 +216,7 @@ class ModelManager:
             raise IOError(f"{label} 다운로드 파일 크기 부족 ({actual_size} < {expected_min_bytes} bytes)")
 
         os.replace(tmp_path, target_path)
-        print(f"[ModelManager] {label} 다운로드 및 원자적 교체 완료 ({actual_size:,} bytes)")
+        log_success("Whisper", f"{label} 다운로드 및 원자적 교체 완료 ({actual_size:,} bytes)")
 
 
 # ==============================================================================
@@ -564,6 +572,7 @@ class WhisperWorker:
     def cancel_run(self, run_id: int):
         with self._lock:
             self._cancelled_runs.add(run_id)
+        log_warn("Whisper", f"사용자 전사 취소 요청 (Run #{run_id})")
 
         # DB 상태 즉시 반영 (대기 중인 경우)
         conn = get_db_connection()
@@ -597,13 +606,13 @@ class WhisperWorker:
                 try:
                     self._process_run(run_id)
                 except Exception as e:
-                    traceback.print_exc()
+                    log_error("Whisper", f"작업 처리 중 오류 발생 (Run #{run_id}): {e}", exc=e)
                     self._update_run_status(run_id, status="FAILED", phase="ERROR", error_msg=str(e))
                 finally:
                     self._active_run_id = None
                     self._queue.task_done()
             except Exception as e:
-                print(f"[WhisperWorker] 루프 예외: {e}")
+                log_error("Whisper", f"워커 루프 미처리 예외 발생: {e}", exc=e)
                 time.sleep(0.5)
 
     def _update_run_status(self, run_id: int, status: str, phase: str, progress: float = 0.0, error_msg: str = ""):
@@ -647,6 +656,7 @@ class WhisperWorker:
 
         # 디바이스 가용성 검증
         if stt_device == "cuda" and ctranslate2.get_cuda_device_count() == 0:
+            log_warn("Whisper", "CUDA 지원 장치가 감지되지 않아 CPU 모드로 자동 전환합니다.")
             stt_device = "cpu"
         compute_type = "float16" if stt_device == "cuda" else "int8"
 
@@ -674,58 +684,120 @@ class WhisperWorker:
         tracker.update_stt(0.0, force=True)
 
         if self.is_cancelled(run_id):
+            log_warn("Whisper", f"작업 시작 전 취소 감지 (Run #{run_id})")
             tracker.cancel()
             return
 
         # ======================================================================
         # Phase 1: faster-whisper STT 전사 (Word Timestamps 활성화)
         # ======================================================================
-        print(f"[WhisperWorker] STT 시작 (Model={model_name}, Device={stt_device}, Compute={compute_type})")
-        whisper_model = WhisperModel(
-            model_size_or_path=model_name,
-            download_root=WHISPER_MODELS_DIR,
-            device=stt_device,
-            compute_type=compute_type
-        )
+        log_info("Whisper", f"STT 시작 (Model={model_name}, Device={stt_device}, Compute={compute_type}, AudioDuration={total_duration:.1f}s)")
+        whisper_model = None
+        try:
+            whisper_model = WhisperModel(
+                model_size_or_path=model_name,
+                download_root=WHISPER_MODELS_DIR,
+                device=stt_device,
+                compute_type=compute_type
+            )
+        except Exception as e:
+            if stt_device == "cuda":
+                log_warn("Whisper", f"CUDA 가속 모델 로딩 실패 ({e}). CPU(int8) 모드로 자동 폴백합니다.")
+                stt_device = "cpu"
+                compute_type = "int8"
+                whisper_model = WhisperModel(
+                    model_size_or_path=model_name,
+                    download_root=WHISPER_MODELS_DIR,
+                    device="cpu",
+                    compute_type="int8"
+                )
+            else:
+                raise
 
-        segments_gen, info = whisper_model.transcribe(
-            file_path,
-            language=language if language != "auto" else None,
-            task="transcribe",
-            word_timestamps=True,
-            vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=500)
-        )
+        def _do_transcribe(m):
+            return m.transcribe(
+                file_path,
+                language=language if language != "auto" else None,
+                task="transcribe",
+                word_timestamps=True,
+                vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=500)
+            )
 
         raw_words = []
-        for seg in segments_gen:
-            if self.is_cancelled(run_id):
-                tracker.cancel()
-                self._update_run_status(run_id, "CANCELLED", "CANCELLED")
-                return
+        try:
+            segments_gen, info = _do_transcribe(whisper_model)
+            for seg in segments_gen:
+                if self.is_cancelled(run_id):
+                    log_warn("Whisper", f"STT 전사 중 취소 감지 (Run #{run_id})")
+                    tracker.cancel()
+                    self._update_run_status(run_id, "CANCELLED", "CANCELLED")
+                    return
 
-            tracker.update_stt(seg.end)
+                tracker.update_stt(seg.end)
 
-            if seg.words:
-                for w in seg.words:
+                if seg.words:
+                    for w in seg.words:
+                        raw_words.append({
+                            "word": w.word,
+                            "start": float(w.start),
+                            "end": float(w.end),
+                            "probability": float(w.probability)
+                        })
+                else:
+                    # 단어 타임스탬프가 비어 있는 경우 세그먼트 단위 폴백
                     raw_words.append({
-                        "word": w.word,
-                        "start": float(w.start),
-                        "end": float(w.end),
-                        "probability": float(w.probability)
+                        "word": seg.text,
+                        "start": float(seg.start),
+                        "end": float(seg.end),
+                        "probability": 1.0
                     })
+        except Exception as e:
+            err_str = str(e).lower()
+            if stt_device == "cuda" and ("out of memory" in err_str or "cuda" in err_str):
+                log_warn("Whisper", f"CUDA 세그먼트 전사 중 VRAM 부족(OOM) 감지 ({e}). CPU(int8) 모드로 전환하여 전체 재시도합니다.")
+                stt_device = "cpu"
+                compute_type = "int8"
+                whisper_model = WhisperModel(
+                    model_size_or_path=model_name,
+                    download_root=WHISPER_MODELS_DIR,
+                    device="cpu",
+                    compute_type="int8"
+                )
+                raw_words = []
+                tracker.update_stt(0.0, force=True)
+                segments_gen, info = _do_transcribe(whisper_model)
+                for seg in segments_gen:
+                    if self.is_cancelled(run_id):
+                        log_warn("Whisper", f"STT 전사 중 취소 감지 (Run #{run_id})")
+                        tracker.cancel()
+                        self._update_run_status(run_id, "CANCELLED", "CANCELLED")
+                        return
+
+                    tracker.update_stt(seg.end)
+
+                    if seg.words:
+                        for w in seg.words:
+                            raw_words.append({
+                                "word": w.word,
+                                "start": float(w.start),
+                                "end": float(w.end),
+                                "probability": float(w.probability)
+                            })
+                    else:
+                        raw_words.append({
+                            "word": seg.text,
+                            "start": float(seg.start),
+                            "end": float(seg.end),
+                            "probability": 1.0
+                        })
             else:
-                # 단어 타임스탬프가 비어 있는 경우 세그먼트 단위 폴백
-                raw_words.append({
-                    "word": seg.text,
-                    "start": float(seg.start),
-                    "end": float(seg.end),
-                    "probability": 1.0
-                })
+                raise
 
         tracker.update_stt(total_duration, force=True)
 
         if self.is_cancelled(run_id):
+            log_warn("Whisper", f"STT 완료 후 취소 감지 (Run #{run_id})")
             tracker.cancel()
             self._update_run_status(run_id, "CANCELLED", "CANCELLED")
             return
@@ -735,7 +807,7 @@ class WhisperWorker:
         # ======================================================================
         turns = []
         if enable_diarization:
-            print("[WhisperWorker] 화자 분리(Diarization) 시작...")
+            log_info("Whisper", f"화자 분리(Diarization) 시작 (Run #{run_id}, NumSpeakers={num_speakers}, Threshold={cluster_threshold})")
             self._update_run_status(run_id, "DIARIZING", "DIARIZATION", progress=70.0)
             tracker.update_diarization(0, 100, force=True)
 
@@ -756,6 +828,7 @@ class WhisperWorker:
             )
 
             if self.is_cancelled(run_id):
+                log_warn("Whisper", f"화자 분리 중 취소 감지 (Run #{run_id})")
                 tracker.cancel()
                 self._update_run_status(run_id, "CANCELLED", "CANCELLED")
                 return
@@ -763,7 +836,7 @@ class WhisperWorker:
         # ======================================================================
         # Phase 3: Active Interval Sweep 단어-화자 시간축 정합
         # ======================================================================
-        print("[WhisperWorker] 단어-화자 정합 및 세그먼트 생성 중...")
+        log_info("Whisper", f"단어-화자 정합 및 세그먼트 생성 시작 (Run #{run_id}, RawWords={len(raw_words)}, Turns={len(turns)})")
         self._update_run_status(run_id, "ALIGNING", "ALIGNMENT", progress=97.0)
         tracker.update_alignment()
 
@@ -806,7 +879,8 @@ class WhisperWorker:
             conn.close()
 
         tracker.finish()
-        print(f"[WhisperWorker] 전사 완료! (Run #{run_id}, Segments={len(canonical_segments)}, RTF={tracker.rtf:.2f})")
+        elapsed_sec = time.perf_counter() - tracker.start_wall_time
+        log_success("Whisper", f"전사 및 정합 완료 (Run #{run_id}, Segments={len(canonical_segments)}, RTF={tracker.rtf:.2f}, 소요 시간={elapsed_sec:.1f}초)")
 
 
 # 전역 백그라운드 워커 인스턴스
@@ -833,6 +907,178 @@ def stream_audio(audio_id: int):
         dirname = os.path.dirname(os.path.abspath(file_path))
         filename = os.path.basename(file_path)
         return eel.btl.static_file(filename, root=dirname)
+    finally:
+        conn.close()
+
+
+def _is_safe_whisper_request() -> bool:
+    """루프백 IP 및 로컬 호스트 검증 (Same-Origin / Loopback 방어)"""
+    client_ip = request.environ.get("REMOTE_ADDR", "")
+    if client_ip not in ("127.0.0.1", "::1", "localhost"):
+        return False
+    host = request.headers.get("Host", "")
+    if not (host.startswith("localhost") or host.startswith("127.0.0.1")):
+        return False
+    sec_fetch_site = request.headers.get("Sec-Fetch-Site", "")
+    if sec_fetch_site and sec_fetch_site not in ("same-origin", "none", "same-site"):
+        return False
+    return True
+
+
+@eel.btl.route("/api/whisper/upload", method=["POST", "OPTIONS"])
+def handle_audio_upload():
+    """
+    드래그 앤 드롭 및 웹 환경 오디오 바이너리 업로드 수신 핸들러
+    - chunked 스트림으로 data/audio 디렉토리에 안전 저장
+    - 중복 해시 검증을 통한 디스크 중복 방지
+    - PyAV 메타데이터(재생 시간, 포맷) 추출 및 audio_files 테이블 등록
+    """
+    if request.method == "OPTIONS":
+        return {}
+
+    if not _is_safe_whisper_request():
+        response.status = 403
+        response.content_type = "application/json; charset=utf-8"
+        return json.dumps({"success": False, "message": "접근이 거부되었습니다 (로컬 요청만 허용)."}, ensure_ascii=False)
+
+    uploaded_files = request.files.getall("file") or request.files.getall("files")
+    if not uploaded_files:
+        f = request.files.get("file") or request.files.get("files")
+        if f:
+            uploaded_files = [f]
+
+    if not uploaded_files:
+        response.status = 400
+        response.content_type = "application/json; charset=utf-8"
+        return json.dumps({"success": False, "message": "업로드된 오디오 파일이 없습니다."}, ensure_ascii=False)
+
+    _ensure_dirs()
+    conn = get_db_connection()
+    added_files = []
+    skipped_count = 0
+    errors = []
+
+    try:
+        for upload in uploaded_files:
+            raw_filename = upload.filename or "uploaded_audio.mp3"
+            # 파일명 경로 순회(Path Traversal) 방지 및 정규화
+            safe_filename = os.path.basename(raw_filename.replace("\\", "/")).strip()
+            if not safe_filename:
+                safe_filename = f"audio_{int(time.time())}.mp3"
+
+            ext = safe_filename.rsplit(".", 1)[-1].lower() if "." in safe_filename else ""
+            if ext not in ALLOWED_AUDIO_EXTENSIONS:
+                errors.append(f"'{safe_filename}': 지원되지 않는 파일 형식입니다 (.${ext})")
+                skipped_count += 1
+                continue
+
+            # 임시 파일 경로 생성 및 청크 스트리밍 쓰기 + MD5 산출
+            temp_path = os.path.join(AUDIO_DIR, f".tmp_{int(time.time() * 1000)}_{os.urandom(4).hex()}_{safe_filename}")
+            hasher = hashlib.md5()
+            total_bytes = 0
+
+            try:
+                with open(temp_path, "wb") as f_out:
+                    while True:
+                        chunk = upload.file.read(64 * 1024)
+                        if not chunk:
+                            break
+                        total_bytes += len(chunk)
+                        if total_bytes > MAX_AUDIO_UPLOAD_BYTES:
+                            raise ValueError(f"파일 크기가 최대 제한(2GB)을 초과했습니다.")
+                        hasher.update(chunk)
+                        f_out.write(chunk)
+
+                if total_bytes == 0:
+                    try:
+                        os.remove(temp_path)
+                    except OSError:
+                        pass
+                    errors.append(f"'{safe_filename}': 0바이트 빈 파일입니다.")
+                    skipped_count += 1
+                    continue
+
+                file_hash = hasher.hexdigest()
+
+                # 동일 파일명 및 파일 크기가 DB에 이미 존재하는지 검사 (디스크 중복 방지)
+                existing = conn.execute(
+                    "SELECT * FROM audio_files WHERE filename = ? AND file_size = ?",
+                    (safe_filename, total_bytes)
+                ).fetchone()
+
+                if existing and os.path.exists(existing["file_path"]):
+                    try:
+                        with open(existing["file_path"], "rb") as ef:
+                            existing_hasher = hashlib.md5()
+                            while True:
+                                ec = ef.read(64 * 1024)
+                                if not ec:
+                                    break
+                                existing_hasher.update(ec)
+                        if existing_hasher.hexdigest() == file_hash:
+                            try:
+                                os.remove(temp_path)
+                            except OSError:
+                                pass
+                            added_files.append(dict(existing))
+                            continue
+                    except Exception:
+                        pass
+
+                # 신규 파일명 결정 (중복 방지 넘버링)
+                base_name, file_ext = os.path.splitext(safe_filename)
+                target_path = os.path.join(AUDIO_DIR, safe_filename)
+                counter = 1
+                while os.path.exists(target_path):
+                    target_path = os.path.join(AUDIO_DIR, f"{base_name}_{counter}{file_ext}")
+                    counter += 1
+
+                # 임시 파일을 최종 목적지로 이동
+                os.replace(temp_path, target_path)
+
+                target_filename = os.path.basename(target_path)
+                file_size = os.path.getsize(target_path)
+                duration = AudioPreprocessor.get_audio_duration(target_path)
+
+                cursor = conn.execute("""
+                    INSERT INTO audio_files (file_path, filename, file_size, duration_sec)
+                    VALUES (?, ?, ?, ?)
+                """, (target_path, target_filename, file_size, duration))
+                conn.commit()
+
+                added_files.append({
+                    "id": cursor.lastrowid,
+                    "file_path": target_path,
+                    "filename": target_filename,
+                    "file_size": file_size,
+                    "duration_sec": round(duration, 2)
+                })
+
+            except Exception as fe:
+                try:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                except OSError:
+                    pass
+                errors.append(f"'{safe_filename}': {str(fe)}")
+                skipped_count += 1
+
+        response.content_type = "application/json; charset=utf-8"
+        if not added_files and errors:
+            response.status = 400
+            return json.dumps({
+                "success": False,
+                "message": "\n".join(errors),
+                "skipped_count": skipped_count
+            }, ensure_ascii=False)
+
+        return json.dumps({
+            "success": True,
+            "added": added_files,
+            "skipped_count": skipped_count,
+            "errors": errors
+        }, ensure_ascii=False)
+
     finally:
         conn.close()
 
@@ -985,6 +1231,7 @@ def start_transcription_run(audio_id: int, options: Optional[Dict[str, Any]] = N
 
         # 워커 큐 등록
         _worker.enqueue_run(run_id)
+        log_info("Whisper", f"신규 전사 요청 등록 (Run #{run_id}, AudioID={audio_id}, Model={model_name}, Diarization={bool(enable_diarization)})")
         return {"success": True, "run_id": run_id}
     finally:
         conn.close()
@@ -1153,8 +1400,23 @@ def delete_audio_file(audio_id: int) -> Dict[str, Any]:
     """오디오 파일 및 연관된 모든 전사 런 영구 삭제 (CASCADE)"""
     conn = get_db_connection()
     try:
+        row = conn.execute("SELECT file_path FROM audio_files WHERE id = ?", (audio_id,)).fetchone()
         conn.execute("DELETE FROM audio_files WHERE id = ?", (audio_id,))
         conn.commit()
+
+        # data/audio 디렉토리에 업로드된 파일인 경우 디스크 정리
+        if row and row["file_path"]:
+            fp = row["file_path"]
+            norm_audio_dir = os.path.abspath(AUDIO_DIR)
+            norm_fp = os.path.abspath(fp)
+            if norm_fp.startswith(norm_audio_dir):
+                remaining = conn.execute("SELECT COUNT(*) FROM audio_files WHERE file_path = ?", (fp,)).fetchone()[0]
+                if remaining == 0 and os.path.exists(fp):
+                    try:
+                        os.remove(fp)
+                    except OSError:
+                        pass
+
         return {"success": True, "audio_id": audio_id}
     finally:
         conn.close()

@@ -17,6 +17,7 @@
             <div class="nav-brand">
                 <span class="brand-icon">🛠️</span>
                 <span class="brand-title">Utility Toolkit</span>
+                <span class="brand-version" style="font-size: 0.72rem; color: #818cf8; margin-left: 6px; font-weight: 600; vertical-align: middle;">v0.17.0</span>
             </div>
 
             <!-- 좁은 화면용 햄버거 헤더 -->
@@ -125,6 +126,13 @@
                             <div class="item-text">
                                 <span class="item-title">OCR 텍스트 추출</span>
                                 <span class="item-desc">Windows 네이티브 문자 인식 & ROI 추출</span>
+                            </div>
+                        </button>
+                        <button type="button" class="tab-dropdown-item" data-tab="diff" onclick="selectDropdownTab('diff', '🔀', '텍스트 Diff 비교', event)">
+                            <span class="item-icon">🔀</span>
+                            <div class="item-text">
+                                <span class="item-title">텍스트 Diff 비교</span>
+                                <span class="item-desc">코드/텍스트 차이점 분석 & 하이라이트</span>
                             </div>
                         </button>
                     </div>
@@ -1477,12 +1485,21 @@
 
                             <!-- 오디오 파일 목록 패널 -->
                             <div id="whisper-audio-list-panel" class="whisper-side-panel active">
+                                <!-- 오디오 파일 드래그 앤 드롭 영역 -->
+                                <div id="whisper-drop-zone" class="whisper-drop-zone" onclick="openWhisperFilePicker()" title="클릭하여 오디오 파일 선택 또는 드래그 앤 드롭">
+                                    <div class="whisper-drop-icon" id="whisper-drop-icon">🎙️</div>
+                                    <div class="whisper-drop-text" id="whisper-drop-text"><b>오디오 파일 드래그 앤 드롭</b></div>
+                                    <div class="whisper-drop-sub" id="whisper-drop-sub">또는 클릭하여 파일 선택 (MP3, WAV, M4A 등)</div>
+                                </div>
                                 <div class="whisper-search-box">
                                     <input type="text" id="whisper-audio-search" class="form-input" placeholder="오디오 파일명 검색..." oninput="filterAudioList(this.value)">
                                 </div>
                                 <div id="whisper-audio-items" class="whisper-item-list">
                                     <!-- 동적 렌더링 -->
-                                    <div class="whisper-empty-state">등록된 오디오 파일이 없습니다.<br>오디오 파일을 추가하거나 드래그 앤 드롭하세요.</div>
+                                    <div class="whisper-empty-state" onclick="openWhisperFilePicker()" style="cursor: pointer;" title="클릭하여 오디오 파일 선택">
+                                        <div style="font-size: 1.6rem; margin-bottom: 6px;">🎙️</div>
+                                        등록된 오디오 파일이 없습니다.<br>상단 영역으로 파일을 드래그하거나 <b>여기를 클릭</b>하세요.
+                                    </div>
                                 </div>
                             </div>
 
@@ -1752,6 +1769,162 @@
                         </div>
                         <div id="ocr-history-list" class="history-drawer-list">
                             <!-- 동적 렌더링 -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 텍스트 차이점 비교 (Diff Checker) 탭 -->
+            <section id="tab-diff" class="tab-pane">
+                <div class="diff-studio-container">
+                    <!-- 단일 통합 상단 툴바 (비교 실행, 뷰 모드, 옵션 및 액션 버튼 일원화) -->
+                    <div class="diff-toolbar">
+                        <div class="diff-toolbar-left">
+                            <button type="button" id="diff-run-btn" class="diff-btn-run" onclick="runDiffComparison()" title="텍스트/코드 차이점 비교 실행">
+                                <span class="diff-run-icon">▶️</span>
+                                <span>차이점 비교 실행</span>
+                            </button>
+
+                            <div class="diff-view-mode-group" role="group" aria-label="뷰 모드 선택">
+                                <button type="button" id="diff-mode-split-btn" class="diff-mode-btn active" onclick="setDiffViewMode('split')" title="나란히 보기 (좌/우 분할)">
+                                    <span>▥</span> Split
+                                </button>
+                                <button type="button" id="diff-mode-unified-btn" class="diff-mode-btn" onclick="setDiffViewMode('unified')" title="통합 보기 (단일 스트림)">
+                                    <span>☰</span> Unified
+                                </button>
+                            </div>
+
+                            <div class="diff-option-item">
+                                <label for="diff-granularity-select" class="diff-option-label">단위:</label>
+                                <select id="diff-granularity-select" class="diff-select" onchange="runDiffComparison()" title="인라인 하이라이트 단위">
+                                    <option value="word" selected>단어 (Word)</option>
+                                    <option value="char">문자 (Char)</option>
+                                    <option value="line">행 (Line)</option>
+                                </select>
+                            </div>
+
+                            <div class="diff-options-checkboxes">
+                                <label class="diff-checkbox-label" title="앞뒤 공백이나 연속 공백 차이를 무시합니다.">
+                                    <input type="checkbox" id="diff-opt-whitespace" onchange="runDiffComparison()">
+                                    <span>공백 무시</span>
+                                </label>
+                                <label class="diff-checkbox-label" title="대문자와 소문자를 구분하지 않고 비교합니다.">
+                                    <input type="checkbox" id="diff-opt-case" onchange="runDiffComparison()">
+                                    <span>대소문자 무시</span>
+                                </label>
+                                <label class="diff-checkbox-label" title="내용이 없는 빈 줄은 비교 대상에서 제외합니다.">
+                                    <input type="checkbox" id="diff-opt-blank" onchange="runDiffComparison()">
+                                    <span>빈 줄 무시</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="diff-toolbar-right">
+                            <button type="button" class="btn-diff-action" onclick="loadDiffSample()" title="예시 코드 불러오기">
+                                <span>📄</span> 샘플 불러오기
+                            </button>
+                            <button type="button" class="btn-diff-action" onclick="swapDiffTexts()" title="원본과 수정본 텍스트 맞바꾸기">
+                                <span>⇄</span> 좌우 교환
+                            </button>
+                            <button type="button" class="btn-diff-action" onclick="copyUnifiedDiff()" title="표준 Git Unified Diff 패치 클립보드 복사">
+                                <span>📋</span> Diff 복사
+                            </button>
+                            <button type="button" class="btn-diff-action btn-diff-danger" onclick="clearDiffAll()" title="입력 및 비교 결과 전체 초기화">
+                                <span>🧹</span> 전체 비우기
+                            </button>
+                            <button type="button" id="diff-toggle-input-btn" class="btn-diff-action" onclick="toggleDiffInputPanels()" title="입력창 접기/펼치기">
+                                <span id="diff-toggle-input-icon">🔼</span> <span id="diff-toggle-input-text">입력창 접기</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 입력 영역: 좌우 텍스트 에디터 -->
+                    <div id="diff-inputs-wrapper" class="diff-inputs-grid">
+                        <!-- 좌측: 원본(Original) -->
+                        <div class="diff-input-pane" id="diff-orig-drop-zone">
+                            <div class="diff-pane-header">
+                                <div class="diff-pane-title">
+                                    <span class="pane-tag tag-orig">Original</span>
+                                    <span>원본 텍스트 (이전 버전)</span>
+                                </div>
+                                <div class="diff-pane-meta">
+                                    <span id="diff-orig-count" class="diff-char-count">0행, 0자</span>
+                                    <button type="button" class="mini-tool-btn" onclick="openDiffFileDialog('orig')" title="로컬 텍스트 파일 불러오기">
+                                        📂 파일 열기
+                                    </button>
+                                    <button type="button" class="mini-tool-btn" onclick="clearDiffPane('orig')" title="원본 텍스트 지우기">
+                                        지우기
+                                    </button>
+                                </div>
+                            </div>
+                            <textarea id="diff-orig-text" class="diff-textarea" placeholder="비교할 원본 텍스트를 입력하거나 텍스트 파일을 드래그하여 놓으세요..." spellcheck="false" oninput="updateDiffInputCounts()"></textarea>
+                        </div>
+
+                        <!-- 우측: 수정본(Modified) -->
+                        <div class="diff-input-pane" id="diff-mod-drop-zone">
+                            <div class="diff-pane-header">
+                                <div class="diff-pane-title">
+                                    <span class="pane-tag tag-mod">Modified</span>
+                                    <span>수정본 텍스트 (변경 버전)</span>
+                                </div>
+                                <div class="diff-pane-meta">
+                                    <span id="diff-mod-count" class="diff-char-count">0행, 0자</span>
+                                    <button type="button" class="mini-tool-btn" onclick="openDiffFileDialog('mod')" title="로컬 텍스트 파일 불러오기">
+                                        📂 파일 열기
+                                    </button>
+                                    <button type="button" class="mini-tool-btn" onclick="clearDiffPane('mod')" title="수정본 텍스트 지우기">
+                                        지우기
+                                    </button>
+                                </div>
+                            </div>
+                            <textarea id="diff-mod-text" class="diff-textarea" placeholder="비교할 수정본 텍스트를 입력하거나 텍스트 파일을 드래그하여 놓으세요..." spellcheck="false" oninput="updateDiffInputCounts()"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- 결과 요약 통계 바 -->
+                    <div id="diff-status-bar" class="diff-status-bar">
+                        <div class="diff-status-badges">
+                            <span id="diff-status-state" class="diff-badge badge-neutral">대기 중</span>
+                            <span class="diff-stat stat-add" id="diff-stat-add" title="추가된 행 수">➕ 0 추가</span>
+                            <span class="diff-stat stat-del" id="diff-stat-del" title="삭제된 행 수">➖ 0 삭제</span>
+                            <span class="diff-stat stat-mod" id="diff-stat-mod" title="수정된 행 수">✏️ 0 수정</span>
+                            <span class="diff-stat stat-unc" id="diff-stat-unc" title="일치하는 행 수">⚖️ 0 동일</span>
+                        </div>
+                        <div class="diff-status-meta">
+                            <span id="diff-time-badge" class="diff-time-badge">⏱️ 0.0ms</span>
+                        </div>
+                    </div>
+
+                    <!-- 결과 출력 뷰 컨테이너 -->
+                    <div class="diff-output-card">
+                        <!-- Split View (나란히 보기) -->
+                        <div id="diff-split-container" class="diff-view-pane diff-split-view">
+                            <div class="diff-split-column diff-col-orig">
+                                <div class="diff-col-header">
+                                    <span>원본 (Original)</span>
+                                </div>
+                                <div id="diff-split-orig-body" class="diff-lines-viewport" onscroll="syncDiffScroll('orig')">
+                                    <div class="diff-empty-placeholder">비교할 텍스트를 입력하고 [차이점 비교 실행] 버튼을 클릭하세요.</div>
+                                </div>
+                            </div>
+                            <div class="diff-split-column diff-col-mod">
+                                <div class="diff-col-header">
+                                    <span>수정본 (Modified)</span>
+                                </div>
+                                <div id="diff-split-mod-body" class="diff-lines-viewport" onscroll="syncDiffScroll('mod')">
+                                    <div class="diff-empty-placeholder">비교할 텍스트를 입력하고 [차이점 비교 실행] 버튼을 클릭하세요.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Unified View (통합 보기, 초기 숨김) -->
+                        <div id="diff-unified-container" class="diff-view-pane diff-unified-view" style="display: none;">
+                            <div class="diff-col-header">
+                                <span>통합 차이점 (Unified Diff)</span>
+                            </div>
+                            <div id="diff-unified-body" class="diff-lines-viewport">
+                                <div class="diff-empty-placeholder">비교할 텍스트를 입력하고 [차이점 비교 실행] 버튼을 클릭하세요.</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2644,6 +2817,7 @@
     <script src="js/agy_sessions.js"></script>
     <script src="js/whisper.js"></script>
     <script src="js/ocr.js"></script>
+    <script src="js/diff_checker.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

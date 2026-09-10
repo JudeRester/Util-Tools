@@ -163,11 +163,58 @@ erDiagram
     REDMINE_CONFIG ||--o{ REDMINE_ISSUES : caches
     REDMINE_PROJECTS ||--o{ REDMINE_ISSUES : contains
     REDMINE_PROJECTS ||--o{ REDMINE_WIKIS : contains
+
+    %% Speech & OCR Studio Tables
+    AUDIO_FILES {
+        integer id PK
+        text file_path
+        text filename
+        integer file_size
+        real duration_sec
+        text created_at
+    }
+
+    TRANSCRIPTION_RUNS {
+        integer id PK
+        integer audio_id FK
+        text model_name
+        text language
+        text stt_device
+        integer enable_diarization
+        text diarization_provider
+        integer num_speakers
+        real cluster_threshold
+        text status
+        real progress
+        text current_phase
+        real rtf
+        real eta_sec
+        text segments_json
+        text speaker_names_json
+        text error_message
+        text created_at
+        text updated_at
+    }
+
+    OCR_HISTORY {
+        integer id PK
+        text source_type
+        text filename
+        integer image_width
+        integer image_height
+        text extracted_text
+        text blocks_json
+        text thumbnail_path
+        real latency_ms
+        text created_at
+    }
+
+    AUDIO_FILES ||--o{ TRANSCRIPTION_RUNS : executes
 ```
 
 ---
 
-## 3. 📋 13개 테이블별 상세 스키마 명세 (Schema Specifications)
+## 3. 📋 16개 테이블별 상세 스키마 명세 (Schema Specifications)
 
 ### ① `emails` (대용량 이메일 아카이브)
 | 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
@@ -388,11 +435,71 @@ erDiagram
 
 ---
 
+### ⑭ `audio_files` (오디오 원본 파일 라이브러리)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `INTEGER` | `PRIMARY KEY AUTOINCREMENT` | 오디오 고유 식별자 |
+| `file_path` | `TEXT` | `NOT NULL UNIQUE` | 로컬 디스크 절대 경로 (`data/audio/`) |
+| `filename` | `TEXT` | `NOT NULL` | 표시용 파일명 |
+| `file_size` | `INTEGER` | `NOT NULL` | 파일 크기 (Bytes) |
+| `duration_sec` | `REAL` | `0.0` | PyAV 산출 오디오 재생 시간 (초) |
+| `created_at` | `TEXT` | `datetime('now', 'localtime')` | 등록 일시 |
+
+> **인덱스**: `idx_audio_files_created (created_at DESC)`
+
+---
+
+### ⑮ `transcription_runs` (음성 전사 및 화자 분리 실행 이력)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `INTEGER` | `PRIMARY KEY AUTOINCREMENT` | 실행 런 고유 식별자 |
+| `audio_id` | `INTEGER` | `NOT NULL, FK(audio_files.id)` | 대상 오디오 ID (ON DELETE CASCADE) |
+| `model_name` | `TEXT` | `'small'` | Whisper 모델 크기 (`'tiny'`, `'small'`, `'medium'`, `'large-v3'`) |
+| `language` | `TEXT` | `'ko'` | 대상 언어 코드 (`'ko'`, `'en'`, `'auto'`) |
+| `stt_device` | `TEXT` | `'cuda'` | 실행 디바이스 (`'cuda'`, `'cpu'`) |
+| `enable_diarization` | `INTEGER` | `0` | 화자 분리 활성화 여부 (1: ON, 0: OFF) |
+| `diarization_provider` | `TEXT` | `'cpu'` | 화자 분리 연산 프로바이더 |
+| `num_speakers` | `INTEGER` | `0` | 화자 수 (0: 자동 감지) |
+| `cluster_threshold` | `REAL` | `0.5` | 군집화 임계값 |
+| `status` | `TEXT` | `'PENDING'` | 작업 상태 (`'PENDING'`, `'TRANSCRIBING'`, `'DIARIZING'`, `'ALIGNING'`, `'COMPLETED'`, `'FAILED'`, `'CANCELLED'`) |
+| `progress` | `REAL` | `0.0` | 0.0 ~ 100.0% 진행률 |
+| `current_phase` | `TEXT` | `'PENDING'` | 현재 단계 (`'STT'`, `'DIARIZATION'`, `'ALIGNMENT'`, `'FINISHED'`, `'ERROR'`) |
+| `rtf` | `REAL` | `0.0` | 실측 실시간 팩터 (Real-Time Factor) |
+| `eta_sec` | `REAL` | `0.0` | 예상 잔여 시간 (초) |
+| `segments_json` | `TEXT` | `'[]'` | 정합 완료된 표준 세그먼트 JSON 배열 |
+| `speaker_names_json` | `TEXT` | `'{}'` | 화자 이름 매핑 JSON 객체 |
+| `error_message` | `TEXT` | `''` | 실패 시 오류 메시지 |
+| `created_at` | `TEXT` | `datetime('now', 'localtime')` | 작업 요청 일시 |
+| `updated_at` | `TEXT` | `datetime('now', 'localtime')` | 상태 최종 변경 일시 |
+
+> **인덱스**: `idx_runs_audio (audio_id)`, `idx_runs_status (status)`, `idx_runs_updated (updated_at DESC)`
+
+---
+
+### ⑯ `ocr_history` (Windows Media OCR 텍스트 추출 이력)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `INTEGER` | `PRIMARY KEY AUTOINCREMENT` | OCR 이력 고유 식별자 |
+| `source_type` | `TEXT` | `NOT NULL` | 소스 유형 (`'clipboard'`, `'file'`, `'screenshot'`) |
+| `filename` | `TEXT` | `''` | 원본 파일명 (파일 입력 시) |
+| `image_width` | `INTEGER` | `0` | 입력 이미지 가로 해상도 (px) |
+| `image_height` | `INTEGER` | `0` | 입력 이미지 세로 해상도 (px) |
+| `extracted_text` | `TEXT` | `NOT NULL` | 추출된 전체 텍스트 |
+| `blocks_json` | `TEXT` | `'[]'` | 텍스트 라인/단어별 좌표 및 신뢰도 JSON |
+| `thumbnail_path` | `TEXT` | `''` | 썸네일 이미지 저장 경로 |
+| `latency_ms` | `REAL` | `0.0` | OCR 추론 소요 시간 (밀리초) |
+| `created_at` | `TEXT` | `datetime('now', 'localtime')` | 인식 일시 |
+
+> **인덱스**: `idx_ocr_history_created (created_at DESC)`
+
+---
+
 ## 4. 📁 파일 기반 설정 파일 (File-based JSON Configurations)
 
 데이터베이스 외에 다음 설정 파일들은 독립된 JSON 파일로 관리되어 외부 연동 및 설정을 지원합니다:
 - **`calendar_config.json`**: 구글 캘린더 비공개 주소 및 iCal(ICS) 웹 구독 목록
 - **`app_settings.json`**: 윈도우 창 크기, 콘솔 높이, 분할창 크기 등 사용자 인터페이스 영구 설정
+- **`widget_config.json`**: 엣지 핸들 위치(`edge`, `offset_ratio`), 핸들 크기(`handle_size`), 대상 모니터(`device_name`) 영속 설정
 
 ---
 

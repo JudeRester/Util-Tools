@@ -26,11 +26,14 @@ def get_bundle_dir() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-# 1. 루트 경로 상수
+# 1. 애플리케이션 메타데이터
+APP_VERSION = "0.17.0"
+
+# 2. 루트 경로 상수
 APP_DIR = get_app_dir()
 BUNDLE_DIR = get_bundle_dir()
 
-# 2. 읽기 전용 번들 정적 리소스 경로
+# 3. 읽기 전용 번들 정적 리소스 경로
 WEB_DIR = os.path.join(BUNDLE_DIR, "web")
 MODELS_DIR = os.path.join(BUNDLE_DIR, "models", "multilingual-e5-small")
 ICON_PATH = os.path.join(BUNDLE_DIR, "utiltools.ico")
