@@ -36,6 +36,7 @@ from core.paths import (
     DIARIZATION_MODELS_DIR,
     AUDIO_DIR
 )
+from core.logger import log_info, log_warn, log_error, log_success
 from services.db_service import get_db_connection
 
 # ==============================================================================
@@ -80,7 +81,7 @@ class AudioPreprocessor:
                     if stream.duration is not None and stream.time_base is not None:
                         return float(stream.duration * stream.time_base)
         except Exception as e:
-            print(f"[AudioPreprocessor] get_audio_duration 오류 ({file_path}): {e}")
+            log_error("Whisper", f"오디오 메타데이터 추출 오류 ({file_path}): {e}", exc=e)
         return 0.0
 
     @staticmethod
@@ -165,7 +166,7 @@ class ModelManager:
                             progress_callback=progress_callback
                         )
                     except Exception as e1:
-                        print(f"[ModelManager] 1차 다운로드 실패({SPEAKER_3D_MODEL_URL}): {e1}, 미러 사이트 시도...")
+                        log_warn("Whisper", f"화자 분리 모델 1차 다운로드 실패({SPEAKER_3D_MODEL_URL}): {e1}, 미러 사이트로 재시도합니다.")
                         cls._download_file_atomic(
                             url=SPEAKER_3D_MODEL_BACKUP_URL,
                             target_path=spk_path,
@@ -187,7 +188,7 @@ class ModelManager:
             except Exception:
                 pass
 
-        print(f"[ModelManager] {label} 다운로드 시작: {url}")
+        log_info("Whisper", f"{label} 다운로드 시작: {url}")
         req = urllib.request.Request(
             url,
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) UtilTools/1.0"}
@@ -215,7 +216,7 @@ class ModelManager:
             raise IOError(f"{label} 다운로드 파일 크기 부족 ({actual_size} < {expected_min_bytes} bytes)")
 
         os.replace(tmp_path, target_path)
-        print(f"[ModelManager] {label} 다운로드 및 원자적 교체 완료 ({actual_size:,} bytes)")
+        log_success("Whisper", f"{label} 다운로드 및 원자적 교체 완료 ({actual_size:,} bytes)")
 
 
 # ==============================================================================
@@ -571,6 +572,7 @@ class WhisperWorker:
     def cancel_run(self, run_id: int):
         with self._lock:
             self._cancelled_runs.add(run_id)
+        log_warn("Whisper", f"사용자 전사 취소 요청 (Run #{run_id})")
 
         # DB 상태 즉시 반영 (대기 중인 경우)
         conn = get_db_connection()
@@ -604,13 +606,13 @@ class WhisperWorker:
                 try:
                     self._process_run(run_id)
                 except Exception as e:
-                    traceback.print_exc()
+                    log_error("Whisper", f"작업 처리 중 오류 발생 (Run #{run_id}): {e}", exc=e)
                     self._update_run_status(run_id, status="FAILED", phase="ERROR", error_msg=str(e))
                 finally:
                     self._active_run_id = None
                     self._queue.task_done()
             except Exception as e:
-                print(f"[WhisperWorker] 루프 예외: {e}")
+                log_error("Whisper", f"워커 루프 미처리 예외 발생: {e}", exc=e)
                 time.sleep(0.5)
 
     def _update_run_status(self, run_id: int, status: str, phase: str, progress: float = 0.0, error_msg: str = ""):
@@ -654,6 +656,7 @@ class WhisperWorker:
 
         # 디바이스 가용성 검증
         if stt_device == "cuda" and ctranslate2.get_cuda_device_count() == 0:
+            log_warn("Whisper", "CUDA 지원 장치가 감지되지 않아 CPU 모드로 자동 전환합니다.")
             stt_device = "cpu"
         compute_type = "float16" if stt_device == "cuda" else "int8"
 
@@ -681,58 +684,120 @@ class WhisperWorker:
         tracker.update_stt(0.0, force=True)
 
         if self.is_cancelled(run_id):
+            log_warn("Whisper", f"작업 시작 전 취소 감지 (Run #{run_id})")
             tracker.cancel()
             return
 
         # ======================================================================
         # Phase 1: faster-whisper STT 전사 (Word Timestamps 활성화)
         # ======================================================================
-        print(f"[WhisperWorker] STT 시작 (Model={model_name}, Device={stt_device}, Compute={compute_type})")
-        whisper_model = WhisperModel(
-            model_size_or_path=model_name,
-            download_root=WHISPER_MODELS_DIR,
-            device=stt_device,
-            compute_type=compute_type
-        )
+        log_info("Whisper", f"STT 시작 (Model={model_name}, Device={stt_device}, Compute={compute_type}, AudioDuration={total_duration:.1f}s)")
+        whisper_model = None
+        try:
+            whisper_model = WhisperModel(
+                model_size_or_path=model_name,
+                download_root=WHISPER_MODELS_DIR,
+                device=stt_device,
+                compute_type=compute_type
+            )
+        except Exception as e:
+            if stt_device == "cuda":
+                log_warn("Whisper", f"CUDA 가속 모델 로딩 실패 ({e}). CPU(int8) 모드로 자동 폴백합니다.")
+                stt_device = "cpu"
+                compute_type = "int8"
+                whisper_model = WhisperModel(
+                    model_size_or_path=model_name,
+                    download_root=WHISPER_MODELS_DIR,
+                    device="cpu",
+                    compute_type="int8"
+                )
+            else:
+                raise
 
-        segments_gen, info = whisper_model.transcribe(
-            file_path,
-            language=language if language != "auto" else None,
-            task="transcribe",
-            word_timestamps=True,
-            vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=500)
-        )
+        def _do_transcribe(m):
+            return m.transcribe(
+                file_path,
+                language=language if language != "auto" else None,
+                task="transcribe",
+                word_timestamps=True,
+                vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=500)
+            )
 
         raw_words = []
-        for seg in segments_gen:
-            if self.is_cancelled(run_id):
-                tracker.cancel()
-                self._update_run_status(run_id, "CANCELLED", "CANCELLED")
-                return
+        try:
+            segments_gen, info = _do_transcribe(whisper_model)
+            for seg in segments_gen:
+                if self.is_cancelled(run_id):
+                    log_warn("Whisper", f"STT 전사 중 취소 감지 (Run #{run_id})")
+                    tracker.cancel()
+                    self._update_run_status(run_id, "CANCELLED", "CANCELLED")
+                    return
 
-            tracker.update_stt(seg.end)
+                tracker.update_stt(seg.end)
 
-            if seg.words:
-                for w in seg.words:
+                if seg.words:
+                    for w in seg.words:
+                        raw_words.append({
+                            "word": w.word,
+                            "start": float(w.start),
+                            "end": float(w.end),
+                            "probability": float(w.probability)
+                        })
+                else:
+                    # 단어 타임스탬프가 비어 있는 경우 세그먼트 단위 폴백
                     raw_words.append({
-                        "word": w.word,
-                        "start": float(w.start),
-                        "end": float(w.end),
-                        "probability": float(w.probability)
+                        "word": seg.text,
+                        "start": float(seg.start),
+                        "end": float(seg.end),
+                        "probability": 1.0
                     })
+        except Exception as e:
+            err_str = str(e).lower()
+            if stt_device == "cuda" and ("out of memory" in err_str or "cuda" in err_str):
+                log_warn("Whisper", f"CUDA 세그먼트 전사 중 VRAM 부족(OOM) 감지 ({e}). CPU(int8) 모드로 전환하여 전체 재시도합니다.")
+                stt_device = "cpu"
+                compute_type = "int8"
+                whisper_model = WhisperModel(
+                    model_size_or_path=model_name,
+                    download_root=WHISPER_MODELS_DIR,
+                    device="cpu",
+                    compute_type="int8"
+                )
+                raw_words = []
+                tracker.update_stt(0.0, force=True)
+                segments_gen, info = _do_transcribe(whisper_model)
+                for seg in segments_gen:
+                    if self.is_cancelled(run_id):
+                        log_warn("Whisper", f"STT 전사 중 취소 감지 (Run #{run_id})")
+                        tracker.cancel()
+                        self._update_run_status(run_id, "CANCELLED", "CANCELLED")
+                        return
+
+                    tracker.update_stt(seg.end)
+
+                    if seg.words:
+                        for w in seg.words:
+                            raw_words.append({
+                                "word": w.word,
+                                "start": float(w.start),
+                                "end": float(w.end),
+                                "probability": float(w.probability)
+                            })
+                    else:
+                        raw_words.append({
+                            "word": seg.text,
+                            "start": float(seg.start),
+                            "end": float(seg.end),
+                            "probability": 1.0
+                        })
             else:
-                # 단어 타임스탬프가 비어 있는 경우 세그먼트 단위 폴백
-                raw_words.append({
-                    "word": seg.text,
-                    "start": float(seg.start),
-                    "end": float(seg.end),
-                    "probability": 1.0
-                })
+                raise
 
         tracker.update_stt(total_duration, force=True)
 
         if self.is_cancelled(run_id):
+            log_warn("Whisper", f"STT 완료 후 취소 감지 (Run #{run_id})")
             tracker.cancel()
             self._update_run_status(run_id, "CANCELLED", "CANCELLED")
             return
@@ -742,7 +807,7 @@ class WhisperWorker:
         # ======================================================================
         turns = []
         if enable_diarization:
-            print("[WhisperWorker] 화자 분리(Diarization) 시작...")
+            log_info("Whisper", f"화자 분리(Diarization) 시작 (Run #{run_id}, NumSpeakers={num_speakers}, Threshold={cluster_threshold})")
             self._update_run_status(run_id, "DIARIZING", "DIARIZATION", progress=70.0)
             tracker.update_diarization(0, 100, force=True)
 
@@ -763,6 +828,7 @@ class WhisperWorker:
             )
 
             if self.is_cancelled(run_id):
+                log_warn("Whisper", f"화자 분리 중 취소 감지 (Run #{run_id})")
                 tracker.cancel()
                 self._update_run_status(run_id, "CANCELLED", "CANCELLED")
                 return
@@ -770,7 +836,7 @@ class WhisperWorker:
         # ======================================================================
         # Phase 3: Active Interval Sweep 단어-화자 시간축 정합
         # ======================================================================
-        print("[WhisperWorker] 단어-화자 정합 및 세그먼트 생성 중...")
+        log_info("Whisper", f"단어-화자 정합 및 세그먼트 생성 시작 (Run #{run_id}, RawWords={len(raw_words)}, Turns={len(turns)})")
         self._update_run_status(run_id, "ALIGNING", "ALIGNMENT", progress=97.0)
         tracker.update_alignment()
 
@@ -813,7 +879,8 @@ class WhisperWorker:
             conn.close()
 
         tracker.finish()
-        print(f"[WhisperWorker] 전사 완료! (Run #{run_id}, Segments={len(canonical_segments)}, RTF={tracker.rtf:.2f})")
+        elapsed_sec = time.perf_counter() - tracker.start_wall_time
+        log_success("Whisper", f"전사 및 정합 완료 (Run #{run_id}, Segments={len(canonical_segments)}, RTF={tracker.rtf:.2f}, 소요 시간={elapsed_sec:.1f}초)")
 
 
 # 전역 백그라운드 워커 인스턴스
@@ -1164,6 +1231,7 @@ def start_transcription_run(audio_id: int, options: Optional[Dict[str, Any]] = N
 
         # 워커 큐 등록
         _worker.enqueue_run(run_id)
+        log_info("Whisper", f"신규 전사 요청 등록 (Run #{run_id}, AudioID={audio_id}, Model={model_name}, Diarization={bool(enable_diarization)})")
         return {"success": True, "run_id": run_id}
     finally:
         conn.close()
