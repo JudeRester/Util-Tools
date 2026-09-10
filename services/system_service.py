@@ -14,7 +14,7 @@ import json
 import ctypes
 from ctypes import wintypes
 import eel
-from core.paths import APP_DIR
+from core.paths import APP_DIR, APP_VERSION
 import core.logger
 
 
@@ -155,6 +155,7 @@ def get_system_info():
         hw = _get_hardware_info()
 
         info = {
+            "애플리케이션 버전": f"v{APP_VERSION}",
             "OS / 운영체제": f"{uname.system} {uname.release} (빌드: {uname.version})",
             "호스트 이름": uname.node,
             "시스템 아키텍처": uname.machine,
