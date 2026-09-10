@@ -12,6 +12,7 @@
 
     // State
     let isPinned = false;
+    let isModalOpen = false;
     let dwellTimer = null;
     let collapseTimer = null;
     let dragOccurred = false;
@@ -35,6 +36,14 @@
     const memoInput = document.getElementById('widget-memo-input');
     const memoStatus = document.getElementById('memo-status');
     const btnRefreshSys = document.getElementById('btn-refresh-sys');
+    const btnWidgetRestart = document.getElementById('btn-widget-restart');
+    const btnWidgetShutdown = document.getElementById('btn-widget-shutdown');
+    const modalOverlay = document.getElementById('widget-modal-overlay');
+    const modalIcon = document.getElementById('widget-modal-icon');
+    const modalTitle = document.getElementById('widget-modal-title');
+    const modalMsg = document.getElementById('widget-modal-msg');
+    const modalBtnCancel = document.getElementById('widget-modal-btn-cancel');
+    const modalBtnConfirm = document.getElementById('widget-modal-btn-confirm');
 
     function isCollapsed() {
         return body.classList.contains('state-collapsed');
@@ -191,12 +200,14 @@
     }
 
 
-    // Auto-collapse on MouseLeave (400ms delay if not pinned)
+    // Auto-collapse on MouseLeave (400ms delay if not pinned and modal not open)
     if (widgetPanel) {
         widgetPanel.addEventListener('mouseleave', () => {
-            if (!isPinned && !isCollapsed()) {
+            if (!isPinned && !isCollapsed() && !isModalOpen) {
                 collapseTimer = setTimeout(() => {
-                    collapseWidget();
+                    if (!isModalOpen) {
+                        collapseWidget();
+                    }
                 }, 400);
             }
         });
@@ -451,6 +462,118 @@
     if (btnRefreshSys) {
         btnRefreshSys.addEventListener('click', () => {
             updateSystemMetrics();
+        });
+    }
+
+    // =========================================================================
+    // 7-1. In-layer Confirmation Modal
+    // =========================================================================
+
+    function showWidgetConfirm(options) {
+        const opts = Object.assign({
+            title: '확인',
+            message: '계속하시겠습니까?',
+            icon: '❓',
+            confirmText: '확인',
+            cancelText: '취소',
+            danger: false
+        }, options || {});
+
+        return new Promise((resolve) => {
+            if (!modalOverlay || !modalBtnCancel || !modalBtnConfirm) {
+                resolve(false);
+                return;
+            }
+
+            isModalOpen = true;
+            if (collapseTimer) {
+                clearTimeout(collapseTimer);
+                collapseTimer = null;
+            }
+
+            if (modalIcon) modalIcon.textContent = opts.icon;
+            if (modalTitle) modalTitle.textContent = opts.title;
+            if (modalMsg) modalMsg.textContent = opts.message;
+            if (modalBtnCancel) modalBtnCancel.textContent = opts.cancelText;
+            if (modalBtnConfirm) {
+                modalBtnConfirm.textContent = opts.confirmText;
+                modalBtnConfirm.classList.toggle('danger', !!opts.danger);
+            }
+
+            modalOverlay.style.display = 'flex';
+
+            const onCancel = (e) => {
+                if (e) e.stopPropagation();
+                cleanup(false);
+            };
+
+            const onConfirm = (e) => {
+                if (e) e.stopPropagation();
+                cleanup(true);
+            };
+
+            const cleanup = (result) => {
+                modalOverlay.style.display = 'none';
+                isModalOpen = false;
+                modalBtnCancel.removeEventListener('click', onCancel);
+                modalBtnConfirm.removeEventListener('click', onConfirm);
+                resolve(result);
+            };
+
+            modalBtnCancel.addEventListener('click', onCancel);
+            modalBtnConfirm.addEventListener('click', onConfirm);
+        });
+    }
+
+    // =========================================================================
+    // 7-2. System Power Controls (Restart & Shutdown)
+    // =========================================================================
+
+    if (btnWidgetRestart) {
+        btnWidgetRestart.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const confirmed = await showWidgetConfirm({
+                title: '백엔드 서버 재시작',
+                message: 'Util-Tools 백엔드 서버와 위젯을 재시작하시겠습니까?\n\n수정된 코드 및 설정이 즉시 반영되며, 새 윈도우가 자동으로 열립니다.',
+                icon: '🔄',
+                confirmText: '재시작',
+                cancelText: '취소',
+                danger: false
+            });
+
+            if (!confirmed) return;
+
+            try {
+                if (window.eel && window.eel.restart_app) {
+                    await window.eel.restart_app()();
+                }
+            } catch (err) {
+                console.error('재시작 요청 실패:', err);
+            }
+        });
+    }
+
+    if (btnWidgetShutdown) {
+        btnWidgetShutdown.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const confirmed = await showWidgetConfirm({
+                title: '애플리케이션 완전 종료',
+                message: 'Utility Toolkit 백엔드 서버, 시스템 트레이 및 위젯을 완전히 종료하시겠습니까?',
+                icon: '🚪',
+                confirmText: '완전 종료',
+                cancelText: '취소',
+                danger: true
+            });
+
+            if (!confirmed) return;
+
+            try {
+                if (window.eel && window.eel.shutdown_app) {
+                    await window.eel.shutdown_app()();
+                }
+            } catch (err) {
+                console.error('종료 요청 실패:', err);
+            }
         });
     }
 
