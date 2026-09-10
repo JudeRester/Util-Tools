@@ -200,3 +200,63 @@ stateDiagram-v2
 - **500ms Fallback 폴링**: 이벤트 누락을 대비하여 500ms 주기 저빈도 타이머로 상태 일관성을 교차 검증합니다.
 - **다중 모니터 `_fullscreen_hwnd` 추적**: 포그라운드가 다른 모니터로 이동하더라도, 기존 모니터에 전체화면 앱(게임, 동영상)이 유지되고 있으면 위젯을 숨김(`SUPPRESSED`) 상태로 유지합니다.
 - **포커스 비탈취 복원 (`SW_SHOWNOACTIVATE`)**: 전체화면이 종료되어 위젯이 복원될 때 `user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE)`를 사용하여 활성 창의 키보드/마우스 포커스를 가로채지 않고 비활성 상태로 조용히 화면에 복귀합니다.
+
+### 8-5. 퀵 위젯 시스템 제어 및 비차단 인레이어 모달 (`web/widget.html`, `web/js/widget.js`)
+- **시스템 전원 제어 그리드 (`system-power-grid`)**:
+  - `[📊 시스템]` 탭 리소스 모니터링 하단에 `[🔄 앱 재시작]` 및 `[🚪 완전 종료]` 2열 제어 버튼 배치.
+  - 각각 `eel.restart_app()` 및 `eel.shutdown_app()`과 비동기 바인딩되어 메인 창을 열지 않고도 엣지 패널에서 즉시 백엔드 핫 리로드 또는 시스템 트레이 프로세스 완전 종료 가능.
+- **비차단 인레이어 확인 모달 (`showWidgetConfirm`)**:
+  - 브라우저 네이티브 블로킹 팝업(`confirm`)을 배제하고, 위젯 패널 내부에 `widget-modal-overlay`와 블러 백드롭(`backdrop-filter: blur(4px)`) 기반의 비동기 모달 다이얼로그 구동.
+  - **모달 오픈 중 자동 축소 방어 (`isModalOpen`)**: 사용자가 확인 모달을 열람 중일 때 마우스 포인터가 패널 영역을 벗어나더라도 400ms 자동 닫힘 타이머를 취소하여 모달이 예기치 않게 닫히는 현상을 방지.
+
+---
+
+## 9. 📜 전역 시스템 로깅 파이프라인 및 백그라운드 예외 크래시 방어 (`core/logger.py`)
+
+애플리케이션 전역의 표준 출력, 표준 에러, 비즈니스 이벤트 및 백그라운드 스레드 예외를 단일 인터셉터로 통합 수집하고 프론트엔드 실시간 전파 및 프로세스 크래시를 방어하는 중앙 로깅 인프라입니다.
+
+```mermaid
+flowchart TD
+    subgraph Sources ["로그 발생원 (Log Sources)"]
+        P["print(...) 표준 출력"]
+        SE["sys.stderr 에러 출력"]
+        EX["threading.excepthook (스레드 미처리 예외)"]
+        APP["core.logger.log_info/warn/error/success"]
+    end
+
+    subgraph CoreLogger ["core/logger.py 중앙 엔진"]
+        Redir["LogStreamRedirector (개행 버퍼링 + 태그 추출)"]
+        Hook["_thread_excepthook (스택 트레이스 포맷팅)"]
+        Buffer["메모리 링 버퍼 (deque maxlen=1000)"]
+        ReentryGuard["_local.active (재진입 무한루프 차단)"]
+    end
+
+    subgraph Output ["출력 및 전파 (Dispatch)"]
+        Term["_orig_stdout (터미널 콘솔 스트림 유지)"]
+        UI["Eel on_backend_log (📜 시스템 로그 탭 실시간 브로드캐스트)"]
+    end
+
+    P --> Redir
+    SE --> Redir
+    EX --> Hook
+    APP --> Buffer
+    Hook --> Buffer
+    Redir --> ReentryGuard --> Buffer
+    Buffer --> Term
+    Buffer --> UI
+```
+
+### 9-1. `LogStreamRedirector` (표준 스트림 인터셉터)
+- **도입 목적**: `run.pyw` 무콘솔(`pythonw.exe`) 환경에서 발생하는 `print()` 및 라이브러리 표준 출력의 유실을 방지하고 프론트엔드 UI로 통합 전송.
+- **라인 단위 버퍼링**: `io.StringIO` 기반으로 청크 스트림을 수집하고 개행(`\n`) 단위로 분할하여 온전한 로그 라인 생성.
+- **카테고리 태그 자동 파싱**: `[WhisperWorker] STT 시작...`, `[SherpaDiarization] ...`과 같이 `[Tag]` 형태로 시작하는 레거시 로그 문자열을 자동 감지하여 카테고리(`category`)와 본문(`message`)으로 정규화.
+- **스레드 로컬 재진입 락 (`_local.active`)**: `LogStreamRedirector` 내부에서 `log_event()`를 호출할 때 다시 `print()`가 유발되어 발생하는 상호 재귀 호출(Infinite Recursion) 및 데드락을 원천 차단.
+
+### 9-2. 백그라운드 스레드 크래시 방어 (`threading.excepthook`)
+- **Python 3.8+ 전역 스레드 예외 훅 등록**: 워커 스레드나 비동기 데몬 스레드에서 캐치되지 않은 치명적 예외(`Unhandled Exception`)가 발생하더라도 메인 프로세스가 강제 종료되는 것을 방지.
+- **스택 트레이스 보존**: 스레드 이름(`Thread:<name>`)과 `traceback.format_exception` 결과 전문을 `error` 레벨로 안전하게 링 버퍼에 보관하고 UI 시스템 로그에 노출.
+
+### 9-3. 하이브리드 자동화 검증 하네스 (`scripts/test_logging_crash_guard_functional.py`)
+- `print()` 출력 캡처, 태그 파싱, `sys.stderr` 포획 100% 검증.
+- 백그라운드 스레드 고의 발생 예외 캡처 및 프로세스 생존 런타임 검증.
+- WhisperWorker 큐 예외 격리 및 CUDA OOM 시 CPU(int8) 자동 폴백 복구 시뮬레이션 통과.
