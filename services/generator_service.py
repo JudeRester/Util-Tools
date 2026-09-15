@@ -13,6 +13,7 @@ DEFAULT_GENERATORS = [
         "icon": "🏢",
         "category": "금융/세무",
         "description": "국세청 체크섬 알고리즘 검증을 통과하는 유효한 사업자등록번호 생성",
+        "variables": [],
         "code": """// 국세청 유효 사업자등록번호 생성 (1개 반환)
 const weights = [1, 3, 7, 1, 3, 7, 1, 3, 5];
 const digits = [Math.floor(Math.random() * 9) + 1];
@@ -33,6 +34,7 @@ return `${raw.slice(0,3)}-${raw.slice(3,5)}-${raw.slice(5)}`;"""
         "icon": "🆔",
         "category": "식별자",
         "description": "RFC 4122 표준 범용 고유 식별자(UUID v4) 생성",
+        "variables": [],
         "code": """// UUID v4 생성
 if (crypto && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -47,22 +49,46 @@ return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
         "name": "강력한 무작위 비밀번호",
         "icon": "🔑",
         "category": "보안/인증",
-        "description": "영문 대소문자, 숫자, 특수문자가 모두 포함된 16자리 보안 비밀번호",
-        "code": """// 16자리 강력한 비밀번호 생성
+        "description": "영문 대소문자, 숫자, 특수문자가 모두 포함된 보안 비밀번호",
+        "variables": [
+            {
+                "id": "var_pwd_len",
+                "name": "length",
+                "label": "비밀번호 길이",
+                "type": "number",
+                "defaultValue": 16,
+                "description": "생성할 비밀번호 자리수 (최소 4자리)"
+            },
+            {
+                "id": "var_pwd_syms",
+                "name": "includeSymbols",
+                "label": "특수문자 포함",
+                "type": "select",
+                "defaultValue": "true",
+                "options": "true:포함 (!@#$...), false:미포함 (영문+숫자)",
+                "description": "특수기호 사용 여부"
+            }
+        ],
+        "code": """// 강력한 비밀번호 생성 (파라미터 지원: params.length, params.includeSymbols)
+const len = (typeof params !== 'undefined' && params && params.length) ? Math.max(4, parseInt(params.length, 10)) : 16;
+const useSyms = (typeof params !== 'undefined' && params && params.includeSymbols !== undefined) ? (String(params.includeSymbols) === 'true') : true;
+
 const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const lower = "abcdefghijklmnopqrstuvwxyz";
 const nums = "0123456789";
 const syms = "!@#$%^&*()_+-=[]{}|";
-const all = upper + lower + nums + syms;
+const all = upper + lower + nums + (useSyms ? syms : "");
 
 let pwd = [
     upper[Math.floor(Math.random() * upper.length)],
     lower[Math.floor(Math.random() * lower.length)],
-    nums[Math.floor(Math.random() * nums.length)],
-    syms[Math.floor(Math.random() * syms.length)]
+    nums[Math.floor(Math.random() * nums.length)]
 ];
+if (useSyms) {
+    pwd.push(syms[Math.floor(Math.random() * syms.length)]);
+}
 
-for (let i = 4; i < 16; i++) {
+for (let i = pwd.length; i < len; i++) {
     pwd.push(all[Math.floor(Math.random() * all.length)]);
 }
 return pwd.sort(() => Math.random() - 0.5).join('');"""
@@ -73,6 +99,7 @@ return pwd.sort(() => Math.random() - 0.5).join('');"""
         "icon": "👤",
         "category": "더미 데이터",
         "description": "테스트용 가상 한국인 이름과 010 가상 휴대폰 번호 세트",
+        "variables": [],
         "code": """// 가상 한국인 이름 + 가상 휴대폰 번호 생성
 const lastNames = ["김", "이", "박", "최", "정", "강", "조", "윤", "장", "임", "한", "오", "서", "신", "권", "황", "안", "송", "류", "홍"];
 const firstNames = ["민준", "서준", "도윤", "예준", "시우", "하준", "서연", "서윤", "지우", "서현", "하은", "민서", "지유", "윤서", "채원", "지원", "준혁", "도현", "태민", "수빈"];
@@ -90,6 +117,7 @@ return `${name} (${phone})`;"""
         "icon": "⏰",
         "category": "일시/변환",
         "description": "현재 시각 기준 밀리초/초 단위 Epoch 타임스탬프 및 ISO 8601 문자열",
+        "variables": [],
         "code": """// 현재 시간 타임스탬프 및 ISO 문자열
 const now = new Date();
 return `Timestamp (ms): ${now.getTime()}\nTimestamp (s):  ${Math.floor(now.getTime() / 1000)}\nISO 8601:       ${now.toISOString()}\nLocal (KST):     ${now.toLocaleString()}`;"""
@@ -99,13 +127,24 @@ return `Timestamp (ms): ${now.getTime()}\nTimestamp (s):  ${Math.floor(now.getTi
         "name": "무작위 32자 HEX 토큰",
         "icon": "🎲",
         "category": "보안/인증",
-        "description": "API 키 및 세션 테스트용 32자리 16진수(HEX) 무작위 시크릿 토큰",
-        "code": """// 32자리 HEX 토큰 생성
-const bytes = new Uint8Array(16);
+        "description": "API 키 및 세션 테스트용 16진수(HEX) 무작위 시크릿 토큰",
+        "variables": [
+            {
+                "id": "var_hex_bytes",
+                "name": "bytes",
+                "label": "바이트 수",
+                "type": "number",
+                "defaultValue": 16,
+                "description": "생성할 바이트 크기 (16바이트 = 32자 HEX)"
+            }
+        ],
+        "code": """// 무작위 HEX 토큰 생성 (파라미터 지원: params.bytes)
+const numBytes = (typeof params !== 'undefined' && params && params.bytes) ? Math.max(1, parseInt(params.bytes, 10)) : 16;
+const bytes = new Uint8Array(numBytes);
 if (window.crypto && crypto.getRandomValues) {
     crypto.getRandomValues(bytes);
 } else {
-    for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+    for (let i = 0; i < numBytes; i++) bytes[i] = Math.floor(Math.random() * 256);
 }
 return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');"""
     }

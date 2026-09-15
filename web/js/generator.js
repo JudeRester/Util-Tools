@@ -15,6 +15,7 @@ const DEFAULT_GENERATORS_FALLBACK = [
         "icon": "🏢",
         "category": "금융/세무",
         "description": "국세청 체크섬 알고리즘 검증을 통과하는 유효한 사업자등록번호 생성",
+        "variables": [],
         "code": `// 국세청 유효 사업자등록번호 생성
 const weights = [1, 3, 7, 1, 3, 7, 1, 3, 5];
 const digits = [Math.floor(Math.random() * 9) + 1];
@@ -35,6 +36,7 @@ return \`\${raw.slice(0,3)}-\${raw.slice(3,5)}-\${raw.slice(5)}\`;`
         "icon": "🆔",
         "category": "식별자",
         "description": "RFC 4122 표준 범용 고유 식별자(UUID v4) 생성",
+        "variables": [],
         "code": `// UUID v4 생성
 if (crypto && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -49,22 +51,46 @@ return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
         "name": "강력한 무작위 비밀번호",
         "icon": "🔑",
         "category": "보안/인증",
-        "description": "영문 대소문자, 숫자, 특수문자가 모두 포함된 16자리 보안 비밀번호",
-        "code": `// 16자리 강력한 비밀번호 생성
+        "description": "영문 대소문자, 숫자, 특수문자가 모두 포함된 보안 비밀번호",
+        "variables": [
+            {
+                "id": "var_pwd_len",
+                "name": "length",
+                "label": "비밀번호 길이",
+                "type": "number",
+                "defaultValue": 16,
+                "description": "생성할 비밀번호 자리수 (최소 4자리)"
+            },
+            {
+                "id": "var_pwd_syms",
+                "name": "includeSymbols",
+                "label": "특수문자 포함",
+                "type": "select",
+                "defaultValue": "true",
+                "options": "true:포함 (!@#$...), false:미포함 (영문+숫자)",
+                "description": "특수기호 사용 여부"
+            }
+        ],
+        "code": `// 강력한 비밀번호 생성 (파라미터 지원: params.length, params.includeSymbols)
+const len = (typeof params !== 'undefined' && params && params.length) ? Math.max(4, parseInt(params.length, 10)) : 16;
+const useSyms = (typeof params !== 'undefined' && params && params.includeSymbols !== undefined) ? (String(params.includeSymbols) === 'true') : true;
+
 const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const lower = "abcdefghijklmnopqrstuvwxyz";
 const nums = "0123456789";
 const syms = "!@#$%^&*()_+-=[]{}|";
-const all = upper + lower + nums + syms;
+const all = upper + lower + nums + (useSyms ? syms : "");
 
 let pwd = [
     upper[Math.floor(Math.random() * upper.length)],
     lower[Math.floor(Math.random() * lower.length)],
-    nums[Math.floor(Math.random() * nums.length)],
-    syms[Math.floor(Math.random() * syms.length)]
+    nums[Math.floor(Math.random() * nums.length)]
 ];
+if (useSyms) {
+    pwd.push(syms[Math.floor(Math.random() * syms.length)]);
+}
 
-for (let i = 4; i < 16; i++) {
+for (let i = pwd.length; i < len; i++) {
     pwd.push(all[Math.floor(Math.random() * all.length)]);
 }
 return pwd.sort(() => Math.random() - 0.5).join('');`
@@ -75,6 +101,7 @@ return pwd.sort(() => Math.random() - 0.5).join('');`
         "icon": "👤",
         "category": "더미 데이터",
         "description": "테스트용 가상 한국인 이름과 010 가상 휴대폰 번호 세트",
+        "variables": [],
         "code": `// 가상 한국인 이름 + 가상 휴대폰 번호 생성
 const lastNames = ["김", "이", "박", "최", "정", "강", "조", "윤", "장", "임", "한", "오", "서", "신", "권", "황", "안", "송", "류", "홍"];
 const firstNames = ["민준", "서준", "도윤", "예준", "시우", "하준", "서연", "서윤", "지우", "서현", "하은", "민서", "지유", "윤서", "채원", "지원", "준혁", "도현", "태민", "수빈"];
@@ -92,6 +119,7 @@ return \`\${name} (\${phone})\`;`
         "icon": "⏰",
         "category": "일시/변환",
         "description": "현재 시각 기준 밀리초/초 단위 Epoch 타임스탬프 및 ISO 8601 문자열",
+        "variables": [],
         "code": `// 현재 시간 타임스탬프 및 ISO 문자열
 const now = new Date();
 return \`Timestamp (ms): \${now.getTime()}\\nTimestamp (s):  \${Math.floor(now.getTime() / 1000)}\\nISO 8601:       \${now.toISOString()}\\nLocal (KST):     \${now.toLocaleString()}\`;`
@@ -101,13 +129,24 @@ return \`Timestamp (ms): \${now.getTime()}\\nTimestamp (s):  \${Math.floor(now.g
         "name": "무작위 32자 HEX 토큰",
         "icon": "🎲",
         "category": "보안/인증",
-        "description": "API 키 및 세션 테스트용 32자리 16진수(HEX) 무작위 시크릿 토큰",
-        "code": `// 32자리 HEX 토큰 생성
-const bytes = new Uint8Array(16);
+        "description": "API 키 및 세션 테스트용 16진수(HEX) 무작위 시크릿 토큰",
+        "variables": [
+            {
+                "id": "var_hex_bytes",
+                "name": "bytes",
+                "label": "바이트 수",
+                "type": "number",
+                "defaultValue": 16,
+                "description": "생성할 바이트 크기 (16바이트 = 32자 HEX)"
+            }
+        ],
+        "code": `// 무작위 HEX 토큰 생성 (파라미터 지원: params.bytes)
+const numBytes = (typeof params !== 'undefined' && params && params.bytes) ? Math.max(1, parseInt(params.bytes, 10)) : 16;
+const bytes = new Uint8Array(numBytes);
 if (window.crypto && crypto.getRandomValues) {
     crypto.getRandomValues(bytes);
 } else {
-    for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+    for (let i = 0; i < numBytes; i++) bytes[i] = Math.floor(Math.random() * 256);
 }
 return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');`
     }
@@ -201,15 +240,18 @@ function renderGeneratorsUI() {
         const name = escapeHtml(gen.name || '생성기');
         const desc = escapeHtml(gen.description || '');
         const cat = escapeHtml(gen.category || '기타');
+        const hasVars = Array.isArray(gen.variables) && gen.variables.length > 0;
+        const varBadge = hasVars ? `<span class="gen-param-badge" title="파라미터 입력 지원 (${gen.variables.length}개 변수)">⚙️ 파라미터 (${gen.variables.length})</span>` : '';
 
         return `
-            <div class="gen-tool-card" onclick="runGenerator('${gen.id}', 1)" title="${desc} (클릭 시 1개 생성 및 복사)">
+            <div class="gen-tool-card" onclick="handleGeneratorCardClick('${gen.id}', 1)" title="${desc} (${hasVars ? '클릭 시 파라미터 입력 후 생성' : '클릭 시 1개 생성 및 복사'})">
                 <div class="gen-card-top-bar">
                     <div class="gen-card-icon-group">
                         <span class="gen-card-badge-icon">${icon}</span>
                         <span class="gen-card-cat" onclick="event.stopPropagation(); setGeneratorCategoryFilter('${escapeJsString(gen.category || '기타')}')" title="이 카테고리만 모아보기">${cat}</span>
+                        ${varBadge}
                     </div>
-                    <button class="gen-bulk-btn" onclick="event.stopPropagation(); runGenerator('${gen.id}', 5)" title="5개 일괄 생성 및 복사">
+                    <button class="gen-bulk-btn" onclick="event.stopPropagation(); handleGeneratorCardClick('${gen.id}', 5)" title="5개 일괄 생성 및 복사">
                         5개 📋
                     </button>
                 </div>
@@ -298,8 +340,207 @@ function clearGeneratorSearch() {
     if (input) input.focus();
 }
 
-// 3. 생성기 스크립트 실행 함수
-async function runGenerator(genId, count = 1) {
+// ==========================================
+// 3. 파라미터 입력 실행 모달 & 생성 실행 제어
+// ==========================================
+
+let runModalGenId = null;
+let runModalCount = 1;
+const generatorParamsCache = {};
+
+/**
+ * 생성기 카드 클릭 핸들러
+ * - 파라미터가 정의된 생성기: 파라미터 입력 모달 표시
+ * - 파라미터가 없는 생성기: 기존대로 즉시 생성 및 복사
+ */
+function handleGeneratorCardClick(genId, count = 1) {
+    const gen = currentGenerators.find(g => String(g.id) === String(genId));
+    if (!gen) return;
+
+    const hasVars = Array.isArray(gen.variables) && gen.variables.length > 0;
+    if (hasVars) {
+        openGenRunParamsModal(genId, count);
+    } else {
+        runGenerator(genId, count);
+    }
+}
+
+/**
+ * 파라미터 입력 모달 열기
+ */
+function openGenRunParamsModal(genId, initialCount = 1) {
+    const gen = currentGenerators.find(g => String(g.id) === String(genId));
+    if (!gen) return;
+
+    runModalGenId = genId;
+    runModalCount = initialCount;
+
+    const modal = document.getElementById('gen-run-params-modal');
+    const iconEl = document.getElementById('gen-run-icon');
+    const titleEl = document.getElementById('gen-run-title');
+    const descEl = document.getElementById('gen-run-desc');
+    const fieldsContainer = document.getElementById('gen-run-fields-container');
+    if (!modal) return;
+
+    if (iconEl) iconEl.textContent = gen.icon || '🎲';
+    if (titleEl) titleEl.textContent = `${gen.name} 파라미터 입력`;
+    if (descEl) descEl.textContent = gen.description || '파라미터 값을 입력하고 생성 버튼을 누르세요.';
+
+    // 입력 필드 동적 렌더링
+    const cachedValues = generatorParamsCache[genId] || {};
+    const variables = Array.isArray(gen.variables) ? gen.variables : [];
+
+    if (fieldsContainer) {
+        fieldsContainer.innerHTML = variables.map(v => {
+            const varName = escapeHtml(v.name || '');
+            const varLabel = escapeHtml(v.label || v.name || '파라미터');
+            const varDesc = escapeHtml(v.description || '');
+            const varType = v.type || 'text';
+            const currentVal = cachedValues[v.name] !== undefined ? cachedValues[v.name] : (v.defaultValue !== undefined ? v.defaultValue : '');
+
+            let inputHtml = '';
+            if (varType === 'select') {
+                // 옵션 파싱 (쉼표 구분 또는 키:라벨)
+                const optionsRaw = String(v.options || '').split(',');
+                const optionsList = optionsRaw.map(opt => {
+                    const trimmed = opt.trim();
+                    if (!trimmed) return null;
+                    const parts = trimmed.split(':');
+                    const optVal = parts[0].trim();
+                    const optLabel = parts.length > 1 ? parts.slice(1).join(':').trim() : optVal;
+                    return { val: optVal, label: optLabel };
+                }).filter(Boolean);
+
+                inputHtml = `
+                    <select class="form-input gen-run-input" data-var-name="${varName}" data-var-type="select">
+                        ${optionsList.map(o => `
+                            <option value="${escapeHtml(o.val)}" ${String(currentVal) === String(o.val) ? 'selected' : ''}>
+                                ${escapeHtml(o.label)}
+                            </option>
+                        `).join('')}
+                    </select>
+                `;
+            } else if (varType === 'number') {
+                inputHtml = `
+                    <input type="number" class="form-input gen-run-input" data-var-name="${varName}" data-var-type="number"
+                        value="${escapeHtml(String(currentVal))}" placeholder="${varDesc || '숫자 입력'}">
+                `;
+            } else {
+                inputHtml = `
+                    <input type="text" class="form-input gen-run-input" data-var-name="${varName}" data-var-type="text"
+                        value="${escapeHtml(String(currentVal))}" placeholder="${varDesc || '값 입력'}">
+                `;
+            }
+
+            return `
+                <div class="gen-run-field-row">
+                    <div class="gen-run-field-label-line">
+                        <label class="gen-run-field-label">${varLabel}</label>
+                        <span class="gen-param-var-tag">params.${varName}</span>
+                    </div>
+                    ${inputHtml}
+                    ${varDesc ? `<div class="gen-run-field-tip">${varDesc}</div>` : ''}
+                </div>
+            `;
+        }).join('');
+    }
+
+    // 생성 건수 버튼 동기화
+    updateGenRunCountUI(initialCount);
+
+    modal.classList.add('show');
+
+    // 첫 번째 입력 필드에 자동 포커스
+    setTimeout(() => {
+        const firstInput = fieldsContainer?.querySelector('.gen-run-input');
+        if (firstInput) firstInput.focus();
+    }, 100);
+}
+
+function closeGenRunParamsModal() {
+    const modal = document.getElementById('gen-run-params-modal');
+    if (modal) modal.classList.remove('show');
+    runModalGenId = null;
+}
+
+function selectGenRunCount(count) {
+    runModalCount = parseInt(count, 10) || 1;
+    updateGenRunCountUI(runModalCount);
+}
+
+function onGenRunCustomCountInput(val) {
+    const num = parseInt(val, 10);
+    if (!isNaN(num) && num >= 1) {
+        runModalCount = Math.min(500, Math.max(1, num));
+        updateGenRunCountUI(runModalCount, true);
+    }
+}
+
+function updateGenRunCountUI(count, isCustomInput = false) {
+    const chips = document.querySelectorAll('.gen-count-chip');
+    const customIn = document.getElementById('gen-run-custom-count');
+    let matchedChip = false;
+
+    chips.forEach(chip => {
+        const chipCount = parseInt(chip.getAttribute('data-count'), 10);
+        if (chipCount === count) {
+            chip.classList.add('active');
+            matchedChip = true;
+        } else {
+            chip.classList.remove('active');
+        }
+    });
+
+    if (customIn && !isCustomInput) {
+        customIn.value = count;
+    }
+    if (!matchedChip && customIn) {
+        customIn.classList.add('active');
+    } else if (customIn) {
+        customIn.classList.remove('active');
+    }
+}
+
+/**
+ * 모달에서 파라미터를 읽어 생성기 실행
+ */
+function executeGeneratorWithModalParams() {
+    if (!runModalGenId) return;
+
+    const fieldsContainer = document.getElementById('gen-run-fields-container');
+    const inputs = fieldsContainer ? fieldsContainer.querySelectorAll('.gen-run-input') : [];
+    const params = {};
+
+    inputs.forEach(input => {
+        const name = input.getAttribute('data-var-name');
+        const type = input.getAttribute('data-var-type');
+        let val = input.value;
+
+        if (type === 'number') {
+            const num = parseFloat(val);
+            params[name] = isNaN(num) ? 0 : num;
+        } else {
+            params[name] = val;
+        }
+    });
+
+    // 최근 입력값 캐시에 보존
+    generatorParamsCache[runModalGenId] = { ...params };
+
+    const targetGenId = runModalGenId;
+    const targetCount = runModalCount;
+
+    closeGenRunParamsModal();
+    runGenerator(targetGenId, targetCount, params);
+}
+
+/**
+ * 생성기 스크립트 실행 함수
+ * @param {string} genId 생성기 ID
+ * @param {number} count 생성 개수
+ * @param {object|null} paramValues 전달할 사용자 입력 파라미터 (params / args)
+ */
+async function runGenerator(genId, count = 1, paramValues = null) {
     const gen = currentGenerators.find(g => String(g.id) === String(genId));
     if (!gen) {
         await showAppAlert('생성기 정보를 찾을 수 없습니다.', '생성기 오류', '⚠️');
@@ -314,24 +555,37 @@ async function runGenerator(genId, count = 1) {
 
     try {
         const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-        const fn = new AsyncFunction(code);
+        // params, args 를 전달하여 코드 내에서 파라미터 참조 가능
+        const fn = new AsyncFunction('params', 'args', code);
+
+        const activeParams = paramValues ? { ...paramValues } : {};
 
         const results = [];
         for (let i = 0; i < count; i++) {
-            const val = await fn();
+            const val = await fn(activeParams, activeParams);
             results.push(typeof val === 'object' ? JSON.stringify(val) : String(val));
         }
 
         const copyText = results.join('\n');
         copyTextToClipboard(copyText);
 
+        const paramSummary = Object.keys(activeParams).length > 0 ? activeParams : '없음 (기본값)';
         logToConsole(`[${gen.icon || '🎲'} ${gen.name}] 데이터 생성 완료 (${count}개)`, {
             생성기: gen.name,
             카테고리: gen.category || '기타',
             생성개수: `${count}개`,
+            입력파라미터: paramSummary,
             결과미리보기: count === 1 ? results[0] : results,
             클립보드: '자동 복사 완료'
         });
+
+        const previewStr = count === 1 ? results[0] : `${results[0]} 외 ${count - 1}개`;
+        showToast(
+            `${gen.icon || '🎲'} ${gen.name} 생성 완료 (${count}개)`,
+            `클립보드 복사 완료: ${previewStr.substring(0, 32)}${previewStr.length > 32 ? '...' : ''}`,
+            '✅',
+            3000
+        );
     } catch (err) {
         console.error('생성기 실행 오류:', err);
         logToConsole(`🚨 [${gen.name}] 생성기 실행 오류`, err.message || String(err));
@@ -418,7 +672,8 @@ function selectGeneratorInStudio(id) {
             icon: '🎲',
             category: '사용자 정의',
             description: '',
-            code: `// JavaScript 생성 코드를 작성하세요 (return 값으로 데이터 반환)\nconst rand = Math.floor(Math.random() * 900000) + 100000;\nreturn 'DATA_' + rand;`
+            variables: [],
+            code: `// JavaScript 생성 코드를 작성하세요 (return 값으로 데이터 반환)\n// params.변수명 또는 args.변수명으로 입력값을 전달받을 수 있습니다.\nconst rand = Math.floor(Math.random() * 900000) + 100000;\nreturn 'DATA_' + rand;`
         };
         studioDraftGenerators.unshift(newGen);
         selectedStudioGenId = newId;
@@ -441,6 +696,7 @@ function loadGeneratorToEditor(id) {
     if (id) {
         const gen = studioDraftGenerators.find(g => String(g.id) === String(id));
         if (gen) {
+            if (!Array.isArray(gen.variables)) gen.variables = [];
             if (formTitle) formTitle.textContent = `생성기 편집: ${gen.name || '무제'}`;
             if (modeIcon) modeIcon.textContent = '✏️';
             if (iconIn) iconIn.value = gen.icon || '🎲';
@@ -459,6 +715,140 @@ function loadGeneratorToEditor(id) {
         if (descIn) descIn.value = '';
         if (codeIn) codeIn.value = '';
         if (deleteBtn) deleteBtn.style.display = 'none';
+    }
+
+    renderStudioVariablesEditor();
+}
+
+/**
+ * 스튜디오 에디터 내 실행 파라미터(변수) 설정 렌더링
+ */
+function renderStudioVariablesEditor() {
+    const listEl = document.getElementById('gen-variables-list');
+    if (!listEl) return;
+
+    const gen = selectedStudioGenId 
+        ? studioDraftGenerators.find(g => String(g.id) === String(selectedStudioGenId))
+        : null;
+
+    if (!gen || !Array.isArray(gen.variables) || gen.variables.length === 0) {
+        listEl.innerHTML = `
+            <div class="gen-vars-empty">
+                <span>등록된 실행 파라미터가 없습니다. 위의 [➕ 변수 추가] 버튼을 눌러 파라미터를 추가할 수 있습니다.</span>
+            </div>
+        `;
+        return;
+    }
+
+    listEl.innerHTML = gen.variables.map((v, idx) => {
+        const varName = escapeHtml(v.name || '');
+        const varLabel = escapeHtml(v.label || '');
+        const varType = v.type || 'text';
+        const varDef = escapeHtml(v.defaultValue !== undefined ? String(v.defaultValue) : '');
+        const varDesc = escapeHtml(v.description || '');
+        const varOpts = escapeHtml(v.options || '');
+
+        return `
+            <div class="gen-var-item" data-var-idx="${idx}">
+                <div class="gen-var-main-row">
+                    <div class="gen-var-col col-name">
+                        <label>변수명 (params.식별자) <span class="req-star">*</span></label>
+                        <input type="text" class="form-input var-input-sm" value="${varName}" 
+                            placeholder="예: length" onchange="onVariableFieldChange(${idx}, 'name', this.value)">
+                    </div>
+                    <div class="gen-var-col col-label">
+                        <label>표시 라벨 <span class="req-star">*</span></label>
+                        <input type="text" class="form-input var-input-sm" value="${varLabel}" 
+                            placeholder="예: 비밀번호 길이" onchange="onVariableFieldChange(${idx}, 'label', this.value)">
+                    </div>
+                    <div class="gen-var-col col-type">
+                        <label>유형</label>
+                        <select class="form-input var-input-sm" onchange="onVariableFieldChange(${idx}, 'type', this.value)">
+                            <option value="text" ${varType === 'text' ? 'selected' : ''}>문자열 (text)</option>
+                            <option value="number" ${varType === 'number' ? 'selected' : ''}>숫자 (number)</option>
+                            <option value="select" ${varType === 'select' ? 'selected' : ''}>선택 목록 (select)</option>
+                        </select>
+                    </div>
+                    <div class="gen-var-col col-default">
+                        <label>기본값</label>
+                        <input type="text" class="form-input var-input-sm" value="${varDef}" 
+                            placeholder="기본값" onchange="onVariableFieldChange(${idx}, 'defaultValue', this.value)">
+                    </div>
+                    <div class="gen-var-col col-delete">
+                        <label>&nbsp;</label>
+                        <button type="button" class="mini-tool-btn danger icon-only" onclick="removeVariableFromDraft(${idx})" title="이 파라미터 삭제">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+                ${varType === 'select' ? `
+                <div class="gen-var-sub-row">
+                    <label>선택 옵션 목록 (쉼표 구분: A, B 또는 key:label 형태):</label>
+                    <input type="text" class="form-input var-input-sm" value="${varOpts}" 
+                        placeholder="예: true:포함, false:미포함 또는 서울, 경기, 인천, 부산" onchange="onVariableFieldChange(${idx}, 'options', this.value)">
+                </div>
+                ` : ''}
+                <div class="gen-var-sub-row">
+                    <label>설명 / 힌트:</label>
+                    <input type="text" class="form-input var-input-sm" value="${varDesc}" 
+                        placeholder="예: 최소 4자리 이상 입력" onchange="onVariableFieldChange(${idx}, 'description', this.value)">
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function addVariableToDraft() {
+    if (!selectedStudioGenId) return;
+    const gen = studioDraftGenerators.find(g => String(g.id) === String(selectedStudioGenId));
+    if (!gen) return;
+
+    if (!Array.isArray(gen.variables)) gen.variables = [];
+
+    const count = gen.variables.length + 1;
+    gen.variables.push({
+        id: 'var_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        name: `param${count}`,
+        label: `파라미터 ${count}`,
+        type: 'text',
+        defaultValue: '',
+        options: '',
+        description: ''
+    });
+
+    renderStudioVariablesEditor();
+
+    // 새로 추가된 변수명 input으로 포커스
+    setTimeout(() => {
+        const items = document.querySelectorAll('.gen-var-item');
+        const lastItem = items[items.length - 1];
+        if (lastItem) {
+            const nameInput = lastItem.querySelector('.col-name input');
+            if (nameInput) {
+                nameInput.focus();
+                nameInput.select();
+            }
+        }
+    }, 50);
+}
+
+function removeVariableFromDraft(idx) {
+    if (!selectedStudioGenId) return;
+    const gen = studioDraftGenerators.find(g => String(g.id) === String(selectedStudioGenId));
+    if (!gen || !Array.isArray(gen.variables)) return;
+
+    gen.variables.splice(idx, 1);
+    renderStudioVariablesEditor();
+}
+
+function onVariableFieldChange(idx, field, value) {
+    if (!selectedStudioGenId) return;
+    const gen = studioDraftGenerators.find(g => String(g.id) === String(selectedStudioGenId));
+    if (!gen || !Array.isArray(gen.variables) || !gen.variables[idx]) return;
+
+    gen.variables[idx][field] = value.trim();
+    if (field === 'type') {
+        renderStudioVariablesEditor();
     }
 }
 
@@ -564,14 +954,34 @@ async function testGeneratorCode() {
     outputBar.style.display = 'block';
     const startTime = performance.now();
 
+    // 현재 생성기 Draft에서 정의된 변수 기본값 수집
+    const draftGen = selectedStudioGenId 
+        ? studioDraftGenerators.find(g => String(g.id) === String(selectedStudioGenId))
+        : null;
+    const testParams = {};
+    if (draftGen && Array.isArray(draftGen.variables)) {
+        draftGen.variables.forEach(v => {
+            if (v.name) {
+                if (v.type === 'number') {
+                    const num = parseFloat(v.defaultValue);
+                    testParams[v.name] = isNaN(num) ? 0 : num;
+                } else {
+                    testParams[v.name] = v.defaultValue !== undefined ? v.defaultValue : '';
+                }
+            }
+        });
+    }
+
     try {
         const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-        const fn = new AsyncFunction(code);
-        const result = await fn();
+        const fn = new AsyncFunction('params', 'args', code);
+        const result = await fn(testParams, testParams);
         const duration = (performance.now() - startTime).toFixed(2);
 
         outputBar.className = 'gen-test-output-bar';
-        if (timeText) timeText.textContent = `⏱️ ${duration}ms (정상 반환)`;
+        const paramKeys = Object.keys(testParams);
+        const paramLabel = paramKeys.length > 0 ? ` (테스트 파라미터: ${JSON.stringify(testParams)})` : '';
+        if (timeText) timeText.textContent = `⏱️ ${duration}ms (정상 반환)${paramLabel}`;
         outputText.textContent = typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result);
     } catch (err) {
         const duration = (performance.now() - startTime).toFixed(2);
@@ -639,6 +1049,34 @@ async function saveStudioChanges() {
             selectGeneratorInStudio(g.id);
             document.getElementById('gen-code-input')?.focus();
             return;
+        }
+
+        // 변수 목록 유효성 검사
+        if (Array.isArray(g.variables)) {
+            const seenNames = new Set();
+            for (let vi = 0; vi < g.variables.length; vi++) {
+                const v = g.variables[vi];
+                const vname = (v.name || '').trim();
+                if (!vname) {
+                    await showAppAlert(`'${g.name}'의 #${vi + 1}번째 파라미터 변수명을 입력해 주세요.`, '변수명 필요', '⚠️');
+                    selectGeneratorInStudio(g.id);
+                    return;
+                }
+                if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(vname)) {
+                    await showAppAlert(`'${vname}'은(는) 유효한 JavaScript 식별자 형식이 아닙니다.\n(영문자, 숫자, _ 만 사용 가능하며 숫자로 시작할 수 없습니다)`, '변수명 오류', '⚠️');
+                    selectGeneratorInStudio(g.id);
+                    return;
+                }
+                if (seenNames.has(vname)) {
+                    await showAppAlert(`'${g.name}'에 중복된 변수명 '${vname}'이(가) 정의되어 있습니다.`, '변수명 중복', '⚠️');
+                    selectGeneratorInStudio(g.id);
+                    return;
+                }
+                seenNames.add(vname);
+                if (!v.label || !v.label.trim()) {
+                    v.label = vname;
+                }
+            }
         }
     }
 

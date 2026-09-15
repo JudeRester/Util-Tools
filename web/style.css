@@ -3759,6 +3759,20 @@ input[type="checkbox"] {
     max-width: 140px;
 }
 
+.gen-param-badge {
+    font-size: 0.68rem;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+    font-weight: 600;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
 .gen-bulk-btn {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border-color);
@@ -4196,6 +4210,331 @@ input[type="checkbox"] {
     align-items: center;
     gap: 8px;
     margin-left: auto;
+}
+
+/* 데이터 생성기 실행 파라미터(변수) 설정 섹션 */
+.gen-variables-section {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.gen-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.gen-section-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.badge-optional {
+    font-size: 0.65rem;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+}
+
+.gen-variables-tip {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    background: rgba(99, 102, 241, 0.08);
+    border-left: 2px solid var(--accent-color);
+    padding: 4px 8px;
+    border-radius: 0 4px 4px 0;
+}
+
+.gen-variables-tip code {
+    color: #a5b4fc;
+    font-family: 'Consolas', monospace;
+}
+
+.gen-variables-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.gen-vars-empty {
+    padding: 12px;
+    text-align: center;
+    font-size: 0.74rem;
+    color: var(--text-secondary);
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 4px;
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.gen-var-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: var(--transition);
+}
+
+.gen-var-item:hover {
+    border-color: rgba(99, 102, 241, 0.4);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.gen-var-main-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.gen-var-col {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.gen-var-col label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.gen-var-col.col-name {
+    flex: 1.5;
+    min-width: 110px;
+}
+
+.gen-var-col.col-label {
+    flex: 1.8;
+    min-width: 120px;
+}
+
+.gen-var-col.col-type {
+    flex: 1.2;
+    min-width: 100px;
+}
+
+.gen-var-col.col-default {
+    flex: 1.2;
+    min-width: 90px;
+}
+
+.gen-var-col.col-delete {
+    width: 32px;
+    flex-shrink: 0;
+}
+
+.var-input-sm {
+    padding: 5px 8px !important;
+    font-size: 0.76rem !important;
+    height: 30px !important;
+}
+
+.gen-var-sub-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+}
+
+.gen-var-sub-row label {
+    white-space: nowrap;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    min-width: 120px;
+}
+
+.gen-var-sub-row input {
+    flex: 1;
+}
+
+/* ==========================================
+   데이터 생성기 파라미터 입력 실행 모달 (Run Params Modal)
+   ========================================== */
+.gen-params-modal-card {
+    max-width: 480px;
+    width: 92vw;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+    animation: dialogPopIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    padding: 0;
+    overflow: hidden;
+}
+
+.gen-params-modal-card .modal-header {
+    padding: 14px 18px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.gen-params-header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.gen-params-header-title h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.gen-params-modal-body {
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.gen-run-desc-text {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.45;
+}
+
+.gen-run-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.gen-run-field-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 10px 12px;
+}
+
+.gen-run-field-label-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.gen-run-field-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.gen-param-var-tag {
+    font-size: 0.68rem;
+    font-family: 'Consolas', monospace;
+    color: #a5b4fc;
+    background: rgba(99, 102, 241, 0.15);
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.gen-run-input {
+    width: 100%;
+    font-size: 0.85rem;
+}
+
+.gen-run-field-tip {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    line-height: 1.35;
+}
+
+.gen-run-count-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    flex-wrap: wrap;
+}
+
+.gen-run-count-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.gen-run-count-chips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.gen-count-chip {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.gen-count-chip:hover {
+    background: rgba(99, 102, 241, 0.2);
+    color: #ffffff;
+    border-color: var(--accent-color);
+}
+
+.gen-count-chip.active {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
+}
+
+.gen-run-custom-count-input {
+    width: 58px;
+    padding: 4px 6px;
+    font-size: 0.78rem;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    outline: none;
+    transition: var(--transition);
+}
+
+.gen-run-custom-count-input:focus,
+.gen-run-custom-count-input.active {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 1px var(--accent-color);
+}
+
+.gen-count-unit {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
 }
 
 /* ==========================================

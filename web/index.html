@@ -2187,6 +2187,22 @@
                             </div>
                         </div>
 
+                        <!-- 실행 파라미터 (변수 정의) 섹션 -->
+                        <div class="gen-variables-section">
+                            <div class="gen-section-header">
+                                <label class="gen-section-label">⚙️ 실행 파라미터 (변수 정의) <span class="badge-optional">선택사항</span></label>
+                                <button type="button" class="mini-tool-btn" onclick="addVariableToDraft()" title="실행 시 사용자에게 입력받을 변수 추가">
+                                    ➕ 변수 추가
+                                </button>
+                            </div>
+                            <div class="gen-variables-tip">
+                                💡 변수를 추가하면 실행 시 입력 팝업이 표시되며, JS 코드에서 <code>params.변수명</code> 또는 <code>args.변수명</code>으로 접근할 수 있습니다.
+                            </div>
+                            <div id="gen-variables-list" class="gen-variables-list">
+                                <!-- JS 동적 렌더링 -->
+                            </div>
+                        </div>
+
                         <!-- 자바스크립트 코드 에디터 -->
                         <div class="gen-code-section">
                             <div class="gen-code-header">
@@ -2224,6 +2240,46 @@
                         </div>
                     </div>
                 </main>
+            </div>
+        </div>
+    </div>
+
+    <!-- 데이터 생성기 파라미터 입력 실행 모달 -->
+    <div id="gen-run-params-modal" class="modal-overlay">
+        <div class="modal-card gen-params-modal-card">
+            <div class="modal-header">
+                <div class="gen-params-header-title">
+                    <span id="gen-run-icon" class="title-icon">🎲</span>
+                    <h3 id="gen-run-title">데이터 생성 파라미터 입력</h3>
+                </div>
+                <button class="modal-close-btn" onclick="closeGenRunParamsModal()">&times;</button>
+            </div>
+            
+            <div class="modal-body gen-params-modal-body">
+                <p id="gen-run-desc" class="gen-run-desc-text"></p>
+                <form id="gen-run-params-form" onsubmit="event.preventDefault(); executeGeneratorWithModalParams();">
+                    <div id="gen-run-fields-container" class="gen-run-fields">
+                        <!-- 동적 파라미터 입력 필드 렌더링 -->
+                    </div>
+                    
+                    <div class="gen-run-count-bar">
+                        <label class="gen-run-count-label">생성 건수:</label>
+                        <div class="gen-run-count-chips">
+                            <button type="button" class="gen-count-chip active" data-count="1" onclick="selectGenRunCount(1)">1개</button>
+                            <button type="button" class="gen-count-chip" data-count="5" onclick="selectGenRunCount(5)">5개</button>
+                            <button type="button" class="gen-count-chip" data-count="10" onclick="selectGenRunCount(10)">10개</button>
+                            <input type="number" id="gen-run-custom-count" class="gen-run-custom-count-input" min="1" max="500" value="1" title="건수 직접 입력" oninput="onGenRunCustomCountInput(this.value)">
+                            <span class="gen-count-unit">개</span>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="form-btn close-btn" onclick="closeGenRunParamsModal()">취소</button>
+                <button type="button" id="gen-run-execute-btn" class="form-btn add-btn" onclick="executeGeneratorWithModalParams()">
+                    📋 생성 및 클립보드 복사
+                </button>
             </div>
         </div>
     </div>
