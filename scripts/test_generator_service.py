@@ -41,6 +41,14 @@ def run_tests():
                 "type": "number",
                 "defaultValue": 8,
                 "description": "난수 자릿수"
+            },
+            {
+                "id": "var_body",
+                "name": "template",
+                "label": "여러 줄 템플릿",
+                "type": "textarea",
+                "defaultValue": "Line 1\nLine 2\nLine 3",
+                "description": "여러 줄 텍스트 (줄바꿈 보존)"
             }
         ],
         "code": "const p = (params && params.prefix) || 'TEST-'; return p + Date.now();"
@@ -58,10 +66,14 @@ def run_tests():
     assert test_gen_id in retrieved_gens, "Saved test generator not found in DB"
 
     saved_test_gen = retrieved_gens[test_gen_id]
-    assert len(saved_test_gen["variables"]) == 2, f"Expected 2 variables, got: {saved_test_gen['variables']}"
+    assert len(saved_test_gen["variables"]) == 3, f"Expected 3 variables, got: {saved_test_gen['variables']}"
     assert saved_test_gen["variables"][0]["name"] == "prefix"
     assert saved_test_gen["variables"][1]["name"] == "count"
-    print("    Variables verified in DB.")
+    assert saved_test_gen["variables"][2]["name"] == "template"
+    assert saved_test_gen["variables"][2]["type"] == "textarea"
+    assert "\n" in saved_test_gen["variables"][2]["defaultValue"], "Newline in textarea defaultValue must be preserved"
+    assert saved_test_gen["variables"][2]["defaultValue"] == "Line 1\nLine 2\nLine 3"
+    print("    Variables (including multiline textarea with newlines) verified in DB.")
 
     print("[4] Cleaning up test generator (Restoring original state)...")
     clean_res = save_generators(orig_generators)

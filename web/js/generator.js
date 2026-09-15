@@ -425,10 +425,17 @@ function openGenRunParamsModal(genId, initialCount = 1) {
                     <input type="number" class="form-input gen-run-input" data-var-name="${varName}" data-var-type="number"
                         value="${escapeHtml(String(currentVal))}" placeholder="${varDesc || '숫자 입력'}">
                 `;
-            } else {
+            } else if (varType === 'text' && !String(currentVal).includes('\n')) {
                 inputHtml = `
                     <input type="text" class="form-input gen-run-input" data-var-name="${varName}" data-var-type="text"
                         value="${escapeHtml(String(currentVal))}" placeholder="${varDesc || '값 입력'}">
+                `;
+            } else {
+                // textarea (여러 줄 텍스트 또는 줄바꿈 보존 텍스트)
+                inputHtml = `
+                    <textarea class="form-input gen-run-input gen-run-textarea" data-var-name="${varName}" data-var-type="textarea"
+                        rows="3" placeholder="${varDesc || '내용 입력 (줄바꿈/Enter 지원)'}">${escapeHtml(String(currentVal))}</textarea>
+                    <div class="gen-run-field-hint">💡 줄바꿈은 Enter, 바로 생성은 Ctrl+Enter를 누르세요.</div>
                 `;
             }
 
@@ -450,8 +457,18 @@ function openGenRunParamsModal(genId, initialCount = 1) {
 
     modal.classList.add('show');
 
-    // 첫 번째 입력 필드에 자동 포커스
+    // textarea에 Ctrl+Enter 단축키 바인딩 및 첫 번째 입력 필드에 자동 포커스
     setTimeout(() => {
+        const textareas = fieldsContainer?.querySelectorAll('textarea.gen-run-input');
+        textareas?.forEach(ta => {
+            ta.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    executeGeneratorWithModalParams();
+                }
+            });
+        });
+
         const firstInput = fieldsContainer?.querySelector('.gen-run-input');
         if (firstInput) firstInput.focus();
     }, 100);
@@ -764,15 +781,21 @@ function renderStudioVariablesEditor() {
                     <div class="gen-var-col col-type">
                         <label>유형</label>
                         <select class="form-input var-input-sm" onchange="onVariableFieldChange(${idx}, 'type', this.value)">
-                            <option value="text" ${varType === 'text' ? 'selected' : ''}>문자열 (text)</option>
+                            <option value="textarea" ${varType === 'textarea' ? 'selected' : ''}>여러 줄 텍스트 (textarea)</option>
+                            <option value="text" ${varType === 'text' ? 'selected' : ''}>한 줄 문자열 (text)</option>
                             <option value="number" ${varType === 'number' ? 'selected' : ''}>숫자 (number)</option>
                             <option value="select" ${varType === 'select' ? 'selected' : ''}>선택 목록 (select)</option>
                         </select>
                     </div>
                     <div class="gen-var-col col-default">
-                        <label>기본값</label>
-                        <input type="text" class="form-input var-input-sm" value="${varDef}" 
-                            placeholder="기본값" onchange="onVariableFieldChange(${idx}, 'defaultValue', this.value)">
+                        <label>기본값 ${varType === 'textarea' ? '(줄바꿈 가능)' : ''}</label>
+                        ${varType === 'textarea' ? `
+                            <textarea class="form-input var-input-sm var-textarea-sm" rows="2"
+                                placeholder="기본값 (줄바꿈 가능)" onchange="onVariableFieldChange(${idx}, 'defaultValue', this.value)">${varDef}</textarea>
+                        ` : `
+                            <input type="text" class="form-input var-input-sm" value="${varDef}" 
+                                placeholder="기본값" onchange="onVariableFieldChange(${idx}, 'defaultValue', this.value)">
+                        `}
                     </div>
                     <div class="gen-var-col col-delete">
                         <label>&nbsp;</label>
@@ -810,7 +833,7 @@ function addVariableToDraft() {
         id: 'var_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
         name: `param${count}`,
         label: `파라미터 ${count}`,
-        type: 'text',
+        type: 'textarea',
         defaultValue: '',
         options: '',
         description: ''
@@ -846,7 +869,11 @@ function onVariableFieldChange(idx, field, value) {
     const gen = studioDraftGenerators.find(g => String(g.id) === String(selectedStudioGenId));
     if (!gen || !Array.isArray(gen.variables) || !gen.variables[idx]) return;
 
-    gen.variables[idx][field] = value.trim();
+    if (field === 'defaultValue' && gen.variables[idx].type === 'textarea') {
+        gen.variables[idx][field] = value;
+    } else {
+        gen.variables[idx][field] = (field === 'defaultValue' || field === 'description' || field === 'options') ? value : value.trim();
+    }
     if (field === 'type') {
         renderStudioVariablesEditor();
     }

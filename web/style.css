@@ -4346,6 +4346,15 @@ input[type="checkbox"] {
     height: 30px !important;
 }
 
+.var-textarea-sm {
+    height: auto !important;
+    min-height: 48px !important;
+    resize: vertical;
+    line-height: 1.4 !important;
+    font-family: inherit;
+    white-space: pre-wrap;
+}
+
 .gen-var-sub-row {
     display: flex;
     align-items: center;
@@ -4458,6 +4467,24 @@ input[type="checkbox"] {
 .gen-run-input {
     width: 100%;
     font-size: 0.85rem;
+}
+
+.gen-run-textarea {
+    min-height: 72px;
+    resize: vertical;
+    line-height: 1.5;
+    font-family: inherit;
+    white-space: pre-wrap;
+}
+
+.gen-run-field-hint {
+    font-size: 0.7rem;
+    color: #a5b4fc;
+    opacity: 0.85;
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .gen-run-field-tip {
