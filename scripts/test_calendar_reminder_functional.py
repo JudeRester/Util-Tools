@@ -98,7 +98,44 @@ END:VCALENDAR"""
     print("[PASS] Test 2: ICS UID 파싱 정상 완료")
 
 
+def test_exposed_reminder_apis():
+    print("[TEST 3] Eel Exposed 알림 API 검증 시작...")
+    test_uid = "exposed_test_uid_555"
+    
+    # 1. 알림 설정 API
+    res = calendar_service.set_event_reminder(
+        event_uid=test_uid,
+        calendar_name="공식 캘린더",
+        title="릴리스 회의",
+        start_datetime="2026-10-20 10:00",
+        reminder_minutes=15
+    )
+    assert res.get("status") == "success", f"set_event_reminder 실패: {res}"
+    print("  -> set_event_reminder 성공")
+
+    # 2. 목록 조회 API
+    list_res = calendar_service.get_event_reminders()
+    assert list_res.get("status") == "success", f"get_event_reminders 실패: {list_res}"
+    found = next((r for r in list_res.get("data", []) if r["event_uid"] == test_uid), None)
+    assert found is not None, "목록에서 테스트 알림 미발견"
+    assert found["reminder_minutes"] == 15, "알림 분 설정값 불일치"
+    print("  -> get_event_reminders 성공")
+
+    # 3. 알림 삭제 API
+    del_res = calendar_service.delete_event_reminder(test_uid)
+    assert del_res.get("status") == "success", f"delete_event_reminder 실패: {del_res}"
+    print("  -> delete_event_reminder 성공")
+
+    list_res2 = calendar_service.get_event_reminders()
+    found2 = next((r for r in list_res2.get("data", []) if r["event_uid"] == test_uid), None)
+    assert found2 is None, "삭제 후에도 알림이 남아있음"
+    print("  -> 삭제 후 목록 확인 성공")
+
+    print("[PASS] Test 3: Eel Exposed 알림 API 정상 완료")
+
+
 if __name__ == "__main__":
     test_calendar_reminder_crud()
     test_ics_uid_parsing()
+    test_exposed_reminder_apis()
     print("\n[ALL PASS] Backend functional test completed successfully.")
