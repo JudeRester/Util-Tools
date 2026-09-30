@@ -1274,16 +1274,25 @@
                                     <option value="neutral">⚪ 뉴트럴 (Neutral)</option>
                                 </select>
                             </div>
+                            <button id="mermaid-sidebar-toggle-btn" class="play-btn mini-tool-btn" onclick="toggleMermaidSidebar()" title="다이어그램 목록 사이드바 접기/펼치기">
+                                <span id="mermaid-sidebar-toggle-icon">◀</span> <span id="mermaid-sidebar-toggle-text">목록 접기</span>
+                            </button>
                             <button id="mermaid-editor-toggle-btn" class="play-btn mini-tool-btn" onclick="toggleMermaidEditor()" title="스크립트 에디터 접기/펼치기">
                                 <span id="mermaid-editor-toggle-icon">◀</span> <span id="mermaid-editor-toggle-text">에디터 접기</span>
                             </button>
+                            <!-- 현재 편집 중인 다이어그램 상태 표시 -->
+                            <div id="mermaid-active-diagram-status" class="mermaid-active-status-bar" title="현재 편집 중인 다이어그램">
+                                <span class="status-icon">📌</span>
+                                <span id="mermaid-active-diagram-title" class="status-title">새 다이어그램</span>
+                                <span id="mermaid-dirty-badge" class="dirty-badge" style="display: none;">● 수정됨</span>
+                            </div>
                         </div>
                         <div class="mermaid-toolbar-right">
-                            <button class="play-btn mini-tool-btn" onclick="openDiagramListModal()" title="저장된 다이어그램 목록 열기">
-                                <span>📂</span> 다이어그램 목록 (<span id="mermaid-saved-count-badge">0</span>)
+                            <button class="play-btn mini-tool-btn run" id="mermaid-save-update-btn" onclick="saveCurrentDiagramEdits()" title="현재 다이어그램 스크립트 수정 저장 (Ctrl+S)">
+                                <span>💾</span> 수정 내용 저장
                             </button>
-                            <button class="play-btn mini-tool-btn" onclick="openSaveCurrentDiagramPrompt()" title="현재 다이어그램을 목록에 저장">
-                                <span>💾</span> 저장
+                            <button class="play-btn mini-tool-btn" onclick="openSaveCurrentDiagramPrompt()" title="현재 다이어그램을 새 이름으로 저장">
+                                <span>➕</span> 다른 이름으로 저장
                             </button>
                             <button class="play-btn mini-tool-btn" onclick="copyMermaidCode()" title="작성된 Mermaid 코드 클립보드 복사">
                                 <span>📋</span> 코드 복사
@@ -1303,13 +1312,41 @@
                         </div>
                     </div>
 
-                    <!-- 좌우 분할 에디터 & 뷰포트 -->
+                    <!-- 좌우 3-Pane 분할: 목록 사이드바 - 에디터 - 뷰포트 -->
                     <div class="mermaid-split" id="mermaid-split">
-                        <!-- 좌측: 코드 에디터 -->
+                        <!-- Pane 1: 저장된 다이어그램 사이드바 -->
+                        <aside class="mermaid-sidebar-pane" id="mermaid-sidebar-pane">
+                            <div class="mermaid-sidebar-header">
+                                <span class="sidebar-title">📂 저장된 다이어그램 (<span id="mermaid-sidebar-count">0</span>)</span>
+                                <button type="button" class="mini-tool-btn new-diagram-btn" onclick="startNewDiagram()" title="빈 에디터로 새 다이어그램 시작">
+                                    <span>➕</span> 새로 만들기
+                                </button>
+                            </div>
+                            <div class="mermaid-sidebar-search-box">
+                                <span class="search-icon">🔍</span>
+                                <input type="text" id="mermaid-sidebar-search-input" class="sidebar-search-input" placeholder="다이어그램 검색..." oninput="onMermaidSidebarSearch(this.value)">
+                                <button type="button" id="mermaid-sidebar-search-clear" class="search-clear-btn" onclick="clearMermaidSidebarSearch()" style="display: none;">&times;</button>
+                            </div>
+                            <div id="mermaid-sidebar-list" class="mermaid-sidebar-list">
+                                <!-- JavaScript로 동적 렌더링 -->
+                            </div>
+                        </aside>
+
+                        <!-- 사이드바 드래그 스플리터 -->
+                        <div id="mermaid-sidebar-resizer" class="calendar-v-resizer" title="좌우로 드래그하여 목록 크기 조절">
+                            <div class="v-resizer-handle"></div>
+                        </div>
+
+                        <!-- Pane 2: 코드 에디터 -->
                         <div class="mermaid-editor-pane" id="mermaid-editor-pane">
                             <div class="pane-label">
-                                <span>Mermaid Script</span>
-                                <span class="shortcut-tip">실시간 렌더링</span>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <button id="mermaid-open-sidebar-btn" class="mini-tool-btn" onclick="toggleMermaidSidebar()" title="다이어그램 목록 펼치기" style="display: none; padding: 1px 6px; font-size: 0.72rem;">
+                                        <span>📂</span> 목록 열기
+                                    </button>
+                                    <span>Mermaid Script</span>
+                                </div>
+                                <span class="shortcut-tip">Ctrl+S 저장 | 실시간 렌더링</span>
                             </div>
                             <textarea id="mermaid-code-editor" class="code-textarea" spellcheck="false" placeholder="%% 여기에 Mermaid 다이어그램 스크립트를 작성하세요...&#10;flowchart TD&#10;    A[시작] --> B[처리]&#10;    B --> C[완료]" oninput="onMermaidCodeChange()"></textarea>
                             <!-- 문법 에러 알림 바 -->
@@ -1319,12 +1356,12 @@
                             </div>
                         </div>
 
-                        <!-- 좌우 너비 드래그 스플리터 -->
+                        <!-- 에디터 드래그 스플리터 -->
                         <div id="mermaid-resizer" class="calendar-v-resizer" title="좌우로 드래그하여 에디터와 뷰포트 크기 조절">
                             <div class="v-resizer-handle"></div>
                         </div>
 
-                        <!-- 우측: 다이어그램 뷰포트 -->
+                        <!-- Pane 3: 다이어그램 뷰포트 -->
                         <div class="mermaid-viewport-pane" id="mermaid-viewport-pane">
                             <div class="pane-label">
                                 <div style="display: flex; align-items: center; gap: 8px;">
