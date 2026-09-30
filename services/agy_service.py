@@ -786,13 +786,18 @@ def activate_session_terminal_window(conversation_id: str) -> bool:
 
     short_id = conversation_id[:8].lower()
     full_id = conversation_id.lower()
+    my_pid = os.getpid()
 
     try:
         windows = _get_visible_desktop_windows()
 
         # [1단계] 창 제목에 세션 ID가 포함되어 있는 경우 (Util-Tools에서 열었던 터미널)
         for hwnd, pid, title in windows:
+            if pid == my_pid:
+                continue
             t_lower = title.lower()
+            if any(app_kw in t_lower for app_kw in ("utiltools", "utility toolkit")):
+                continue
             if short_id in t_lower or full_id in t_lower:
                 if _bring_window_to_front(hwnd):
                     core.logger.log_event("info", "agy", f"세션 타이틀 기반 터미널 창 활성화 성공: #{short_id} ({title})")
@@ -814,48 +819,61 @@ def activate_session_terminal_window(conversation_id: str) -> bool:
 
             # 실제로 현재 실행 중인 프로세스가 락을 쥐고 있는 경우에만 역추적 수행
             if is_locked:
-                locking_pids = _get_pids_locking_file(lock_file)
+                raw_locking_pids = _get_pids_locking_file(lock_file)
+                # UtilTools 자체 프로세스(my_pid) 및 하위 프로세스는 타겟에서 원천 배제
+                locking_pids = [p for p in raw_locking_pids if p != my_pid]
+
                 if locking_pids:
                     proc_map = _get_process_map()
                     direct_target_pids = set(locking_pids)
-                    has_conpty = False
+                    term_names = ("powershell", "pwsh", "cmd", "code", "conhost", "openconsole", "windowsterminal", "wt")
 
                     for p in locking_pids:
                         curr = p
                         depth = 0
-                        while curr in proc_map and proc_map[curr]['parent'] > 0 and depth < 6:
-                            parent = proc_map[curr]['parent']
-                            p_name = proc_map.get(parent, {}).get('name', '')
-                            # 오직 해당 agy 프로세스를 직접 감싸고 실행 중인 직계 콘솔 호스트만 부모로 수집
-                            if any(term in p_name for term in ('powershell', 'pwsh', 'cmd', 'code', 'conhost')):
+                        while curr in proc_map and proc_map[curr]["parent"] > 0 and depth < 6:
+                            parent = proc_map[curr]["parent"]
+                            if parent == my_pid:
+                                break
+                            p_name = proc_map.get(parent, {}).get("name", "")
+                            # 직계 콘솔 호스트 및 터미널 부모 수집 (Windows Terminal 및 OpenConsole 포함)
+                            if any(term in p_name for term in term_names):
                                 direct_target_pids.add(parent)
                             curr = parent
                             depth += 1
 
-                    # 해당 직계 쉘 프로세스의 자식 중 conhost가 존재하는 경우 Windows Terminal(ConPTY) 호스팅 여부 판단
+                    # 직계 쉘 프로세스의 자식 중 conhost/openconsole이 존재하는 경우 ConPTY 호스팅 여부 판단
+                    has_conpty = False
                     for pid, info in proc_map.items():
-                        if info.get('parent') in direct_target_pids:
-                            if 'conhost' in info.get('name', ''):
+                        if info.get("parent") in direct_target_pids:
+                            c_name = info.get("name", "")
+                            if any(c in c_name for c in ("conhost", "openconsole")):
                                 has_conpty = True
                                 break
 
-                    # ConPTY 모드인 경우 Windows Terminal UI 호스트 프로세스도 타겟에 안전하게 편입
+                    # ConPTY 모드인 경우 Windows Terminal UI 호스트 프로세스도 타겟에 편입
                     if has_conpty:
                         for pid, info in proc_map.items():
-                            if 'windowsterminal' in info.get('name', ''):
+                            w_name = info.get("name", "")
+                            if any(w in w_name for w in ("windowsterminal", "wt")):
                                 direct_target_pids.add(pid)
 
-                    # 일치하는 창 검색 (터미널 관련 창 우선 정렬)
+                    # 일치하는 창 검색 (반드시 실제 터미널 창인 것만 필터링)
                     matched_windows = []
                     for hwnd, pid, title in windows:
-                        if pid in direct_target_pids:
+                        if pid != my_pid and pid in direct_target_pids:
                             t_lower = title.lower()
-                            is_term = any(k in t_lower for k in ('powershell', 'terminal', 'cmd', 'agy', 'visual studio code', 'code'))
-                            matched_windows.append((is_term, hwnd, title))
+                            # Util-Tools 자체 창이나 퀵 위젯은 명시적 배제
+                            if any(app_kw in t_lower for app_kw in ("utiltools", "utility toolkit")):
+                                continue
+                            is_term = any(k in t_lower for k in (
+                                "powershell", "terminal", "cmd", "agy", "visual studio code", "code", "openconsole", "명령 프롬프트"
+                            ))
+                            if is_term:
+                                matched_windows.append((hwnd, pid, title))
 
                     if matched_windows:
-                        matched_windows.sort(key=lambda x: x[0], reverse=True)
-                        best_hwnd = matched_windows[0][1]
+                        best_hwnd = matched_windows[0][0]
                         best_title = matched_windows[0][2]
                         if _bring_window_to_front(best_hwnd):
                             core.logger.log_event("info", "agy", f"PID/ConPTY 역추적 기반 터미널 창 활성화 성공: #{short_id} -> {best_title}")

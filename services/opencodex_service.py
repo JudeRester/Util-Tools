@@ -420,13 +420,18 @@ def activate_opencodex_terminal_window(thread_id: str) -> bool:
 
     short_id = thread_id[:8].lower()
     full_id = thread_id.lower()
+    my_pid = os.getpid()
 
     try:
         windows = _get_visible_desktop_windows()
 
         # [1단계] 타이틀 기반 탐색
         for hwnd, pid, title in windows:
+            if pid == my_pid:
+                continue
             t_lower = title.lower()
+            if any(app_kw in t_lower for app_kw in ("utiltools", "utility toolkit")):
+                continue
             if short_id in t_lower or full_id in t_lower:
                 if _bring_window_to_front(hwnd):
                     core.logger.log_event("info", "ocx", f"세션 타이틀 기반 터미널 창 활성화 성공: #{short_id}")
@@ -449,10 +454,14 @@ def activate_opencodex_terminal_window(thread_id: str) -> bool:
         if not is_locked:
             return False
 
-        # 락이 잡혀있다면 Windows Terminal 창 검색
+        # 락이 잡혀있다면 실제 터미널 창 검색 (자체 앱 및 퀵 위젯 배제)
         for hwnd, pid, title in windows:
+            if pid == my_pid:
+                continue
             t_lower = title.lower()
-            if any(term in t_lower for term in ("powershell", "terminal", "codex", "ocx", "cmd")):
+            if any(app_kw in t_lower for app_kw in ("utiltools", "utility toolkit")):
+                continue
+            if any(term in t_lower for term in ("powershell", "terminal", "codex", "ocx", "cmd", "명령 프롬프트")):
                 if _bring_window_to_front(hwnd):
                     core.logger.log_event("info", "ocx", f"활성 터미널 창 포커스 성공: #{short_id} -> {title}")
                     return True
