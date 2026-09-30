@@ -117,7 +117,8 @@ git commit -m "feat(calendar): 반복 일정 동기화 로직 구현 (#이슈번
 - **① 백엔드 기능 검증**: 서비스 로직 및 API에 대한 실제 런타임 자동화 기능 테스트(Unit/Functional Test) PASS
 - **② 프론트엔드 UI 검수 요청**: 작업 브랜치 상태를 유지하고 사용자에게 실화면 UI/인터랙션 수동 검수 요청
 - **③ 🚨 임의 병합 절대 금지**: 사용자의 명시적 승인("확인 완료, 병합 진행" 등) 없이 AI가 독단적으로 develop 병합을 수행하는 행위 전면 금지
-- **④ 사용자 승인 후 병합 실행**:
+- **④ 매 병합 시 버전 업데이트 수요 확인 및 적용 의무 (Mandatory Version Bump Verification on Merge)**: 병합 전 반드시 사용자에게 버전 업데이트 수요(Semantic Versioning: Major / Minor / Patch 증가 여부)를 확인받고 해당 버전을 코드(`core/paths.py`, `web/index.html`)에 반영합니다.
+- **⑤ 사용자 승인 후 병합 실행**:
 ```powershell
 # develop 브랜치로 이동 및 최신화
 git switch develop
