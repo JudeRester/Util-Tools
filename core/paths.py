@@ -27,7 +27,7 @@ def get_bundle_dir() -> str:
 
 
 # 1. 애플리케이션 메타데이터
-APP_VERSION = "0.17.1"
+APP_VERSION = "0.18.0"
 
 # 2. 루트 경로 상수
 APP_DIR = get_app_dir()

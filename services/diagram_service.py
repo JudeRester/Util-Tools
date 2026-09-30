@@ -129,3 +129,62 @@ def save_diagrams(diagrams_data):
             conn.close()
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@eel.expose
+def update_diagram(diagram_id: str, code: str, title: str = None, category: str = None, description: str = None):
+    """단일 다이어그램 스크립트 코드 및 메타데이터 업데이트 (SQLite 즉시 갱신)"""
+    try:
+        if not diagram_id:
+            return {"status": "error", "message": "다이어그램 ID가 유효하지 않습니다."}
+
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor()
+            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # 기존 레코드 존재 확인
+            cursor.execute("SELECT id, title, category, description FROM diagrams WHERE id = ?", (str(diagram_id),))
+            row = cursor.fetchone()
+            if not row:
+                return {"status": "error", "message": f"ID [{diagram_id}]에 해당하는 다이어그램을 찾을 수 없습니다."}
+
+            new_title = title if title is not None else row["title"]
+            new_cat = category if category is not None else row["category"]
+            new_desc = description if description is not None else row["description"]
+
+            with conn:
+                conn.execute("""
+                    UPDATE diagrams
+                    SET code = ?, title = ?, category = ?, description = ?, updated_at = ?
+                    WHERE id = ?
+                """, (code, new_title, new_cat, new_desc, now_str, str(diagram_id)))
+
+            return {
+                "status": "success",
+                "message": f"'{new_title}' 다이어그램이 성공적으로 수정 저장되었습니다.",
+                "updated_at": now_str
+            }
+        finally:
+            conn.close()
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@eel.expose
+def delete_diagram_item(diagram_id: str):
+    """단일 다이어그램 삭제 (SQLite 즉시 삭제)"""
+    try:
+        if not diagram_id:
+            return {"status": "error", "message": "다이어그램 ID가 유효하지 않습니다."}
+
+        conn = get_db_connection()
+        try:
+            with conn:
+                conn.execute("DELETE FROM diagrams WHERE id = ?", (str(diagram_id),))
+            return {"status": "success", "message": "다이어그램이 삭제되었습니다."}
+        finally:
+            conn.close()
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+

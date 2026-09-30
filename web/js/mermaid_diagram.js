@@ -14,6 +14,11 @@ let mermaidPanStartY = 0;
 let mermaidRenderTimer = null;
 
 let isMermaidEditorCollapsed = false;
+let isMermaidSidebarCollapsed = false;
+let currentDiagramId = null; // 현재 편집 중인 다이어그램 ID (null이면 새 다이어그램)
+let originalDiagramCode = ''; // Dirty 체크용 원본 코드
+let mermaidSidebarSearchQuery = '';
+let mermaidSidebarSearchDebounceTimer = null;
 
 // 1. Mermaid 초기화
 function initMermaidDiagram() {
@@ -37,10 +42,15 @@ function initMermaidDiagram() {
     }
 
     initMermaidEditorTabKey();
+    initMermaidShortcuts();
+    initMermaidSidebarResizer();
     initMermaidResizer();
     initMermaidPanZoom();
 
-    // 에디터 접힘 상태 복원
+    // 사이드바 및 에디터 접힘 상태 복원
+    isMermaidSidebarCollapsed = localStorage.getItem('mermaid_sidebar_collapsed') === '1';
+    applyMermaidSidebarCollapsedState();
+
     isMermaidEditorCollapsed = localStorage.getItem('mermaid_editor_collapsed') === '1';
     applyMermaidEditorCollapsedState();
 
@@ -49,6 +59,7 @@ function initMermaidDiagram() {
     const editor = document.getElementById('mermaid-code-editor');
     if (editor) {
         editor.value = saved || MERMAID_TEMPLATES.flowchart_td;
+        originalDiagramCode = editor.value;
     }
 
     // 저장된 다이어그램 목록 불러오기
@@ -57,7 +68,42 @@ function initMermaidDiagram() {
     // 초기 렌더링
     setTimeout(() => {
         renderMermaid(true);
+        updateActiveDiagramStatusBar();
     }, 100);
+}
+
+// 사이드바 목록 접기/펼치기 토글
+function toggleMermaidSidebar() {
+    isMermaidSidebarCollapsed = !isMermaidSidebarCollapsed;
+    applyMermaidSidebarCollapsedState();
+    localStorage.setItem('mermaid_sidebar_collapsed', isMermaidSidebarCollapsed ? '1' : '0');
+    setTimeout(() => {
+        fitMermaidToViewport();
+    }, 220);
+}
+
+function applyMermaidSidebarCollapsedState() {
+    const sidebar = document.getElementById('mermaid-sidebar-pane');
+    const resizer = document.getElementById('mermaid-sidebar-resizer');
+    const toggleIcon = document.getElementById('mermaid-sidebar-toggle-icon');
+    const toggleText = document.getElementById('mermaid-sidebar-toggle-text');
+    const openSidebarBtn = document.getElementById('mermaid-open-sidebar-btn');
+
+    if (!sidebar) return;
+
+    if (isMermaidSidebarCollapsed) {
+        sidebar.classList.add('collapsed');
+        if (resizer) resizer.classList.add('hidden');
+        if (toggleIcon) toggleIcon.textContent = '▶';
+        if (toggleText) toggleText.textContent = '목록 펼치기';
+        if (openSidebarBtn) openSidebarBtn.style.display = 'inline-flex';
+    } else {
+        sidebar.classList.remove('collapsed');
+        if (resizer) resizer.classList.remove('hidden');
+        if (toggleIcon) toggleIcon.textContent = '◀';
+        if (toggleText) toggleText.textContent = '목록 접기';
+        if (openSidebarBtn) openSidebarBtn.style.display = 'none';
+    }
 }
 
 // 에디터 접기/펼치기 토글
@@ -111,8 +157,22 @@ function initMermaidEditorTabKey() {
     });
 }
 
-// 에디터 내용 변경 시 실시간 디바운스 렌더링
+// Ctrl+S 단축키 바인딩 (수정 내용 즉시 저장)
+function initMermaidShortcuts() {
+    window.addEventListener('keydown', function(e) {
+        const mermaidTab = document.getElementById('tab-mermaid');
+        if (!mermaidTab || !mermaidTab.classList.contains('active')) return;
+
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+            e.preventDefault();
+            saveCurrentDiagramEdits();
+        }
+    });
+}
+
+// 에디터 내용 변경 시 실시간 디바운스 렌더링 및 상태 바 업데이트
 function onMermaidCodeChange() {
+    updateActiveDiagramStatusBar();
     if (mermaidRenderTimer) clearTimeout(mermaidRenderTimer);
     mermaidRenderTimer = setTimeout(() => {
         renderMermaid(false);
@@ -535,17 +595,17 @@ function updateCanvasTransform() {
     }
 }
 
-// 3. 좌우 스플리터 리사이저
-function initMermaidResizer() {
-    const resizer = document.getElementById('mermaid-resizer');
-    const editorPane = document.getElementById('mermaid-editor-pane');
+// 3. 좌우 스플리터 리사이저 (사이드바 및 에디터)
+function initMermaidSidebarResizer() {
+    const resizer = document.getElementById('mermaid-sidebar-resizer');
+    const sidebar = document.getElementById('mermaid-sidebar-pane');
     const container = document.getElementById('mermaid-split');
 
-    if (!resizer || !editorPane || !container) return;
+    if (!resizer || !sidebar || !container) return;
 
     let isResizing = false;
 
-    resizer.addEventListener('mousedown', (e) => {
+    resizer.addEventListener('mousedown', () => {
         isResizing = true;
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
@@ -555,11 +615,43 @@ function initMermaidResizer() {
         if (!isResizing) return;
         const rect = container.getBoundingClientRect();
         const newWidth = e.clientX - rect.left;
-        const totalWidth = rect.width;
-        const percent = (newWidth / totalWidth) * 100;
+        if (newWidth >= 160 && newWidth <= 480) {
+            sidebar.style.flex = `0 0 ${newWidth}px`;
+        }
+    });
 
-        if (percent >= 20 && percent <= 80) {
-            editorPane.style.flex = `0 0 ${percent}%`;
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        }
+    });
+}
+
+function initMermaidResizer() {
+    const resizer = document.getElementById('mermaid-resizer');
+    const editorPane = document.getElementById('mermaid-editor-pane');
+    const container = document.getElementById('mermaid-split');
+
+    if (!resizer || !editorPane || !container) return;
+
+    let isResizing = false;
+
+    resizer.addEventListener('mousedown', () => {
+        isResizing = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const editorRect = editorPane.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const newWidth = e.clientX - editorRect.left;
+
+        if (newWidth >= 180 && newWidth <= containerRect.width * 0.7) {
+            editorPane.style.flex = `0 0 ${newWidth}px`;
         }
     });
 
@@ -596,12 +688,21 @@ async function loadSavedDiagrams() {
     } catch (e) {
         savedDiagrams = DEFAULT_DIAGRAMS_FALLBACK;
     }
+
     updateDiagramsCountBadge();
+    renderMermaidSidebarList();
+
+    // 초기 상태에서 다이어그램이 있고 선택되지 않은 경우 첫 번째 항목 로드
+    if (savedDiagrams.length > 0 && !currentDiagramId) {
+        selectDiagram(savedDiagrams[0].id, true);
+    }
 }
 
 function updateDiagramsCountBadge() {
     const badge = document.getElementById('mermaid-saved-count-badge');
     if (badge) badge.textContent = savedDiagrams.length;
+    const sidebarCount = document.getElementById('mermaid-sidebar-count');
+    if (sidebarCount) sidebarCount.textContent = savedDiagrams.length;
 }
 
 async function saveSavedDiagramsToBackend() {
@@ -615,7 +716,293 @@ async function saveSavedDiagramsToBackend() {
     }
 }
 
-// 다이어그램 목록 모달 열기
+// ==========================================
+// 5. 사이드바 다이어그램 목록 렌더링 및 인터랙션
+// ==========================================
+function renderMermaidSidebarList() {
+    const listEl = document.getElementById('mermaid-sidebar-list');
+    if (!listEl) return;
+
+    const filtered = savedDiagrams.filter(item => {
+        if (!mermaidSidebarSearchQuery) return true;
+        const q = mermaidSidebarSearchQuery.toLowerCase();
+        const t = (item.title || '').toLowerCase();
+        const d = (item.description || '').toLowerCase();
+        const c = (item.category || '').toLowerCase();
+        const code = (item.code || '').toLowerCase();
+        return t.includes(q) || d.includes(q) || c.includes(q) || code.includes(q);
+    });
+
+    if (filtered.length === 0) {
+        if (savedDiagrams.length === 0) {
+            listEl.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:20px 10px; font-size:0.75rem;">저장된 다이어그램이 없습니다.<br><button class="mini-tool-btn" onclick="startNewDiagram()" style="margin-top:8px;">➕ 새 다이어그램</button></div>';
+        } else {
+            listEl.innerHTML = `<div style="color:var(--text-secondary); text-align:center; padding:20px 10px; font-size:0.75rem;">'${escapeHtml(mermaidSidebarSearchQuery)}' 검색 결과가 없습니다.</div>`;
+        }
+        return;
+    }
+
+    listEl.innerHTML = filtered.map(item => {
+        const isActive = String(item.id) === String(currentDiagramId);
+        const timeStr = item.updatedAt || item.updated_at ? (item.updatedAt || item.updated_at).slice(5, 16) : '';
+        const catBadge = item.category ? `<span class="gen-card-cat" style="font-size:0.65rem; padding:1px 5px;">${escapeHtml(item.category)}</span>` : '';
+
+        return `
+            <div class="mermaid-sidebar-item ${isActive ? 'active' : ''}" onclick="selectDiagram('${item.id}')" title="${escapeHtml(item.title)}">
+                <div class="mermaid-sidebar-item-info">
+                    <div class="mermaid-sidebar-item-title">
+                        <span>📊</span>
+                        <span style="overflow:hidden; text-overflow:ellipsis;">${escapeHtml(item.title)}</span>
+                    </div>
+                    <div class="mermaid-sidebar-item-meta">
+                        ${catBadge}
+                        ${timeStr ? `<span>🕒 ${timeStr}</span>` : ''}
+                    </div>
+                </div>
+                <div class="mermaid-sidebar-item-actions">
+                    <button type="button" class="mermaid-sidebar-action-btn" onclick="editSavedDiagramMeta('${item.id}', event)" title="제목/설명 수정">✏️</button>
+                    <button type="button" class="mermaid-sidebar-action-btn" onclick="duplicateDiagram('${item.id}', event)" title="복제">📋</button>
+                    <button type="button" class="mermaid-sidebar-action-btn delete" onclick="deleteSavedDiagramDirect('${item.id}', event)" title="삭제">🗑️</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// 사이드바 검색 핸들러
+function onMermaidSidebarSearch(val) {
+    const trimmed = (val || '').trim().toLowerCase();
+    const clearBtn = document.getElementById('mermaid-sidebar-search-clear');
+    if (clearBtn) {
+        clearBtn.style.display = trimmed ? 'inline-block' : 'none';
+    }
+
+    clearTimeout(mermaidSidebarSearchDebounceTimer);
+    if (!trimmed) {
+        mermaidSidebarSearchQuery = '';
+        renderMermaidSidebarList();
+        return;
+    }
+
+    mermaidSidebarSearchDebounceTimer = setTimeout(() => {
+        mermaidSidebarSearchQuery = trimmed;
+        renderMermaidSidebarList();
+    }, 150);
+}
+
+function clearMermaidSidebarSearch() {
+    clearTimeout(mermaidSidebarSearchDebounceTimer);
+    const input = document.getElementById('mermaid-sidebar-search-input');
+    const clearBtn = document.getElementById('mermaid-sidebar-search-clear');
+    if (input) input.value = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    mermaidSidebarSearchQuery = '';
+    renderMermaidSidebarList();
+    if (input) input.focus();
+}
+
+// ==========================================
+// 6. 다이어그램 선택, 신규 생성, 수정 저장(UPDATE)
+// ==========================================
+
+// 다이어그램 선택 및 에디터 로드
+async function selectDiagram(id, force = false) {
+    if (!force && String(currentDiagramId) === String(id)) return;
+
+    const editor = document.getElementById('mermaid-code-editor');
+    if (!force && editor && originalDiagramCode !== editor.value && editor.value.trim().length > 0) {
+        const confirmed = await showAppConfirm('현재 작업 중인 변경사항이 저장되지 않았습니다.\n선택한 다이어그램으로 전환하시겠습니까?', {
+            title: '다이어그램 전환',
+            icon: '⚠️',
+            confirmText: '전환',
+            cancelText: '취소'
+        });
+        if (!confirmed) return;
+    }
+
+    const item = savedDiagrams.find(d => String(d.id) === String(id));
+    if (!item) return;
+
+    currentDiagramId = String(item.id);
+    if (editor) editor.value = item.code || '';
+    originalDiagramCode = item.code || '';
+
+    updateActiveDiagramStatusBar();
+    renderMermaidSidebarList();
+    renderMermaid(true);
+}
+
+// 새 다이어그램 시작
+async function startNewDiagram() {
+    const editor = document.getElementById('mermaid-code-editor');
+    if (editor && originalDiagramCode !== editor.value && editor.value.trim().length > 0) {
+        const confirmed = await showAppConfirm('현재 편집 중인 내용이 저장되지 않았습니다.\n새 다이어그램을 시작하시겠습니까?', {
+            title: '새 다이어그램 시작',
+            icon: '⚠️',
+            confirmText: '새 다이어그램 열기',
+            cancelText: '취소'
+        });
+        if (!confirmed) return;
+    }
+
+    currentDiagramId = null;
+    const defaultCode = MERMAID_TEMPLATES.flowchart_td;
+    if (editor) editor.value = defaultCode;
+    originalDiagramCode = defaultCode;
+
+    updateActiveDiagramStatusBar();
+    renderMermaidSidebarList();
+    renderMermaid(true);
+    showToast('새 다이어그램 작성을 시작합니다.', 'info');
+}
+
+// 현재 다이어그램 수정 내용 즉각 저장 (Ctrl+S & [수정 내용 저장] 버튼)
+async function saveCurrentDiagramEdits() {
+    const editor = document.getElementById('mermaid-code-editor');
+    if (!editor) return;
+    const code = editor.value;
+
+    if (!code.trim()) {
+        await showAppAlert('저장할 다이어그램 스크립트가 비어 있습니다.', '입력 필요', '⚠️');
+        return;
+    }
+
+    if (!currentDiagramId) {
+        // 새 다이어그램인 경우 저장 모달 오픈
+        openSaveCurrentDiagramPrompt();
+        return;
+    }
+
+    // 기존 다이어그램 수정 저장 (인플레이스 Update)
+    const target = savedDiagrams.find(d => String(d.id) === String(currentDiagramId));
+    if (!target) {
+        openSaveCurrentDiagramPrompt();
+        return;
+    }
+
+    const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    target.code = code;
+    target.updatedAt = nowStr;
+    target.updated_at = nowStr;
+
+    try {
+        if (window.eel && typeof eel.update_diagram === 'function') {
+            const res = await eel.update_diagram(currentDiagramId, code)();
+            if (res && res.status === 'success') {
+                originalDiagramCode = code;
+                updateActiveDiagramStatusBar();
+                renderMermaidSidebarList();
+                showToast(`'${target.title}' 수정 내용이 저장되었습니다.`, 'success');
+                logToConsole('다이어그램 수정 저장', `'${target.title}' (${currentDiagramId}) 업데이트 완료`);
+                return;
+            }
+        }
+        // Fallback
+        await saveSavedDiagramsToBackend();
+        originalDiagramCode = code;
+        updateActiveDiagramStatusBar();
+        renderMermaidSidebarList();
+        showToast(`'${target.title}' 수정 내용이 저장되었습니다.`, 'success');
+    } catch (e) {
+        console.error('다이어그램 수정 실패:', e);
+        showToast('다이어그램 수정 저장 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+// 툴바의 현재 다이어그램 상태 바 및 Dirty 배지 갱신
+function updateActiveDiagramStatusBar() {
+    const titleEl = document.getElementById('mermaid-active-diagram-title');
+    const dirtyBadge = document.getElementById('mermaid-dirty-badge');
+    const saveUpdateBtn = document.getElementById('mermaid-save-update-btn');
+    const editor = document.getElementById('mermaid-code-editor');
+
+    const currentCode = editor ? editor.value : '';
+    const isDirty = (currentCode !== originalDiagramCode);
+
+    if (currentDiagramId) {
+        const target = savedDiagrams.find(d => String(d.id) === String(currentDiagramId));
+        const title = target ? target.title : '다이어그램';
+        if (titleEl) titleEl.textContent = title;
+        if (dirtyBadge) dirtyBadge.style.display = isDirty ? 'inline-block' : 'none';
+        if (saveUpdateBtn) {
+            saveUpdateBtn.innerHTML = '<span>💾</span> 수정 내용 저장';
+            saveUpdateBtn.title = `'${title}' 수정 내용 저장 (Ctrl+S)`;
+        }
+    } else {
+        if (titleEl) titleEl.textContent = '새 다이어그램';
+        if (dirtyBadge) dirtyBadge.style.display = (currentCode.trim().length > 0) ? 'inline-block' : 'none';
+        if (saveUpdateBtn) {
+            saveUpdateBtn.innerHTML = '<span>💾</span> 다이어그램 저장';
+            saveUpdateBtn.title = '새 다이어그램 저장 (Ctrl+S)';
+        }
+    }
+}
+
+// 다이어그램 복제
+async function duplicateDiagram(id, event) {
+    if (event) event.stopPropagation();
+    const item = savedDiagrams.find(d => String(d.id) === String(id));
+    if (!item) return;
+
+    const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const newItem = {
+        id: Date.now().toString(),
+        title: `${item.title} (복사본)`,
+        category: item.category || 'General',
+        description: item.description || '',
+        code: item.code || '',
+        updatedAt: nowStr,
+        updated_at: nowStr
+    };
+
+    savedDiagrams.unshift(newItem);
+    await saveSavedDiagramsToBackend();
+    updateDiagramsCountBadge();
+    renderMermaidSidebarList();
+    selectDiagram(newItem.id);
+    showToast(`'${newItem.title}' 복사본이 생성되었습니다.`, 'success');
+}
+
+// 사이드바에서 다이어그램 직접 삭제
+async function deleteSavedDiagramDirect(id, event) {
+    if (event) event.stopPropagation();
+    const item = savedDiagrams.find(d => String(d.id) === String(id));
+    if (!item) return;
+
+    const confirmed = await showAppConfirm(`'${item.title}' 다이어그램을 삭제하시겠습니까?`, {
+        title: '다이어그램 삭제',
+        icon: '🗑️',
+        confirmText: '삭제',
+        isDanger: true
+    });
+    if (!confirmed) return;
+
+    savedDiagrams = savedDiagrams.filter(d => String(d.id) !== String(id));
+
+    try {
+        if (window.eel && typeof eel.delete_diagram_item === 'function') {
+            await eel.delete_diagram_item(id)();
+        } else {
+            await saveSavedDiagramsToBackend();
+        }
+    } catch (e) {
+        console.error('삭제 오류:', e);
+    }
+
+    if (String(currentDiagramId) === String(id)) {
+        currentDiagramId = null;
+        originalDiagramCode = '';
+        updateActiveDiagramStatusBar();
+    }
+
+    updateDiagramsCountBadge();
+    renderMermaidSidebarList();
+    showToast(`'${item.title}' 다이어그램이 삭제되었습니다.`, 'info');
+}
+
+// ==========================================
+// 7. 모달 목록 관리 (레거시 모달 호환 유지)
+// ==========================================
 function openDiagramListModal() {
     draftSavedDiagrams = JSON.parse(JSON.stringify(savedDiagrams));
     diagramSearchQuery = '';
@@ -633,14 +1020,12 @@ function closeDiagramListModal() {
     document.getElementById('diagram-list-modal').classList.remove('show');
 }
 
-// 다이어그램 목록 렌더링
 function renderDiagramsManageList() {
     const listEl = document.getElementById('diagrams-manage-list');
     const countEl = document.getElementById('diagram-saved-count');
     if (countEl) countEl.textContent = draftSavedDiagrams.length;
     if (!listEl) return;
 
-    // 검색 필터링
     const filtered = draftSavedDiagrams.filter(item => {
         if (!diagramSearchQuery) return true;
         const t = (item.title || '').toLowerCase();
@@ -652,14 +1037,14 @@ function renderDiagramsManageList() {
 
     if (filtered.length === 0) {
         if (draftSavedDiagrams.length === 0) {
-            listEl.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:25px;">저장된 다이어그램이 없습니다. [➕ 현재 스크립트 저장]을 눌러 저장해 보세요!</div>';
+            listEl.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:25px;">저장된 다이어그램이 없습니다. [➕ 새 다이어그램]을 눌러 저장해 보세요!</div>';
         } else {
             listEl.innerHTML = `<div style="color:var(--text-secondary); text-align:center; padding:25px;">'${escapeHtml(diagramSearchQuery)}' 검색어와 일치하는 다이어그램이 없습니다.</div>`;
         }
         return;
     }
 
-    listEl.innerHTML = filtered.map((item, idx) => {
+    listEl.innerHTML = filtered.map(item => {
         const timeStr = item.updatedAt ? `<span style="font-size:0.7rem; color:var(--text-secondary); margin-left:6px;">🕒 ${item.updatedAt}</span>` : '';
         const catBadge = item.category ? `<span class="gen-card-cat" style="margin-left:6px;">${escapeHtml(item.category)}</span>` : '';
         const descStr = item.description || item.code.split('\n').filter(Boolean).slice(0, 2).join(' | ');
@@ -684,24 +1069,15 @@ function renderDiagramsManageList() {
     }).join('');
 }
 
-// 다이어그램 에디터로 불러오기
 async function loadDiagramIntoEditor(id) {
-    const item = draftSavedDiagrams.find(d => String(d.id) === String(id)) || savedDiagrams.find(d => String(d.id) === String(id));
-    if (!item) return;
-
-    const editor = document.getElementById('mermaid-code-editor');
-    if (editor) {
-        editor.value = item.code || '';
-        renderMermaid(true);
-        closeDiagramListModal();
-        logToConsole('다이어그램 불러오기 완료', `'${item.title}' 다이어그램을 에디터에 로드했습니다.`);
-        await showAppAlert(`'${item.title}' 다이어그램을 성공적으로 불러왔습니다! 📥`, '불러오기 완료', '✅');
-    }
+    closeDiagramListModal();
+    selectDiagram(id, true);
+    logToConsole('다이어그램 불러오기 완료', `다이어그램 [${id}]을 에디터에 로드했습니다.`);
 }
 
-// 다이어그램 메타데이터 수정
-function editSavedDiagramMeta(id) {
-    const item = draftSavedDiagrams.find(d => String(d.id) === String(id));
+function editSavedDiagramMeta(id, event) {
+    if (event) event.stopPropagation();
+    const item = (draftSavedDiagrams.length > 0 ? draftSavedDiagrams : savedDiagrams).find(d => String(d.id) === String(id));
     if (!item) return;
 
     editingDiagramId = id;
@@ -714,7 +1090,6 @@ function editSavedDiagramMeta(id) {
     document.getElementById('save-diagram-title').focus();
 }
 
-// 다이어그램 삭제
 async function deleteSavedDiagram(id) {
     const item = draftSavedDiagrams.find(d => String(d.id) === String(id));
     const confirmed = await showAppConfirm(`'${item ? item.title : '선택한'}' 다이어그램을 삭제하시겠습니까?\n(하단의 [💾 변경사항 저장]을 눌러야 최종 반영됩니다)`, {
@@ -729,7 +1104,6 @@ async function deleteSavedDiagram(id) {
     renderDiagramsManageList();
 }
 
-// 기본값 복원
 async function resetDefaultDiagrams() {
     const confirmed = await showAppConfirm('기본 샘플 다이어그램 목록으로 되돌리시겠습니까?\n(하단의 [💾 변경사항 저장]을 눌러야 최종 반영됩니다)', {
         title: '기본값 복원',
@@ -743,16 +1117,16 @@ async function resetDefaultDiagrams() {
     }
 }
 
-// 다이어그램 변경사항 영구 저장 (Write-Back)
 async function saveDiagramChanges() {
     savedDiagrams = JSON.parse(JSON.stringify(draftSavedDiagrams));
     await saveSavedDiagramsToBackend();
     updateDiagramsCountBadge();
+    renderMermaidSidebarList();
     closeDiagramListModal();
     logToConsole('다이어그램 목록 저장 완료', `총 ${savedDiagrams.length}개의 다이어그램 설정이 안전하게 저장되었습니다.`);
 }
 
-// 현재 에디터 스크립트 저장 모달 열기
+// 현재 에디터 스크립트 저장 모달 열기 (새 이름으로 저장)
 async function openSaveCurrentDiagramPrompt() {
     const editor = document.getElementById('mermaid-code-editor');
     if (!editor || !editor.value.trim()) {
@@ -761,9 +1135,8 @@ async function openSaveCurrentDiagramPrompt() {
     }
 
     editingDiagramId = null;
-    document.getElementById('save-diagram-modal-title').textContent = '💾 현재 다이어그램 저장';
-    
-    // 첫 줄이나 내용에서 카테고리/제목 자동 유추
+    document.getElementById('save-diagram-modal-title').textContent = '💾 다이어그램 저장';
+
     const code = editor.value.trim();
     let guessedCategory = 'Flowchart';
     if (code.startsWith('sequenceDiagram')) guessedCategory = 'Sequence';
@@ -775,9 +1148,17 @@ async function openSaveCurrentDiagramPrompt() {
     else if (code.startsWith('gitGraph')) guessedCategory = 'Git Graph';
     else if (code.startsWith('pie')) guessedCategory = 'Pie Chart';
 
-    document.getElementById('save-diagram-title').value = '';
-    document.getElementById('save-diagram-category').value = guessedCategory;
-    document.getElementById('save-diagram-desc').value = '';
+    // 기존 다이어그램이 선택되어 있다면 제목 복제 제안
+    if (currentDiagramId) {
+        const cur = savedDiagrams.find(d => String(d.id) === String(currentDiagramId));
+        document.getElementById('save-diagram-title').value = cur ? `${cur.title} (새 다이어그램)` : '';
+        document.getElementById('save-diagram-category').value = cur ? cur.category : guessedCategory;
+        document.getElementById('save-diagram-desc').value = cur ? cur.description : '';
+    } else {
+        document.getElementById('save-diagram-title').value = '';
+        document.getElementById('save-diagram-category').value = guessedCategory;
+        document.getElementById('save-diagram-desc').value = '';
+    }
 
     document.getElementById('save-diagram-modal').classList.add('show');
     document.getElementById('save-diagram-title').focus();
@@ -803,13 +1184,14 @@ async function confirmSaveDiagram() {
     const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     if (editingDiagramId !== null) {
-        // 기존 항목 수정
+        // 기존 항목 메타데이터 수정
         const target = (draftSavedDiagrams.length > 0 ? draftSavedDiagrams : savedDiagrams).find(d => String(d.id) === String(editingDiagramId));
         if (target) {
             target.title = title;
             target.category = category;
             target.description = desc;
             target.updatedAt = nowStr;
+            target.updated_at = nowStr;
         }
         if (draftSavedDiagrams.length === 0) {
             await saveSavedDiagramsToBackend();
@@ -822,7 +1204,8 @@ async function confirmSaveDiagram() {
             category,
             description: desc,
             code: editor ? editor.value : '',
-            updatedAt: nowStr
+            updatedAt: nowStr,
+            updated_at: nowStr
         };
 
         if (draftSavedDiagrams.length > 0) {
@@ -831,10 +1214,16 @@ async function confirmSaveDiagram() {
             savedDiagrams.unshift(newItem);
             await saveSavedDiagramsToBackend();
         }
+
+        // 현재 작업 다이어그램으로 설정
+        currentDiagramId = newItem.id;
+        originalDiagramCode = newItem.code;
     }
 
     closeSaveDiagramModal();
     updateDiagramsCountBadge();
+    updateActiveDiagramStatusBar();
+    renderMermaidSidebarList();
 
     if (document.getElementById('diagram-list-modal').classList.contains('show')) {
         renderDiagramsManageList();
@@ -844,7 +1233,7 @@ async function confirmSaveDiagram() {
     }
 }
 
-// 검색 핸들러 (디바운스 200ms)
+// 검색 핸들러 (모달 내 검색)
 let diagramSearchDebounceTimer = null;
 
 function onDiagramSearchInput(val) {
@@ -882,7 +1271,6 @@ function clearDiagramSearch() {
 // 8. 탭 이탈 시 메모리 해제(GC) & 복귀 시 재개
 // ==========================================
 function teardownMermaidDiagram() {
-    // 탭을 벗어날 때 무거운 D3 SVG 및 임시 렌더링 노드를 비워 메모리 즉시 반환
     const previewContainer = document.getElementById('mermaid-preview-container');
     if (previewContainer) {
         previewContainer.innerHTML = '';
@@ -891,10 +1279,10 @@ function teardownMermaidDiagram() {
 }
 
 function resumeMermaidDiagram() {
-    // 탭으로 복귀 시 에디터에 적힌 코드로 즉시 가볍게 재렌더링
     const previewContainer = document.getElementById('mermaid-preview-container');
     if (previewContainer && (!previewContainer.innerHTML || previewContainer.innerHTML.trim() === '')) {
         renderMermaid(true);
     }
 }
+
 
