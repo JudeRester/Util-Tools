@@ -454,7 +454,8 @@ function renderDayEventBadges(dateStr) {
     const extraCount = dayEvents.length - maxDisplay;
 
     let badgesHtml = displayEvents.map(e => `
-        <div class="event-badge" style="border-left-color: ${e.color || '#6366f1'};" title="${escapeHtml(e.title)} (${e.startTime || '하루 종일'})">
+        <div class="event-badge ${e.hasReminder ? 'has-reminder' : ''}" style="border-left-color: ${e.color || '#6366f1'};" title="${escapeHtml(e.title)} (${e.startTime || '하루 종일'})${e.hasReminder ? ` [🔔 ${e.reminderMinutes || 10}분 전 알림]` : ''}">
+            ${e.hasReminder ? '<span class="badge-reminder-bell">🔔</span>' : ''}
             <span class="event-badge-title">${escapeHtml(e.title)}</span>
         </div>
     `).join('');
@@ -508,19 +509,33 @@ function renderAgendaPanel() {
             </div>
         `;
     } else {
-        listEl.innerHTML = dayEvents.map(e => `
-            <div class="agenda-card" style="border-left-color: ${e.color || '#6366f1'};">
-                <div class="agenda-card-header">
-                    <span class="agenda-cal-name" style="background: ${e.color || '#6366f1'}22; color: ${e.color || '#6366f1'};">
-                        ${escapeHtml(e.calendarName || '캘린더')}
-                    </span>
-                    <span class="agenda-time">${e.allDay ? '하루 종일' : `${e.startTime || ''} ~ ${e.endTime || ''}`}</span>
+        listEl.innerHTML = dayEvents.map(e => {
+            const hasTime = !e.allDay && e.startTime;
+            const reminderBtnHtml = hasTime ? `
+                <button type="button" class="agenda-reminder-btn ${e.hasReminder ? 'active' : ''}" 
+                    onclick="toggleOrOpenReminderMenu('${escapeJsString(e.uid)}', event)" 
+                    title="${e.hasReminder ? `시작 ${e.reminderMinutes || 10}분 전 알림 설정됨 (클릭하여 변경)` : '알림 미설정 (클릭하여 사전 알림 설정)'}">
+                    ${e.hasReminder ? `🔔 ${e.reminderMinutes || 10}분 전 ▼` : '🔕 알림 없음 ▼'}
+                </button>
+            ` : '';
+
+            return `
+                <div class="agenda-card" style="border-left-color: ${e.color || '#6366f1'};">
+                    <div class="agenda-card-header">
+                        <span class="agenda-cal-name" style="background: ${e.color || '#6366f1'}22; color: ${e.color || '#6366f1'};">
+                            ${escapeHtml(e.calendarName || '캘린더')}
+                        </span>
+                        <div class="agenda-header-right">
+                            <span class="agenda-time">${e.allDay ? '하루 종일' : `${e.startTime || ''} ~ ${e.endTime || ''}`}</span>
+                            ${reminderBtnHtml}
+                        </div>
+                    </div>
+                    <div class="agenda-title">${escapeHtml(e.title)}</div>
+                    ${e.location ? `<div class="agenda-location">📍 ${escapeHtml(e.location)}</div>` : ''}
+                    ${e.description ? `<div class="agenda-desc">${escapeHtml(e.description)}</div>` : ''}
                 </div>
-                <div class="agenda-title">${escapeHtml(e.title)}</div>
-                ${e.location ? `<div class="agenda-location">📍 ${escapeHtml(e.location)}</div>` : ''}
-                ${e.description ? `<div class="agenda-desc">${escapeHtml(e.description)}</div>` : ''}
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
 }
 
@@ -763,3 +778,207 @@ async function saveCalendarConfigLocally() {
         console.error("캘린더 설정 저장 실패:", e);
     }
 }
+
+
+// =====================================================================
+// 개별 일정 사전 알림 관리 및 실시간 알림 수신 (Calendar Event Reminders)
+// =====================================================================
+
+let activeReminderPopoverUid = null;
+
+function toggleOrOpenReminderMenu(uid, event) {
+    if (event) {
+        event.stopPropagation();
+    }
+
+    const existing = document.getElementById('agenda-reminder-popover');
+    if (existing) {
+        existing.remove();
+        if (activeReminderPopoverUid === uid) {
+            activeReminderPopoverUid = null;
+            return;
+        }
+    }
+
+    const targetEvent = calendarEvents.find(e => e.uid === uid);
+    if (!targetEvent) return;
+
+    activeReminderPopoverUid = uid;
+    const btn = event.currentTarget || event.target;
+    const rect = btn.getBoundingClientRect();
+
+    const currentMin = targetEvent.hasReminder ? targetEvent.reminderMinutes : null;
+    const options = [
+        { label: '🔕 알림 없음 (해제)', minutes: null },
+        { label: '🔔 5분 전 알림', minutes: 5 },
+        { label: '🔔 10분 전 알림', minutes: 10 },
+        { label: '🔔 15분 전 알림', minutes: 15 },
+        { label: '🔔 30분 전 알림', minutes: 30 },
+        { label: '🔔 1시간 전 알림', minutes: 60 }
+    ];
+
+    const popover = document.createElement('div');
+    popover.id = 'agenda-reminder-popover';
+    popover.className = 'agenda-reminder-popover';
+
+    popover.innerHTML = options.map(opt => {
+        const isSelected = (opt.minutes === currentMin) || (opt.minutes === null && !targetEvent.hasReminder);
+        return `
+            <div class="popover-item ${isSelected ? 'selected' : ''}" onclick="selectCalendarReminderOption('${escapeJsString(uid)}', ${opt.minutes !== null ? opt.minutes : 'null'})">
+                <span>${opt.label}</span>
+                ${isSelected ? '<span class="popover-check">✓</span>' : ''}
+            </div>
+        `;
+    }).join('');
+
+    document.body.appendChild(popover);
+
+    // 위치 계산 (버튼 아래 우측 정렬, 화면 밖 이탈 방지)
+    const popoverWidth = 170;
+    let left = rect.right - popoverWidth;
+    let top = rect.bottom + 4;
+
+    if (left < 10) left = 10;
+    if (top + 200 > window.innerHeight) {
+        top = Math.max(10, rect.top - 200);
+    }
+
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
+}
+
+function closeReminderPopover() {
+    const popover = document.getElementById('agenda-reminder-popover');
+    if (popover) {
+        popover.remove();
+        activeReminderPopoverUid = null;
+    }
+}
+
+// 팝오버 외부 영역 클릭 시 자동 닫기
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#agenda-reminder-popover') && !e.target.closest('.agenda-reminder-btn')) {
+        closeReminderPopover();
+    }
+});
+
+async function selectCalendarReminderOption(uid, minutes) {
+    closeReminderPopover();
+    const targetEvent = calendarEvents.find(e => e.uid === uid);
+    if (!targetEvent) return;
+
+    if (minutes === null) {
+        // 알림 해제
+        targetEvent.hasReminder = false;
+        targetEvent.reminderMinutes = null;
+        renderCalendarUI();
+
+        try {
+            if (window.eel && typeof eel.delete_event_reminder === 'function') {
+                await eel.delete_event_reminder(uid)();
+            }
+            if (typeof showToast === 'function') {
+                showToast('알림 해제', `'${targetEvent.title}' 일정의 사전 알림이 해제되었습니다.`, 'info');
+            }
+        } catch (err) {
+            console.error("알림 해제 실패:", err);
+        }
+    } else {
+        // 알림 등록 / 시간 변경
+        targetEvent.hasReminder = true;
+        targetEvent.reminderMinutes = minutes;
+        renderCalendarUI();
+
+        const startDt = `${targetEvent.startDate} ${targetEvent.startTime || '00:00'}`;
+        try {
+            if (window.eel && typeof eel.set_event_reminder === 'function') {
+                await eel.set_event_reminder(
+                    uid,
+                    targetEvent.calendarName || '',
+                    targetEvent.title || '',
+                    startDt,
+                    minutes
+                )();
+            }
+            if (typeof showToast === 'function') {
+                showToast('알림 설정 완료', `'${targetEvent.title}' 일정 시작 ${minutes}분 전 알림이 등록되었습니다.`, 'info');
+            }
+        } catch (err) {
+            console.error("알림 설정 실패:", err);
+        }
+    }
+}
+
+// 백엔드 데몬에서 알림 트리거 시 호출되는 실시간 핸들러
+function on_calendar_reminder_triggered(data) {
+    if (!data) return;
+    const title = data.title || '일정';
+    const calName = data.calendar_name ? `[${data.calendar_name}] ` : '';
+    const remindMin = data.reminder_minutes || 10;
+    const timeDisplay = data.time_display || '';
+
+    // 1. 인앱 토스트 표시
+    if (typeof showToast === 'function') {
+        showToast(
+            `📅 일정 시작 ${remindMin}분 전 알림`,
+            `${calName}${title} (시작 시간: ${timeDisplay})`,
+            'info'
+        );
+    }
+
+    // 2. Web Audio 부드러운 챠임 알림음 재생
+    playReminderChimeSound();
+
+    // 3. UI 상태 갱신
+    if (data.event_uid) {
+        const target = calendarEvents.find(e => e.uid === data.event_uid);
+        if (target) {
+            target.isNotified = true;
+            renderCalendarUI();
+        }
+    }
+}
+
+// Web Audio API를 활용한 부드러운 Two-tone Chime 사운드 합성
+function playReminderChimeSound() {
+    try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        const ctx = new AudioContextClass();
+
+        const now = ctx.currentTime;
+
+        // 1음: C5 (523.25Hz)
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(523.25, now);
+        gain1.gain.setValueAtTime(0.15, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.4);
+
+        // 2음: E5 (659.25Hz)
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(659.25, now + 0.15);
+        gain2.gain.setValueAtTime(0.18, now + 0.15);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.15);
+        osc2.stop(now + 0.6);
+    } catch (e) {
+        console.warn("오디오 챠임 재생 오류:", e);
+    }
+}
+
+// Eel RPC 노출 (전역 바인딩)
+window.on_calendar_reminder_triggered = on_calendar_reminder_triggered;
+if (window.eel) {
+    eel.expose(on_calendar_reminder_triggered, 'on_calendar_reminder_triggered');
+}
+

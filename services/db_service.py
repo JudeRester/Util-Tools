@@ -764,6 +764,22 @@ def init_db():
                 """)
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_ocr_history_created ON ocr_history(created_at DESC);")
 
+                # 17. calendar_reminders 테이블 (캘린더 개별 일정 알림 관리)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS calendar_reminders (
+                        event_uid TEXT PRIMARY KEY,
+                        calendar_name TEXT DEFAULT '',
+                        title TEXT NOT NULL,
+                        start_datetime TEXT NOT NULL,
+                        reminder_minutes INTEGER DEFAULT 10,
+                        is_enabled INTEGER DEFAULT 1,
+                        is_notified INTEGER DEFAULT 0,
+                        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+                    );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_calendar_reminders_active ON calendar_reminders(is_enabled, is_notified, start_datetime);")
+
                 # 비정상 종료 등으로 진행 중 상태에 머물러 있는 오래된 작업 복구 (Stale Run Recovery)
                 conn.execute("""
                     UPDATE transcription_runs
@@ -786,3 +802,76 @@ def init_db():
 
 # 모듈 임포트 시 DB 자동 초기화
 init_db()
+
+
+def get_calendar_reminders(only_active=False):
+    """캘린더 알림 목록 조회"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        if only_active:
+            cur.execute("""
+                SELECT event_uid, calendar_name, title, start_datetime, reminder_minutes, is_enabled, is_notified, created_at, updated_at
+                FROM calendar_reminders 
+                WHERE is_enabled = 1 AND is_notified = 0 
+                ORDER BY start_datetime ASC
+            """)
+        else:
+            cur.execute("""
+                SELECT event_uid, calendar_name, title, start_datetime, reminder_minutes, is_enabled, is_notified, created_at, updated_at
+                FROM calendar_reminders 
+                ORDER BY start_datetime ASC
+            """)
+        rows = cur.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def set_calendar_reminder(event_uid, calendar_name, title, start_datetime, reminder_minutes=10, is_enabled=1):
+    """캘린더 개별 일정 알림 설정/갱신 (UPSERT)"""
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO calendar_reminders (event_uid, calendar_name, title, start_datetime, reminder_minutes, is_enabled, is_notified, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, 0, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                ON CONFLICT(event_uid) DO UPDATE SET
+                    calendar_name = excluded.calendar_name,
+                    title = excluded.title,
+                    start_datetime = excluded.start_datetime,
+                    reminder_minutes = excluded.reminder_minutes,
+                    is_enabled = excluded.is_enabled,
+                    is_notified = 0,
+                    updated_at = datetime('now', 'localtime')
+            """, (event_uid, calendar_name, title, start_datetime, reminder_minutes, 1 if is_enabled else 0))
+        return True
+    finally:
+        conn.close()
+
+
+def delete_calendar_reminder(event_uid):
+    """캘린더 개별 일정 알림 삭제 (완전 제거)"""
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute("DELETE FROM calendar_reminders WHERE event_uid = ?", (event_uid,))
+        return True
+    finally:
+        conn.close()
+
+
+def mark_calendar_reminder_notified(event_uid):
+    """알림 발송 완료 처리 (중복 발송 방지)"""
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute("""
+                UPDATE calendar_reminders 
+                SET is_notified = 1, updated_at = datetime('now', 'localtime')
+                WHERE event_uid = ?
+            """, (event_uid,))
+        return True
+    finally:
+        conn.close()
+

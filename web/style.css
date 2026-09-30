@@ -3378,6 +3378,119 @@ input[type="checkbox"] {
     color: var(--text-secondary);
 }
 
+.agenda-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.agenda-reminder-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    line-height: 1.2;
+}
+
+.agenda-reminder-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--text-primary);
+    background: rgba(99, 102, 241, 0.15);
+}
+
+.agenda-reminder-btn.active {
+    border-color: #6366f1;
+    background: rgba(99, 102, 241, 0.18);
+    color: #a5b4fc;
+    font-weight: 600;
+}
+
+.agenda-reminder-btn.active:hover {
+    background: rgba(99, 102, 241, 0.28);
+}
+
+/* 알림 선택 인레이어 팝오버 */
+.agenda-reminder-popover {
+    position: fixed;
+    z-index: 1050;
+    min-width: 165px;
+    background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    animation: reminderPopoverFadeIn 0.12s ease-out;
+}
+
+@keyframes reminderPopoverFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.agenda-reminder-popover .popover-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    color: var(--text-primary);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+.agenda-reminder-popover .popover-item:hover {
+    background: var(--primary-color);
+    color: #ffffff;
+}
+
+.agenda-reminder-popover .popover-item.selected {
+    color: #a5b4fc;
+    font-weight: 600;
+}
+
+.agenda-reminder-popover .popover-item.selected:hover {
+    color: #ffffff;
+}
+
+.agenda-reminder-popover .popover-check {
+    font-size: 0.75rem;
+    color: #818cf8;
+}
+
+.agenda-reminder-popover .popover-item:hover .popover-check {
+    color: #ffffff;
+}
+
+/* 월간 달력 날짜 셀 안의 🔔 뱃지 아이콘 */
+.event-badge .badge-reminder-bell {
+    font-size: 0.65rem;
+    margin-right: 2px;
+    color: #fbbf24;
+}
+
+.event-badge.has-reminder {
+    font-weight: 600;
+}
+
 .agenda-title {
     font-size: 0.88rem;
     font-weight: 600;

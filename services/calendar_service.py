@@ -5,12 +5,16 @@ import os
 import re
 import json
 import base64
+import hashlib
+import threading
+import time
 import urllib.request
 import urllib.parse
 import datetime
 import eel
 from core.paths import CALENDAR_CONFIG_PATH as CALENDAR_CONFIG_FILE, CALENDAR_CONFIG_EXAMPLE_PATH as CALENDAR_CONFIG_EXAMPLE_FILE
 import core.logger
+from services import db_service
 
 DEFAULT_CONFIG = {
     "ics_urls": [
@@ -130,6 +134,7 @@ def parse_ics_content(ics_text, calendar_info):
             in_event = True
             current_event = {
                 "id": str(len(events) + 1),
+                "uid": "",
                 "calendarName": cal_name,
                 "color": cal_color,
                 "title": "(제목 없음)",
@@ -145,6 +150,11 @@ def parse_ics_content(ics_text, calendar_info):
 
         if line == 'END:VEVENT':
             if in_event and current_event and current_event.get("startDate"):
+                # UID가 비어있는 경우(비표준 ICS 등) 결정론적 고유 해시 키 자동 생성
+                if not current_event.get("uid"):
+                    hash_src = f"{cal_name}_{current_event.get('title')}_{current_event.get('startDate')}_{current_event.get('startTime')}"
+                    current_event["uid"] = f"gen_{hashlib.sha256(hash_src.encode('utf-8')).hexdigest()[:16]}"
+
                 # RFC 5545 표준: 종일 일정(allDay)의 DTEND는 배타적(Exclusive)이므로 실제 일정 종료일은 DTEND - 1일임
                 if current_event.get("allDay"):
                     end_str = current_event.get("endDate")
@@ -166,7 +176,10 @@ def parse_ics_content(ics_text, calendar_info):
             continue
 
         if in_event and current_event is not None:
-            if line.startswith('SUMMARY'):
+            if line.startswith('UID'):
+                val = line.split(':', 1)[1] if ':' in line else ''
+                current_event["uid"] = val.strip()
+            elif line.startswith('SUMMARY'):
                 val = line.split(':', 1)[1] if ':' in line else ''
                 current_event["title"] = val.replace('\\,', ',').replace('\\;', ';').replace('\\n', ' ')
             elif line.startswith('DTSTART'):
@@ -268,6 +281,24 @@ def fetch_calendar_events(force_refresh=False):
         # 시작 날짜 및 시간순 정렬
         all_events.sort(key=lambda x: (x.get("startDate", ""), x.get("startTime") or "00:00"))
 
+        # DB에 저장된 개별 일정 알림 정보 조회 및 이벤트 객체에 병합
+        try:
+            reminders = db_service.get_calendar_reminders()
+            reminder_map = {r["event_uid"]: r for r in reminders}
+            for e in all_events:
+                uid = e.get("uid")
+                r = reminder_map.get(uid)
+                if r and r.get("is_enabled"):
+                    e["reminderMinutes"] = r.get("reminder_minutes", 10)
+                    e["hasReminder"] = True
+                    e["isNotified"] = bool(r.get("is_notified"))
+                else:
+                    e["reminderMinutes"] = None
+                    e["hasReminder"] = False
+                    e["isNotified"] = False
+        except Exception as rem_ex:
+            core.logger.log_warn("Calendar", f"알림 정보 병합 실패: {rem_ex}")
+
         if errors:
             core.logger.log_warn("Calendar", f"일부 캘린더 동기화 실패 ({len(errors)}건)", details="\n".join(errors))
 
@@ -281,3 +312,148 @@ def fetch_calendar_events(force_refresh=False):
     except Exception as e:
         core.logger.log_error("Calendar", f"캘린더 조회 실패: {str(e)}", exc=e)
         return {"status": "error", "message": str(e), "events": []}
+
+
+@eel.expose
+def set_event_reminder(event_uid, calendar_name, title, start_datetime, reminder_minutes=10):
+    """개별 일정에 대한 시작 N분 전 알림 설정 (기본 10분)"""
+    try:
+        reminder_minutes = int(reminder_minutes)
+        db_service.set_calendar_reminder(
+            event_uid=event_uid,
+            calendar_name=calendar_name or "",
+            title=title or "(제목 없음)",
+            start_datetime=start_datetime,
+            reminder_minutes=reminder_minutes,
+            is_enabled=1
+        )
+        return {"status": "success", "message": f"{reminder_minutes}분 전 알림이 설정되었습니다."}
+    except Exception as e:
+        core.logger.log_error("Calendar", f"알림 설정 실패: {e}", exc=e)
+        return {"status": "error", "message": str(e)}
+
+
+@eel.expose
+def delete_event_reminder(event_uid):
+    """개별 일정 알림 해제"""
+    try:
+        db_service.delete_calendar_reminder(event_uid)
+        return {"status": "success", "message": "알림이 해제되었습니다."}
+    except Exception as e:
+        core.logger.log_error("Calendar", f"알림 해제 실패: {e}", exc=e)
+        return {"status": "error", "message": str(e)}
+
+
+@eel.expose
+def get_event_reminders():
+    """모든 알림 설정 목록 조회"""
+    try:
+        reminders = db_service.get_calendar_reminders()
+        return {"status": "success", "data": reminders}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "data": []}
+
+
+# =====================================================================
+# 캘린더 백그라운드 알림 감시 데몬 (Calendar Reminder Daemon)
+# =====================================================================
+_reminder_daemon_thread = None
+_reminder_daemon_running = False
+_reminder_daemon_lock = threading.Lock()
+
+
+def _reminder_daemon_worker():
+    """30초 주기로 활성 알림을 검사하여 OS 트레이 알림 및 인앱 토스트 발송"""
+    global _reminder_daemon_running
+    while _reminder_daemon_running:
+        try:
+            active_reminders = db_service.get_calendar_reminders(only_active=True)
+            if active_reminders:
+                now = datetime.datetime.now()
+                for r in active_reminders:
+                    start_str = r.get("start_datetime", "").strip()
+                    if not start_str:
+                        continue
+
+                    # 날짜 형식 파싱 ("YYYY-MM-DD HH:MM")
+                    try:
+                        start_dt = datetime.datetime.strptime(start_str, "%Y-%m-%d %H:%M")
+                    except Exception:
+                        continue
+
+                    remind_min = r.get("reminder_minutes", 10)
+                    trigger_time = start_dt - datetime.timedelta(minutes=remind_min)
+                    expire_time = start_dt + datetime.timedelta(hours=1)
+
+                    # 알림 조건 도달 (trigger_time <= now < expire_time)
+                    if trigger_time <= now < expire_time:
+                        title = r.get("title") or "일정"
+                        cal_name = r.get("calendar_name") or ""
+                        time_display = start_dt.strftime("%H:%M")
+                        
+                        body_msg = f"[{cal_name}] {title}\n시작: {time_display}" if cal_name else f"{title}\n시작: {time_display}"
+                        
+                        # 1. Windows 시스템 트레이 알림
+                        try:
+                            from core.tray import show_tray_notification
+                            show_tray_notification(f"📅 일정 알림 ({remind_min}분 전)", body_msg)
+                        except Exception as tray_err:
+                            core.logger.log_warn("CalendarReminder", f"트레이 알림 전송 실패: {tray_err}")
+
+                        # 2. Eel 웹 프론트엔드 실시간 알림 통지
+                        try:
+                            eel.on_calendar_reminder_triggered({
+                                "event_uid": r["event_uid"],
+                                "title": title,
+                                "calendar_name": cal_name,
+                                "start_datetime": start_str,
+                                "time_display": time_display,
+                                "reminder_minutes": remind_min
+                            })()
+                        except Exception:
+                            pass
+
+                        # 3. 알림 발송 완료 플래그 갱신
+                        db_service.mark_calendar_reminder_notified(r["event_uid"])
+                        core.logger.log_info("CalendarReminder", f"알림 발송 완료: '{title}' ({remind_min}분 전)")
+
+                    elif now >= expire_time:
+                        # 1시간 이상 지난 과거 일정은 자동으로 완료 처리하여 검사 대상에서 제외
+                        db_service.mark_calendar_reminder_notified(r["event_uid"])
+
+        except Exception as e:
+            core.logger.log_error("CalendarReminder", f"데몬 루프 에러: {e}")
+
+        # 30초 대기
+        for _ in range(30):
+            if not _reminder_daemon_running:
+                break
+            time.sleep(1)
+
+
+def start_calendar_reminder_daemon():
+    """캘린더 알림 데몬 스레드 시작"""
+    global _reminder_daemon_thread, _reminder_daemon_running
+    with _reminder_daemon_lock:
+        if _reminder_daemon_running:
+            return
+        _reminder_daemon_running = True
+        _reminder_daemon_thread = threading.Thread(
+            target=_reminder_daemon_worker,
+            name="CalendarReminderDaemon",
+            daemon=True
+        )
+        _reminder_daemon_thread.start()
+        core.logger.log_info("CalendarReminder", "캘린더 알림 감시 데몬이 시작되었습니다. (주기: 30초)")
+
+
+def stop_calendar_reminder_daemon():
+    """캘린더 알림 데몬 스레드 중지"""
+    global _reminder_daemon_running
+    with _reminder_daemon_lock:
+        _reminder_daemon_running = False
+
+
+# 서비스 모듈 로드 시 데몬 자동 가동
+start_calendar_reminder_daemon()
+
