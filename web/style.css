@@ -2899,6 +2899,8 @@ input[type="checkbox"] {
     font-family: 'Consolas', 'Cascadia Code', monospace, sans-serif;
     font-size: 0.88rem;
     line-height: 1.6;
+    tab-size: 4;
+    -moz-tab-size: 4;
     resize: none;
     outline: none;
     box-sizing: border-box;
