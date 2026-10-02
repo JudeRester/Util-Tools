@@ -58,6 +58,7 @@ function clearNoteSearch() {
 // 초기 로드
 async function loadNotes() {
     initNotesResizer();
+    initNotesTabKeyHandler();
     try {
         if (window.eel && eel.get_notes) {
             const res = await eel.get_notes()();
@@ -144,6 +145,136 @@ function initNotesResizer() {
 
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
+    });
+}
+
+// 빠른메모 에디터 Tab 및 Shift+Tab 들여쓰기/내어쓰기 핸들러
+let notesTabHandlerInitialized = false;
+
+function initNotesTabKeyHandler() {
+    if (notesTabHandlerInitialized) return;
+    const editor = document.getElementById('note-content-editor');
+    if (!editor) return;
+
+    notesTabHandlerInitialized = true;
+
+    editor.addEventListener('keydown', function(e) {
+        if (e.key !== 'Tab') return;
+        e.preventDefault();
+
+        const start = this.selectionStart;
+        const end = this.selectionEnd;
+        const val = this.value;
+
+        // 다중 라인 블록 선택 여부 판정 (블록 내에 개행 문자가 포함되어 있는 경우)
+        const isMultiLine = start !== end && val.substring(start, end).includes('\n');
+
+        if (isMultiLine) {
+            // 다중 라인 선택 블록 들여쓰기 / 내어쓰기
+            const lineStart = val.lastIndexOf('\n', start - 1) + 1;
+            let lineEnd = val.indexOf('\n', end);
+            if (lineEnd === -1) lineEnd = val.length;
+
+            const targetText = val.substring(lineStart, lineEnd);
+            const lines = targetText.split('\n');
+
+            if (e.shiftKey) {
+                // Shift + Tab : 일괄 내어쓰기 (Outdent)
+                let firstLineRemoved = 0;
+                let totalRemoved = 0;
+
+                const newLines = lines.map((line, idx) => {
+                    let removed = 0;
+                    let newLine = line;
+                    if (newLine.startsWith('\t')) {
+                        newLine = newLine.substring(1);
+                        removed = 1;
+                    } else if (newLine.startsWith('    ')) {
+                        newLine = newLine.substring(4);
+                        removed = 4;
+                    } else {
+                        const match = newLine.match(/^ +/);
+                        if (match) {
+                            const count = Math.min(match[0].length, 4);
+                            newLine = newLine.substring(count);
+                            removed = count;
+                        }
+                    }
+
+                    if (idx === 0) firstLineRemoved = removed;
+                    totalRemoved += removed;
+                    return newLine;
+                });
+
+                const replacement = newLines.join('\n');
+                this.setRangeText(replacement, lineStart, lineEnd, 'select');
+
+                // 선택 영역 보정 (첫 줄 및 전체 줄어든 문자 수 반영)
+                const newStart = Math.max(lineStart, start - firstLineRemoved);
+                const newEnd = Math.max(newStart, end - totalRemoved);
+                this.setSelectionRange(newStart, newEnd);
+            } else {
+                // Tab : 일괄 들여쓰기 (Indent)
+                const newLines = lines.map(line => '\t' + line);
+                const replacement = newLines.join('\n');
+                this.setRangeText(replacement, lineStart, lineEnd, 'select');
+
+                // 선택 영역 보정 (첫 줄 +1, 전체 라인 수만큼 끝점 확장)
+                const newStart = start + 1;
+                const newEnd = end + lines.length;
+                this.setSelectionRange(newStart, newEnd);
+            }
+
+            onNoteContentChange(this.value);
+        } else {
+            // 단일 커서 또는 단일 라인 내 선택
+            if (e.shiftKey) {
+                // Shift + Tab : 현재 라인 선행 들여쓰기 제거
+                const lineStart = val.lastIndexOf('\n', start - 1) + 1;
+                let lineEnd = val.indexOf('\n', start);
+                if (lineEnd === -1) lineEnd = val.length;
+
+                const line = val.substring(lineStart, lineEnd);
+                let removed = 0;
+                let newLine = line;
+
+                if (newLine.startsWith('\t')) {
+                    newLine = newLine.substring(1);
+                    removed = 1;
+                } else if (newLine.startsWith('    ')) {
+                    newLine = newLine.substring(4);
+                    removed = 4;
+                } else {
+                    const match = newLine.match(/^ +/);
+                    if (match) {
+                        const count = Math.min(match[0].length, 4);
+                        newLine = newLine.substring(count);
+                        removed = count;
+                    }
+                }
+
+                if (removed > 0) {
+                    this.setRangeText(newLine, lineStart, lineEnd, 'preserve');
+                    const newCursor = Math.max(lineStart, start - removed);
+                    this.setSelectionRange(newCursor, newCursor);
+                    onNoteContentChange(this.value);
+                }
+            } else {
+                // Tab : 커서 위치에 \t 삽입 (브라우저 Undo 히스토리 보존을 위해 execCommand 1순위 시도)
+                let success = false;
+                try {
+                    success = document.execCommand('insertText', false, '\t');
+                } catch (cmdErr) {
+                    success = false;
+                }
+
+                if (!success) {
+                    this.setRangeText('\t', start, end, 'end');
+                }
+
+                onNoteContentChange(this.value);
+            }
+        }
     });
 }
 
