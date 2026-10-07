@@ -854,15 +854,26 @@ function openNoteCategoriesModal() {
     const modal = document.getElementById('note-categories-modal');
     if (!modal) return;
 
-    modal.classList.add('active');
+    modal.classList.add('show');
     cancelEditNoteCategory();
     renderCategoriesManageList();
+
+    // 배경 클릭 시 닫기 핸들러 바인딩
+    if (!modal.dataset.listenerAttached) {
+        modal.dataset.listenerAttached = 'true';
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeNoteCategoriesModal();
+            }
+        });
+    }
 }
 
 function closeNoteCategoriesModal() {
     const modal = document.getElementById('note-categories-modal');
     if (!modal) return;
 
+    modal.classList.remove('show');
     modal.classList.remove('active');
     cancelEditNoteCategory();
 }

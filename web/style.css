@@ -1904,7 +1904,8 @@ body {
     z-index: 999;
 }
 
-.modal-overlay.show {
+.modal-overlay.show,
+.modal-overlay.active {
     display: flex;
     animation: fadeIn 0.2s ease;
 }
