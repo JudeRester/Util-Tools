@@ -37,7 +37,10 @@ def test_note_categories_seeding_and_crud():
     assert update_res["status"] == "success", f"save_note_category 수정 실패: {update_res}"
     print("  -> 카테고리 수정 성공")
 
-    # 4. 메모 생성 후 신규 카테고리 지정
+    # 4. 메모 생성 후 신규 카테고리 지정 (기존 메모 보존)
+    existing_res = notes_service.get_notes()
+    existing_notes = existing_res.get("data", [])
+
     test_note = {
         "id": "test_note_cat_999",
         "title": "카테고리 테스트 메모",
@@ -45,7 +48,8 @@ def test_note_categories_seeding_and_crud():
         "category": new_cat_id,
         "is_pinned": 1
     }
-    save_notes_res = notes_service.save_notes([test_note])
+    # 기존 메모 목록에 테스트 메모 추가하여 저장
+    save_notes_res = notes_service.save_notes(existing_notes + [test_note])
     assert save_notes_res["status"] == "success", f"save_notes 실패: {save_notes_res}"
 
     # 카테고리 조회 시 notes_count 확인
@@ -66,6 +70,9 @@ def test_note_categories_seeding_and_crud():
     assert migrated_note is not None, "메모가 유실됨"
     assert migrated_note["category"] == "scratch", f"메모가 scratch로 이전되지 않음: {migrated_note['category']}"
     print("  -> 소속 메모가 'scratch' 보관함으로 안전하게 자동 이전됨 확인")
+
+    # 테스트 잔여물 메모 정리 및 기존 메모 원상 복구
+    notes_service.save_notes(existing_notes)
 
     # 시스템 카테고리 삭제 방지 가드 검증
     sys_del_res = notes_service.delete_note_category("all")

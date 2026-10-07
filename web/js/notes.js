@@ -109,6 +109,9 @@ async function loadNotes() {
                     category: n.category || 'scratch',
                     is_pinned: n.is_pinned ? 1 : 0
                 }));
+                try {
+                    localStorage.setItem('user_notes', JSON.stringify(currentNotes));
+                } catch (lsErr) {}
             } else {
                 currentNotes = DEFAULT_NOTES_FALLBACK;
             }
