@@ -226,6 +226,31 @@ def _migrate_notes_from_json_if_needed(conn):
         _safe_log(f"[SQLite Migration] 메모 마이그레이션 실패: {e}")
 
 
+def _seed_default_note_categories_if_needed(conn):
+    """기본 카테고리(전체 메모, 스크래치패드, 업무, 개인) 시딩"""
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM note_categories")
+    count = cursor.fetchone()[0]
+    if count > 0:
+        return
+
+    defaults = [
+        ("all", "전체 메모", "📌", 0, 1),
+        ("scratch", "스크래치패드", "🧪", 1, 1),
+        ("work", "업무", "💼", 2, 0),
+        ("personal", "개인", "🏠", 3, 0),
+    ]
+    try:
+        with conn:
+            conn.executemany("""
+                INSERT OR IGNORE INTO note_categories (id, name, icon, sort_order, is_system)
+                VALUES (?, ?, ?, ?, ?)
+            """, defaults)
+        _safe_log("[SQLite Setup] 기본 메모 카테고리 4종(전체, 스크래치패드, 업무, 개인) 시딩 완료")
+    except Exception as e:
+        _safe_log(f"[SQLite Setup] 기본 메모 카테고리 시딩 실패: {e}")
+
+
 def _migrate_diagrams_from_json_if_needed(conn):
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM diagrams")
@@ -780,6 +805,20 @@ def init_db():
                 """)
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_calendar_reminders_active ON calendar_reminders(is_enabled, is_notified, start_datetime);")
 
+                # 18. note_categories 테이블 (빠른 메모 상위 보관함/카테고리 관리)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS note_categories (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        icon TEXT DEFAULT '📁',
+                        sort_order INTEGER DEFAULT 0,
+                        is_system INTEGER DEFAULT 0,
+                        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+                    );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_note_categories_order ON note_categories(sort_order ASC);")
+
                 # 비정상 종료 등으로 진행 중 상태에 머물러 있는 오래된 작업 복구 (Stale Run Recovery)
                 conn.execute("""
                     UPDATE transcription_runs
@@ -787,9 +826,10 @@ def init_db():
                     WHERE status IN ('PENDING', 'TRANSCRIBING', 'DIARIZING', 'ALIGNING');
                 """)
 
-            # 1회 자동 마이그레이션 실행
+            # 1회 자동 마이그레이션 및 기본 카테고리 시딩 실행
             _migrate_emails_from_json_if_needed(conn)
             _migrate_notes_from_json_if_needed(conn)
+            _seed_default_note_categories_if_needed(conn)
             _migrate_diagrams_from_json_if_needed(conn)
             _migrate_quick_launch_from_json_if_needed(conn)
             _migrate_shortcuts_from_json_if_needed(conn)
