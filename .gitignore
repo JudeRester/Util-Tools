@@ -45,6 +45,7 @@ emails/
 utility-toolkit-backup-*.json
 redmine_*_issues.*
 redmine_*_cache.*
+scratch/
 
 # SQLite Database & Storage
 data/
