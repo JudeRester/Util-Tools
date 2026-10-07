@@ -2734,6 +2734,101 @@ input[type="checkbox"] {
     background: var(--primary-hover);
 }
 
+/* 상단 보관함(카테고리) 칩 바 */
+.notes-category-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid var(--border-color);
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: thin;
+}
+
+.notes-category-bar::-webkit-scrollbar {
+    height: 4px;
+}
+
+.notes-category-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: var(--transition);
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.notes-category-chip:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.notes-category-chip.active {
+    background: var(--primary-color);
+    color: #ffffff;
+    border-color: var(--primary-hover);
+    font-weight: 600;
+}
+
+.cat-chip-count {
+    font-size: 0.65rem;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.25);
+    color: inherit;
+    opacity: 0.85;
+}
+
+.notes-category-chip.active .cat-chip-count {
+    background: rgba(255, 255, 255, 0.25);
+    opacity: 1;
+}
+
+/* 검색창 & 정렬 드롭다운 행 */
+.notes-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.12);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.notes-filter-row .notes-search-box {
+    flex: 1;
+    position: relative;
+    padding: 0;
+    background: transparent;
+    border-bottom: none;
+}
+
+.notes-sort-select {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 5px 6px;
+    font-size: 0.72rem;
+    color: var(--text-primary);
+    outline: none;
+    cursor: pointer;
+    transition: var(--transition);
+    max-width: 110px;
+}
+
+.notes-sort-select:focus {
+    border-color: var(--accent-color);
+}
+
 .notes-search-box {
     position: relative;
     padding: 8px 10px;
@@ -2812,6 +2907,25 @@ input[type="checkbox"] {
     border-color: var(--primary-color);
 }
 
+.note-list-item.pinned {
+    border-left: 3px solid #f59e0b;
+    background: rgba(245, 158, 11, 0.04);
+}
+
+.note-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    margin-bottom: 2px;
+}
+
+.note-item-pin-badge {
+    font-size: 0.72rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
 .note-item-title {
     font-size: 0.82rem;
     font-weight: 600;
@@ -2819,7 +2933,8 @@ input[type="checkbox"] {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-bottom: 2px;
+    flex: 1;
+    min-width: 0;
 }
 
 .note-item-preview {
@@ -2831,9 +2946,59 @@ input[type="checkbox"] {
     margin-bottom: 2px;
 }
 
+.note-item-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.note-item-cat-badge {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1px 5px;
+    border-radius: 4px;
+    max-width: 90px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .note-item-date {
     font-size: 0.65rem;
     color: #64748b;
+}
+
+/* 에디터 툴바 메타 컨트롤 */
+.note-meta-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.note-category-select {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    outline: none;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.note-category-select:focus {
+    border-color: var(--accent-color);
+}
+
+.note-pin-btn.pinned {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: #f59e0b;
+    color: #fbbf24;
 }
 
 .notes-editor-panel {
