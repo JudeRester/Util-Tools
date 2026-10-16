@@ -819,6 +819,19 @@ def init_db():
                 """)
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_note_categories_order ON note_categories(sort_order ASC);")
 
+                # 19. qr_history 테이블 (QR 코드 스캔 및 생성 이력 관리)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS qr_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        action_type TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        title TEXT DEFAULT '',
+                        format_type TEXT DEFAULT 'text',
+                        created_at TEXT DEFAULT (datetime('now', 'localtime'))
+                    );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_qr_history_created ON qr_history(created_at DESC);")
+
                 # 비정상 종료 등으로 진행 중 상태에 머물러 있는 오래된 작업 복구 (Stale Run Recovery)
                 conn.execute("""
                     UPDATE transcription_runs

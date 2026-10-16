@@ -71,6 +71,7 @@ hidden_imports = [
     'services.whisper_service',
     'services.ocr_service',
     'services.diff_service',
+    'services.qr_service',
     'winocr',
     'winrt.windows.media.ocr',
     'winrt.windows.globalization',
