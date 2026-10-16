@@ -17,7 +17,7 @@
             <div class="nav-brand">
                 <span class="brand-icon">🛠️</span>
                 <span class="brand-title">Utility Toolkit</span>
-                <span class="brand-version" style="font-size: 0.72rem; color: #818cf8; margin-left: 6px; font-weight: 600; vertical-align: middle;">v0.20.0</span>
+                <span class="brand-version" style="font-size: 0.72rem; color: #818cf8; margin-left: 6px; font-weight: 600; vertical-align: middle;">v0.21.0</span>
             </div>
 
             <!-- 좁은 화면용 햄버거 헤더 -->
@@ -133,6 +133,13 @@
                             <div class="item-text">
                                 <span class="item-title">텍스트 Diff 비교</span>
                                 <span class="item-desc">코드/텍스트 차이점 분석 & 하이라이트</span>
+                            </div>
+                        </button>
+                        <button type="button" class="tab-dropdown-item" data-tab="qr" onclick="selectDropdownTab('qr', '📱', 'QR 코드 도구', event)">
+                            <span class="item-icon">📱</span>
+                            <div class="item-text">
+                                <span class="item-title">QR 코드 도구</span>
+                                <span class="item-desc">QR 스캔(카메라/캡처/파일) & 생성</span>
                             </div>
                         </button>
                     </div>
@@ -1987,6 +1994,302 @@
                     </div>
                 </div>
             </section>
+
+            <!-- 10. QR 코드 도구 통합 탭 (스캐너 & 생성기) -->
+            <section id="tab-qr" class="tab-pane">
+                <div class="qr-studio-container">
+                    <!-- 상단 서브탭 바 -->
+                    <div class="qr-subtab-bar">
+                        <button type="button" class="qr-subtab-btn active" id="qr-subtab-scanner-btn" onclick="switchQrSubTab('scanner')">
+                            <span class="subtab-icon">📷</span> QR 스캐너
+                        </button>
+                        <button type="button" class="qr-subtab-btn" id="qr-subtab-generator-btn" onclick="switchQrSubTab('generator')">
+                            <span class="subtab-icon">✨</span> QR 생성기
+                        </button>
+                        <button type="button" class="qr-subtab-btn" id="qr-subtab-history-btn" onclick="switchQrSubTab('history')">
+                            <span class="subtab-icon">📜</span> 이력 관리 (<span id="qr-history-count">0</span>)
+                        </button>
+                    </div>
+
+                    <!-- 1) QR 스캐너 패널 -->
+                    <div id="qr-pane-scanner" class="qr-sub-pane active">
+                        <!-- 툴바 -->
+                        <div class="qr-toolbar">
+                            <div class="qr-toolbar-left">
+                                <button type="button" id="qr-camera-toggle-btn" class="form-btn add-btn btn-sm" onclick="toggleQrCamera()">
+                                    <span id="qr-camera-btn-icon">📹</span> <span id="qr-camera-btn-text">카메라 스캔 시작</span>
+                                </button>
+                                <button type="button" class="form-btn close-btn btn-sm" onclick="openQrImageFile()">
+                                    <span>📂</span> 이미지 파일 열기
+                                </button>
+                                <input type="file" id="qr-file-input" accept="image/*" style="display: none;" onchange="onQrFileInputChange(event)">
+                                <button type="button" class="form-btn close-btn btn-sm" onclick="pasteQrFromClipboard()" title="클립보드 이미지 붙여넣기 (Ctrl+V)">
+                                    <span>📋</span> 붙여넣기 (Ctrl+V)
+                                </button>
+                                <div class="qr-camera-select-wrap" id="qr-camera-select-wrap" style="display: none;">
+                                    <label for="qr-camera-device-select" class="qr-toolbar-label">카메라:</label>
+                                    <select id="qr-camera-device-select" class="form-select qr-select-sm" onchange="onQrCameraDeviceChange(this.value)">
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="qr-toolbar-right">
+                                <button type="button" class="form-btn close-btn btn-sm" onclick="resetQrScanner()">
+                                    <span>🧹</span> 초기화
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 스캐너 메인 2단 그리드 (좌측: 뷰파인더/드롭존, 우측: 스캔 결과 카드) -->
+                        <div class="qr-scanner-grid">
+                            <!-- 좌측: 비디오/이미지 뷰파인더 -->
+                            <div class="qr-scanner-viewport-card" id="qr-drop-zone">
+                                <!-- 카메라 비디오 화면 -->
+                                <div id="qr-video-wrapper" class="qr-video-wrapper" style="display: none;">
+                                    <video id="qr-video" playsinline></video>
+                                    <div class="qr-scan-guide">
+                                        <div class="qr-scan-frame"></div>
+                                        <div class="qr-scan-laser"></div>
+                                    </div>
+                                    <span class="qr-live-badge">🔴 실시간 스캔 중</span>
+                                </div>
+
+                                <!-- 이미지 드롭존 / 캔버스 화면 -->
+                                <div id="qr-static-wrapper" class="qr-static-wrapper">
+                                    <canvas id="qr-canvas" style="display: none;"></canvas>
+                                    <div id="qr-drop-placeholder" class="qr-drop-placeholder">
+                                        <div class="drop-icon">📷</div>
+                                        <h3>QR 코드 이미지 드래그 & 드롭</h3>
+                                        <p>이미지 파일을 여기에 끌어다 놓거나, 화면 캡처 후 <strong>Ctrl + V</strong>를 누르세요</p>
+                                        <div class="drop-action-hint">또는 상단 [카메라 스캔 시작]을 눌러 웹캠으로 실시간 스캔</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 우측: 인식 결과 카드 -->
+                            <div class="qr-result-card">
+                                <div class="qr-result-header">
+                                    <div class="qr-result-title">
+                                        <span>🔍</span> 인식 결과
+                                        <span id="qr-result-type-badge" class="qr-badge badge-neutral" style="display: none;">텍스트</span>
+                                    </div>
+                                    <div class="qr-result-actions" id="qr-result-quick-actions" style="display: none;">
+                                        <button type="button" id="qr-open-url-btn" class="mini-tool-btn" onclick="openQrDetectedUrl()" style="display: none;">
+                                            <span>🌐</span> 브라우저로 열기
+                                        </button>
+                                        <button type="button" class="mini-tool-btn" onclick="copyQrResultText()">
+                                            <span>📋</span> 복사
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="qr-result-body">
+                                    <div id="qr-result-empty" class="qr-result-empty-hint">
+                                        스캔된 QR 코드 내용이 여기에 표시됩니다.
+                                    </div>
+                                    <div id="qr-result-content-wrap" style="display: none;">
+                                        <!-- 파싱된 상세 정보 (Wi-Fi 등) -->
+                                        <div id="qr-parsed-details" class="qr-parsed-details" style="display: none;"></div>
+                                        <!-- 원본 텍스트 -->
+                                        <div class="qr-raw-text-wrapper">
+                                            <label class="qr-meta-label">디코딩 데이터:</label>
+                                            <textarea id="qr-result-raw-text" class="qr-raw-textarea" readonly rows="8"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2) QR 생성기 패널 -->
+                    <div id="qr-pane-generator" class="qr-sub-pane" style="display: none;">
+                        <div class="qr-generator-grid">
+                            <!-- 좌측: 생성 폼 설정 -->
+                            <div class="qr-gen-form-card">
+                                <div class="qr-gen-type-tabs">
+                                    <button type="button" class="qr-type-tab-btn active" data-type="text" onclick="switchQrGenType('text')">🔗 URL / 텍스트</button>
+                                    <button type="button" class="qr-type-tab-btn" data-type="wifi" onclick="switchQrGenType('wifi')">📶 Wi-Fi</button>
+                                    <button type="button" class="qr-type-tab-btn" data-type="email" onclick="switchQrGenType('email')">📧 이메일</button>
+                                    <button type="button" class="qr-type-tab-btn" data-type="tel" onclick="switchQrGenType('tel')">📞 전화번호</button>
+                                    <button type="button" class="qr-type-tab-btn" data-type="vcard" onclick="switchQrGenType('vcard')">📇 연락처(vCard)</button>
+                                </div>
+
+                                <!-- 입력 폼: URL / 일반 텍스트 -->
+                                <div id="qr-gen-input-text" class="qr-gen-input-pane active">
+                                    <label class="form-label" for="qr-input-text-val">내용 / URL 입력:</label>
+                                    <textarea id="qr-input-text-val" class="form-textarea" rows="4" placeholder="QR 코드로 변환할 URL (예: https://...) 또는 텍스트를 입력하세요" oninput="renderGeneratedQr()"></textarea>
+                                </div>
+
+                                <!-- 입력 폼: Wi-Fi -->
+                                <div id="qr-gen-input-wifi" class="qr-gen-input-pane" style="display: none;">
+                                    <div class="form-row">
+                                        <label class="form-label" for="qr-wifi-ssid">네트워크 이름 (SSID):</label>
+                                        <input type="text" id="qr-wifi-ssid" class="form-input" placeholder="Wi-Fi 이름" oninput="renderGeneratedQr()">
+                                    </div>
+                                    <div class="form-row">
+                                        <label class="form-label" for="qr-wifi-password">비밀번호:</label>
+                                        <input type="text" id="qr-wifi-password" class="form-input" placeholder="비밀번호" oninput="renderGeneratedQr()">
+                                    </div>
+                                    <div class="form-row form-row-inline">
+                                        <div>
+                                            <label class="form-label" for="qr-wifi-auth">보안 방식:</label>
+                                            <select id="qr-wifi-auth" class="form-select" onchange="renderGeneratedQr()">
+                                                <option value="WPA" selected>WPA / WPA2 / WPA3</option>
+                                                <option value="WEP">WEP</option>
+                                                <option value="nopass">암호 없음 (Open)</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-check-inline" style="margin-top: 24px;">
+                                            <label><input type="checkbox" id="qr-wifi-hidden" onchange="renderGeneratedQr()"> 숨겨진 네트워크</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 입력 폼: 이메일 -->
+                                <div id="qr-gen-input-email" class="qr-gen-input-pane" style="display: none;">
+                                    <div class="form-row">
+                                        <label class="form-label" for="qr-email-addr">받는 사람 이메일:</label>
+                                        <input type="email" id="qr-email-addr" class="form-input" placeholder="user@example.com" oninput="renderGeneratedQr()">
+                                    </div>
+                                    <div class="form-row">
+                                        <label class="form-label" for="qr-email-subject">제목:</label>
+                                        <input type="text" id="qr-email-subject" class="form-input" placeholder="메일 제목" oninput="renderGeneratedQr()">
+                                    </div>
+                                    <div class="form-row">
+                                        <label class="form-label" for="qr-email-body">본문 내용:</label>
+                                        <textarea id="qr-email-body" class="form-textarea" rows="3" placeholder="메일 본문 내용" oninput="renderGeneratedQr()"></textarea>
+                                    </div>
+                                </div>
+
+                                <!-- 입력 폼: 전화번호 -->
+                                <div id="qr-gen-input-tel" class="qr-gen-input-pane" style="display: none;">
+                                    <div class="form-row">
+                                        <label class="form-label" for="qr-tel-number">전화번호:</label>
+                                        <input type="tel" id="qr-tel-number" class="form-input" placeholder="010-1234-5678 또는 +82-..." oninput="renderGeneratedQr()">
+                                    </div>
+                                </div>
+
+                                <!-- 입력 폼: vCard -->
+                                <div id="qr-gen-input-vcard" class="qr-gen-input-pane" style="display: none;">
+                                    <div class="form-row">
+                                        <label class="form-label" for="qr-vcard-name">이름 (Full Name):</label>
+                                        <input type="text" id="qr-vcard-name" class="form-input" placeholder="홍길동" oninput="renderGeneratedQr()">
+                                    </div>
+                                    <div class="form-row form-row-inline">
+                                        <div>
+                                            <label class="form-label" for="qr-vcard-tel">전화번호:</label>
+                                            <input type="tel" id="qr-vcard-tel" class="form-input" placeholder="010-1234-5678" oninput="renderGeneratedQr()">
+                                        </div>
+                                        <div>
+                                            <label class="form-label" for="qr-vcard-email">이메일:</label>
+                                            <input type="email" id="qr-vcard-email" class="form-input" placeholder="hong@example.com" oninput="renderGeneratedQr()">
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <label class="form-label" for="qr-vcard-org">회사 / 조직:</label>
+                                        <input type="text" id="qr-vcard-org" class="form-input" placeholder="회사명 또는 부서" oninput="renderGeneratedQr()">
+                                    </div>
+                                </div>
+
+                                <!-- 디자인 & 생성 옵션 -->
+                                <div class="qr-gen-options-box">
+                                    <div class="qr-option-row">
+                                        <div class="qr-option-item">
+                                            <label class="form-label" for="qr-opt-size">크기 (px):</label>
+                                            <select id="qr-opt-size" class="form-select" onchange="renderGeneratedQr()">
+                                                <option value="180">소형 (180px)</option>
+                                                <option value="256" selected>중형 (256px)</option>
+                                                <option value="360">대형 (360px)</option>
+                                                <option value="480">특대형 (480px)</option>
+                                            </select>
+                                        </div>
+                                        <div class="qr-option-item">
+                                            <label class="form-label" for="qr-opt-ecc">오류 복원율:</label>
+                                            <select id="qr-opt-ecc" class="form-select" onchange="renderGeneratedQr()">
+                                                <option value="L">L (7% 복원)</option>
+                                                <option value="M" selected>M (15% 복원 - 표준)</option>
+                                                <option value="Q">Q (25% 복원)</option>
+                                                <option value="H">H (30% 복원 - 최고)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="qr-option-row">
+                                        <div class="qr-option-item">
+                                            <label class="form-label" for="qr-opt-fg-color">전경색 (QR 색):</label>
+                                            <div class="color-picker-wrap">
+                                                <input type="color" id="qr-opt-fg-color" value="#000000" onchange="renderGeneratedQr()">
+                                                <span id="qr-fg-color-hex">#000000</span>
+                                            </div>
+                                        </div>
+                                        <div class="qr-option-item">
+                                            <label class="form-label" for="qr-opt-bg-color">배경색:</label>
+                                            <div class="color-picker-wrap">
+                                                <input type="color" id="qr-opt-bg-color" value="#ffffff" onchange="renderGeneratedQr()">
+                                                <span id="qr-bg-color-hex">#ffffff</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 우측: 생성 결과 미리보기 및 저장/복사 -->
+                            <div class="qr-gen-preview-card">
+                                <div class="qr-gen-preview-header">
+                                    <span>✨ QR 코드 실시간 미리보기</span>
+                                </div>
+                                <div class="qr-gen-preview-body">
+                                    <div id="qr-gen-output-canvas-wrap" class="qr-canvas-holder">
+                                        <!-- qrcodejs가 렌더링할 컨테이너 -->
+                                        <div id="qr-gen-target"></div>
+                                    </div>
+                                    <div id="qr-gen-empty-hint" class="qr-result-empty-hint" style="display: none;">
+                                        내용을 입력하면 QR 코드가 생성됩니다.
+                                    </div>
+                                </div>
+                                <div class="qr-gen-preview-footer">
+                                    <button type="button" class="form-btn add-btn" onclick="downloadQrPng()">
+                                        <span>💾</span> PNG 다운로드
+                                    </button>
+                                    <button type="button" class="form-btn close-btn" onclick="copyQrImageToClipboard()">
+                                        <span>📋</span> 이미지 복사
+                                    </button>
+                                    <button type="button" class="form-btn close-btn" onclick="saveGeneratedQrToHistory()">
+                                        <span>💾</span> 이력에 저장
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3) 이력 관리 패널 -->
+                    <div id="qr-pane-history" class="qr-sub-pane" style="display: none;">
+                        <div class="qr-history-toolbar">
+                            <div class="qr-history-search">
+                                <input type="text" id="qr-history-search-input" class="form-input" placeholder="이력 검색 (내용, 제목)..." oninput="loadQrHistory()">
+                            </div>
+                            <div class="qr-history-actions">
+                                <button type="button" class="form-btn close-btn btn-sm" onclick="confirmClearQrHistory()">
+                                    <span>🧹</span> 전체 이력 삭제
+                                </button>
+                            </div>
+                        </div>
+                        <div class="qr-history-table-wrapper">
+                            <table class="qr-history-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 70px;">구분</th>
+                                        <th style="width: 90px;">유형</th>
+                                        <th>내용 / 제목</th>
+                                        <th style="width: 150px;">일시</th>
+                                        <th style="width: 140px;">동작</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="qr-history-tbody">
+                                    <tr><td colspan="5" class="qr-history-empty">이력이 없습니다.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </main>
 
         <!-- 콘솔 높이 드래그 조절 바 -->
@@ -2984,6 +3287,9 @@
     <script src="js/whisper.js"></script>
     <script src="js/ocr.js"></script>
     <script src="js/diff_checker.js"></script>
+    <script src="js/jsqr.min.js"></script>
+    <script src="js/qrcode.min.js"></script>
+    <script src="js/qr_toolkit.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

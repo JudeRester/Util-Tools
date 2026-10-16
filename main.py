@@ -38,6 +38,7 @@ import services.opencodex_service
 import services.whisper_service
 import services.ocr_service
 import services.diff_service
+import services.qr_service
 
 import socket
 import time

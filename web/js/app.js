@@ -203,6 +203,9 @@ function initTabOnDemand(tabName) {
         case 'diff':
             if (typeof initDiffChecker === 'function') initDiffChecker();
             break;
+        case 'qr':
+            if (typeof initQrToolkit === 'function') initQrToolkit();
+            break;
     }
 }
 
@@ -224,6 +227,10 @@ function teardownTab(tabName) {
     } else if (tabName === 'ocr') {
         if (typeof teardownOcrStudio === 'function') {
             teardownOcrStudio();
+        }
+    } else if (tabName === 'qr') {
+        if (typeof stopQrCamera === 'function') {
+            stopQrCamera();
         }
     }
 
@@ -277,7 +284,8 @@ function switchTab(targetTab) {
         slicer: { icon: '✂️', label: '이미지 슬라이서' },
         whisper: { icon: '🎙️', label: '음성 전사' },
         ocr: { icon: '📷', label: 'OCR 텍스트 추출' },
-        diff: { icon: '🔀', label: '텍스트 Diff 비교' }
+        diff: { icon: '🔀', label: '텍스트 Diff 비교' },
+        qr: { icon: '📱', label: 'QR 코드 도구' }
     };
 
     if (WORKSPACE_TABS[targetTab]) {
