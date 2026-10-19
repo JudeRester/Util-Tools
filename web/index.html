@@ -614,6 +614,9 @@
                             <button class="form-btn select-file-btn" onclick="importEmlFolder()" title="폴더 내 모든 EML 파일 일괄 가져오기">
                                 <span>📁</span> 폴더 일괄 등록
                             </button>
+                            <button class="form-btn select-file-btn" onclick="openImapSyncModal()" title="IMAP 메일 서버 연동 및 원본 다운로드 (단방향 보존 & AI 벡터 임베딩)">
+                                <span>📥</span> IMAP 연동
+                            </button>
                             <button id="email-thread-toggle-btn" class="form-btn email-thread-toggle active" onclick="toggleThreadView()" title="대화별 묶어보기 (스레드 뷰) / 개별 메일 목록 전환">
                                 <span>💬</span> <span id="email-thread-toggle-text">대화별 묶기</span>
                             </button>
@@ -3237,6 +3240,139 @@
             </div>
             <div class="modal-footer">
                 <button class="form-btn close-btn" onclick="closeSpeakerRenameModal()">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- IMAP 메일 계정 연동 및 원본 아카이브 모달 -->
+    <div id="imap-sync-modal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 620px; width: 94%;">
+            <div class="modal-header">
+                <h3>📥 IMAP 메일 계정 연동 & 원본 아카이브</h3>
+                <button class="modal-close-btn" onclick="closeImapSyncModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+                <!-- 단방향 영구 보존 안내 배너 -->
+                <div class="imap-guide-banner">
+                    <span class="guide-icon">🛡️</span>
+                    <div class="guide-text">
+                        <strong>단방향 누적 보관 (Append-Only Vault)</strong>
+                        <p>메일 서버에서 메일이 삭제되더라도 로컬 PC의 원본(.eml)과 DB는 절대 삭제되지 않고 영구 보존됩니다.</p>
+                    </div>
+                </div>
+
+                <!-- 서버 프리셋 선택 -->
+                <div class="imap-preset-group">
+                    <label class="form-label" style="margin-bottom: 4px;">메일 서비스 프리셋:</label>
+                    <div class="imap-preset-chips">
+                        <button type="button" class="imap-preset-chip" onclick="applyImapPreset('gmail')">Google Gmail</button>
+                        <button type="button" class="imap-preset-chip" onclick="applyImapPreset('naver')">네이버 메일</button>
+                        <button type="button" class="imap-preset-chip" onclick="applyImapPreset('daum')">다음 / 카카오</button>
+                        <button type="button" class="imap-preset-chip" onclick="applyImapPreset('outlook')">MS Outlook</button>
+                    </div>
+                </div>
+
+                <!-- 계정 및 서버 설정 폼 -->
+                <div class="imap-form-grid">
+                    <div class="form-row">
+                        <label class="form-label" for="imap-host">IMAP 호스트 주소:</label>
+                        <input type="text" id="imap-host" class="form-input" placeholder="imap.gmail.com">
+                    </div>
+                    <div class="form-row form-row-inline" style="display: flex; gap: 10px; align-items: flex-end;">
+                        <div style="flex: 1;">
+                            <label class="form-label" for="imap-port">포트:</label>
+                            <input type="number" id="imap-port" class="form-input" value="993">
+                        </div>
+                        <div style="padding-bottom: 8px;">
+                            <label><input type="checkbox" id="imap-ssl" checked> SSL 사용</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="imap-form-grid">
+                    <div class="form-row">
+                        <label class="form-label" for="imap-user">이메일 계정 (아이디):</label>
+                        <input type="text" id="imap-user" class="form-input" placeholder="user@gmail.com">
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label" for="imap-pass">비밀번호 (또는 앱 전용 비밀번호):</label>
+                        <input type="password" id="imap-pass" class="form-input" placeholder="••••••••••••••••">
+                    </div>
+                </div>
+
+                <div class="form-row form-row-inline" style="display: flex; gap: 10px; align-items: flex-end;">
+                    <div style="flex: 1;">
+                        <label class="form-label" for="imap-folder-select">대상 사서함 / 폴더:</label>
+                        <select id="imap-folder-select" class="form-select">
+                            <option value="INBOX" selected>INBOX (받은편지함)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button type="button" class="form-btn close-btn btn-sm" onclick="testImapConnectionUi(true)" title="서버 폴더 목록 새로고침">
+                            <span>📂</span> 폴더 조회
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 동기화 범위 및 옵션 -->
+                <div class="imap-options-box">
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 130px;">
+                            <label class="form-label" for="imap-since-days">수신 기간 범위:</label>
+                            <select id="imap-since-days" class="form-select">
+                                <option value="7">최근 7일</option>
+                                <option value="30" selected>최근 30일</option>
+                                <option value="90">최근 90일</option>
+                                <option value="0">전체 메일</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 130px;">
+                            <label class="form-label" for="imap-limit-count">최대 다운로드 수:</label>
+                            <select id="imap-limit-count" class="form-select">
+                                <option value="50">50건</option>
+                                <option value="100" selected>100건</option>
+                                <option value="300">300건</option>
+                                <option value="0">제한 없음</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <label class="imap-checkbox-label">
+                            <input type="checkbox" id="imap-auto-embed" checked>
+                            <span>🧠 다운로드 즉시 AI 신경망 벡터 DB(ai_embeddings) 자동 임베딩 생성 (Ctrl+K 시맨틱 검색 연동)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 실시간 진행률 영역 (동기화 중일 때 노출) -->
+                <div id="imap-progress-wrap" class="imap-progress-card" style="display: none;">
+                    <div class="imap-progress-header">
+                        <span id="imap-progress-status-text">메일 다운로드 대기 중...</span>
+                        <span id="imap-progress-percent">0%</span>
+                    </div>
+                    <div class="imap-progress-bar-bg">
+                        <div id="imap-progress-bar-fill" class="imap-progress-bar-fill" style="width: 0%;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                        <button type="button" class="mini-tool-btn" onclick="cancelImapSyncUi()">다운로드 중지</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="justify-content: space-between;">
+                <div style="display: flex; gap: 6px;">
+                    <button type="button" class="form-btn close-btn" onclick="testImapConnectionUi(false)">
+                        <span>🔍</span> 연결 테스트
+                    </button>
+                    <button type="button" class="form-btn close-btn" onclick="saveImapConfigUi()">
+                        <span>💾</span> 설정 저장
+                    </button>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <button type="button" id="imap-start-sync-btn" class="form-btn add-btn" onclick="startImapSyncUi()">
+                        <span>🚀</span> 메일 다운로드 시작
+                    </button>
+                    <button type="button" class="form-btn close-btn" onclick="closeImapSyncModal()">닫기</button>
+                </div>
             </div>
         </div>
     </div>

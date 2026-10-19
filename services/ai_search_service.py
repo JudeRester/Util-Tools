@@ -686,3 +686,73 @@ def warmup_ai_engine_async():
             pass
     threading.Thread(target=_warmup, daemon=True).start()
     return {"status": "started"}
+
+
+def embed_new_emails(email_items):
+    """신규 저장된 이메일 목록을 즉시 신경망 벡터로 변환하여 SQLite ai_embeddings에 영구 캐싱"""
+    if not email_items:
+        return 0
+
+    if not _init_ai_engine() or _onnx_session is None or _tokenizer is None:
+        _safe_log("[AI Engine] 임베딩 엔진 미초기화 상태로 신규 이메일 임베딩 연기됨")
+        return 0
+
+    try:
+        keys = []
+        hashes = []
+        texts = []
+
+        for em in email_items:
+            em_id = em.get("id")
+            if not em_id:
+                continue
+            key = f"emails_{em_id}"
+            subj = em.get("subject", "") or "(제목 없음)"
+            clean_sub = em.get("clean_subject", "") or subj
+            from_addr = em.get("from", "") or em.get("from_addr", "") or ""
+            to_addr = em.get("to", "") or em.get("to_addr", "") or ""
+            cat = em.get("category", "") or "기타"
+            snippet = em.get("snippet", "") or ""
+            body_text = em.get("body_text", "") or ""
+
+            full_text = f"{subj}\n{clean_sub}\n{from_addr}\n{to_addr}\n{cat}\n{snippet}\n{body_text[:400]}"
+            thash = _compute_text_hash(full_text)
+
+            # 이미 동일한 해시가 캐시되어 있으면 스킵
+            if key in _vector_db_cache and _vector_db_cache[key].get("hash") == thash:
+                continue
+
+            keys.append(key)
+            hashes.append(thash)
+            texts.append(full_text)
+
+        if not texts:
+            return 0
+
+        # 미니배치 분할 추론
+        embs = _get_neural_embeddings(texts, is_query=False, batch_size=16)
+        if embs is None or len(embs) == 0:
+            return 0
+
+        now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+        db_records = []
+        with _engine_lock:
+            for idx, key in enumerate(keys):
+                vec = embs[idx]
+                thash = hashes[idx]
+                _vector_db_cache[key] = {
+                    "hash": thash,
+                    "embedding": vec,
+                    "updated_at": now_str
+                }
+                db_records.append((key, thash, vec))
+
+        if db_records:
+            _save_disk_cache(db_records)
+            _safe_log(f"[AI Engine] 신규 이메일 {len(db_records)}건 벡터 DB(ai_embeddings) 즉시 임베딩 완료")
+
+        return len(db_records)
+    except Exception as e:
+        _safe_log(f"[AI Engine] 신규 이메일 임베딩 중 오류 발생: {e}")
+        return 0
+

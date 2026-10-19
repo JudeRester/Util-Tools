@@ -832,6 +832,23 @@ def init_db():
                 """)
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_qr_history_created ON qr_history(created_at DESC);")
 
+                # 20. imap_accounts 테이블 (IMAP 계정 설정 및 동기화 상태 관리)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS imap_accounts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        account_name TEXT NOT NULL,
+                        host TEXT NOT NULL,
+                        port INTEGER DEFAULT 993,
+                        use_ssl INTEGER DEFAULT 1,
+                        username TEXT NOT NULL,
+                        password TEXT NOT NULL,
+                        folder TEXT DEFAULT 'INBOX',
+                        last_sync_at TEXT,
+                        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+                        updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+                    );
+                """)
+
                 # 비정상 종료 등으로 진행 중 상태에 머물러 있는 오래된 작업 복구 (Stale Run Recovery)
                 conn.execute("""
                     UPDATE transcription_runs
