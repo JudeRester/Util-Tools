@@ -31,6 +31,67 @@ _is_sync_running = False
 _sync_cancel_requested = False
 
 
+import re
+
+
+def _normalize_imap_credentials(host: str, username: str, password: str):
+    """
+    IMAP 접속 계정 및 비밀번호 정규화
+    - 앞뒤 공백/줄바꿈 제거
+    - Google 앱 비밀번호(xxxx xxxx xxxx xxxx) 복사 시 포함되는 내부 공백 자동 제거
+    - Gmail/Naver/Daum 아이디만 입력한 경우 기본 도메인 보정
+    """
+    host_clean = (host or "").strip()
+    user_clean = (username or "").strip()
+    pwd_clean = (password or "").strip()
+
+    host_lower = host_clean.lower()
+
+    # Google 앱 비밀번호(4자리x4블록 공백 포함) 또는 Gmail 호스트인 경우 공백 제거
+    if "gmail.com" in host_lower or "googlemail.com" in host_lower:
+        pwd_clean = re.sub(r"\s+", "", pwd_clean)
+        if user_clean and "@" not in user_clean:
+            user_clean = f"{user_clean}@gmail.com"
+    elif re.match(r"^[A-Za-z0-9]{4}(\s+[A-Za-z0-9]{4}){3}$", pwd_clean):
+        pwd_clean = re.sub(r"\s+", "", pwd_clean)
+
+    if "naver.com" in host_lower and user_clean and "@" not in user_clean:
+        user_clean = f"{user_clean}@naver.com"
+    elif "daum.net" in host_lower and user_clean and "@" not in user_clean:
+        user_clean = f"{user_clean}@daum.net"
+
+    return host_clean, user_clean, pwd_clean
+
+
+def _format_imap_error(err: Exception, host: str = "") -> str:
+    """imaplib 바이트 에러 메시지를 가독성 높은 한국어 원인 안내로 변환"""
+    raw = str(err)
+    if hasattr(err, "args") and err.args:
+        first_arg = err.args[0]
+        if isinstance(first_arg, bytes):
+            raw = first_arg.decode("utf-8", errors="replace")
+        else:
+            raw = str(first_arg)
+
+    raw_upper = raw.upper()
+    if "APPLICATION-SPECIFIC PASSWORD REQUIRED" in raw_upper or "185833" in raw_upper:
+        return (
+            "Google 계정은 일반 비밀번호 대신 16자리 '앱 비밀번호'가 필요합니다. "
+            "(Google 계정 관리 → 보안 → 2단계 인증 활성화 → '앱 비밀번호'에서 생성 후 입력)"
+        )
+    if "AUTHENTICATIONFAILED" in raw_upper or "INVALID CREDENTIALS" in raw_upper:
+        if "gmail" in (host or "").lower():
+            return (
+                "인증 실패(Invalid credentials): 이메일 주소(전체 주소) 또는 16자리 Google 앱 비밀번호가 정확한지 확인해 주세요. "
+                "(일반 계정 비밀번호는 사용할 수 없으며, Gmail 설정에서 IMAP이 활성화되어 있어야 합니다.)"
+            )
+        return (
+            "인증 실패(Invalid credentials): 아이디/비밀번호가 일치하지 않거나, "
+            "웹메일 환경설정에서 'IMAP/SMTP 사용'이 비활성화되어 있거나, 2단계 인증용 앱 비밀번호가 필요합니다."
+        )
+    return raw
+
+
 def _connect_imap(host: str, port: int, use_ssl: bool, timeout: int = 15):
     """IMAP 연결 인스턴스 생성"""
     if use_ssl:
@@ -44,8 +105,7 @@ def _connect_imap(host: str, port: int, use_ssl: bool, timeout: int = 15):
 def test_imap_connection(host: str, port: int, use_ssl: bool, username: str, password: str) -> Dict[str, Any]:
     """IMAP 서버 연결 및 인증 테스트, 사서함 목록 조회"""
     try:
-        host = (host or "").strip()
-        username = (username or "").strip()
+        host, username, password = _normalize_imap_credentials(host, username, password)
         port = int(port or 993)
 
         if not host or not username or not password:
@@ -83,8 +143,9 @@ def test_imap_connection(host: str, port: int, use_ssl: bool, username: str, pas
                 client.logout()
             except Exception:
                 pass
-            log_event("warn", "IMAP", f"로그인 실패: {auth_err}")
-            return {"status": "error", "message": f"인증 실패: {str(auth_err)}"}
+            friendly_msg = _format_imap_error(auth_err, host)
+            log_event("warn", "IMAP", f"로그인 실패: {friendly_msg} (원본: {auth_err})")
+            return {"status": "error", "message": friendly_msg}
     except Exception as conn_err:
         log_event("error", "IMAP", f"서버 연결 실패: {conn_err}")
         return {"status": "error", "message": f"서버 연결 실패: {str(conn_err)}"}
@@ -140,9 +201,11 @@ def get_imap_config() -> Dict[str, Any]:
 def save_imap_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """IMAP 계정 설정 SQLite DB 저장"""
     try:
-        host = (config.get("host") or "").strip()
-        username = (config.get("username") or "").strip()
-        password = config.get("password") or ""
+        host, username, password = _normalize_imap_credentials(
+            config.get("host") or "",
+            config.get("username") or "",
+            config.get("password") or ""
+        )
         port = int(config.get("port") or 993)
         use_ssl = 1 if config.get("use_ssl", True) else 0
         folder = (config.get("folder") or "INBOX").strip()
@@ -238,6 +301,8 @@ def _run_imap_sync_worker(options: Dict[str, Any]):
             port = port or cfg.get("port", 993)
             use_ssl = use_ssl if "use_ssl" in options else cfg.get("use_ssl", True)
             folder = folder or cfg.get("folder", "INBOX")
+
+    host, username, password = _normalize_imap_credentials(host or "", username or "", password or "")
 
     if not (host and username and password):
         _is_sync_running = False
@@ -431,8 +496,9 @@ def _run_imap_sync_worker(options: Dict[str, Any]):
         })
 
     except Exception as e:
-        log_event("error", "IMAP", f"메일 동기화 중 에러: {e}")
-        _notify_sync_error(str(e))
+        friendly_msg = _format_imap_error(e, host)
+        log_event("error", "IMAP", f"메일 동기화 중 에러: {friendly_msg} (원본: {e})")
+        _notify_sync_error(friendly_msg)
     finally:
         _is_sync_running = False
         if client:

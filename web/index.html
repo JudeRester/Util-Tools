@@ -3291,13 +3291,19 @@
 
                 <div class="imap-form-grid">
                     <div class="form-row">
-                        <label class="form-label" for="imap-user">이메일 계정 (아이디):</label>
+                        <label class="form-label" for="imap-user">이메일 계정 (전체 이메일 주소):</label>
                         <input type="text" id="imap-user" class="form-input" placeholder="user@gmail.com">
                     </div>
                     <div class="form-row">
-                        <label class="form-label" for="imap-pass">비밀번호 (또는 앱 전용 비밀번호):</label>
-                        <input type="password" id="imap-pass" class="form-input" placeholder="••••••••••••••••">
+                        <label class="form-label" for="imap-pass">비밀번호 (또는 16자리 앱 비밀번호):</label>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <input type="password" id="imap-pass" class="form-input" placeholder="앱 비밀번호 입력 (공백 자동 제거)" style="flex: 1;">
+                            <button type="button" class="mini-tool-btn" onclick="toggleImapPasswordVisibility()" title="비밀번호 표시/숨기기" style="height: 36px; padding: 0 10px;">👁️</button>
+                        </div>
                     </div>
+                </div>
+                <div style="font-size: 0.76rem; color: var(--text-muted); background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; line-height: 1.45;">
+                    💡 <strong>인증 안내</strong>: <strong>Gmail</strong>은 일반 비밀번호 대신 <span style="color: var(--primary-color);">Google 계정 → 보안 → 2단계 인증 → 앱 비밀번호(16자리)</span>를 발급받아 입력해야 합니다. <strong>네이버/다음</strong>은 메일함 환경설정의 <span style="color: var(--primary-color);">POP3/IMAP 설정에서 'IMAP/SMTP 사용'을 '사용함'</span>으로 활성화해야 합니다.
                 </div>
 
                 <div class="form-row form-row-inline" style="display: flex; gap: 10px; align-items: flex-end;">

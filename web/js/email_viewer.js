@@ -1509,13 +1509,19 @@ function applyImapPreset(service) {
     }
 }
 
+function toggleImapPasswordVisibility() {
+    const passInput = document.getElementById("imap-pass");
+    if (!passInput) return;
+    passInput.type = (passInput.type === "password") ? "text" : "password";
+}
+
 function getImapFormInputs() {
     return {
         host: (document.getElementById("imap-host")?.value || "").trim(),
         port: parseInt(document.getElementById("imap-port")?.value || "993", 10),
         use_ssl: document.getElementById("imap-ssl")?.checked ?? true,
         username: (document.getElementById("imap-user")?.value || "").trim(),
-        password: document.getElementById("imap-pass")?.value || "",
+        password: (document.getElementById("imap-pass")?.value || "").trim(),
         folder: document.getElementById("imap-folder-select")?.value || "INBOX"
     };
 }

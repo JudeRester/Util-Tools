@@ -19,7 +19,9 @@ from services.db_service import init_db, get_db_connection
 from services.imap_service import (
     get_imap_config,
     save_imap_config,
-    test_imap_connection
+    test_imap_connection,
+    _normalize_imap_credentials,
+    _format_imap_error
 )
 from services.ai_search_service import embed_new_emails
 
@@ -66,12 +68,25 @@ def test_imap_config_crud():
 
 def test_imap_connection_validation():
     print("[RUN] test_imap_connection_validation...")
-    # 빈 파라미터 유효성 검증
+    # 1. Google 앱 비밀번호(4x4 공백 포함) 및 아이디 정규화 검증
+    h, u, p = _normalize_imap_credentials(" imap.gmail.com ", "myuser", " abcd efgh ijkl mnop ")
+    assert h == "imap.gmail.com"
+    assert u == "myuser@gmail.com"
+    assert p == "abcdefghijklmnop"
+
+    # 2. 에러 메시지 한국어 안내 포매팅 검증
+    msg1 = _format_imap_error(Exception(b"[ALERT] Application-specific password required: https://support.google.com/accounts/answer/185833 (Failure)"), "imap.gmail.com")
+    assert "앱 비밀번호" in msg1
+
+    msg2 = _format_imap_error(Exception(b"[AUTHENTICATIONFAILED] Invalid credentials (Failure)"), "imap.gmail.com")
+    assert "Invalid credentials" in msg2
+
+    # 3. 빈 파라미터 유효성 검증
     res_empty = test_imap_connection("", 993, True, "", "")
     assert res_empty["status"] == "error"
     assert "모두 입력" in res_empty["message"]
 
-    # 잘못된 호스트 연결 실패 검증 (타임아웃 핸들링)
+    # 4. 잘못된 호스트 연결 실패 검증 (타임아웃 핸들링)
     res_invalid = test_imap_connection("invalid.host.nonexistent.local", 993, True, "user", "pass")
     assert res_invalid["status"] == "error"
 
