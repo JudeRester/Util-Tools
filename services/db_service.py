@@ -832,6 +832,17 @@ def init_db():
                 """)
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_qr_history_created ON qr_history(created_at DESC);")
 
+                # 20. calendar_events_cache 테이블 (캘린더 구독별 일정 스냅샷 로컬 캐시)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS calendar_events_cache (
+                        calendar_id TEXT PRIMARY KEY,
+                        calendar_name TEXT DEFAULT '',
+                        calendar_url TEXT DEFAULT '',
+                        events_json TEXT DEFAULT '[]',
+                        updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+                    );
+                """)
+
                 # 비정상 종료 등으로 진행 중 상태에 머물러 있는 오래된 작업 복구 (Stale Run Recovery)
                 conn.execute("""
                     UPDATE transcription_runs
@@ -927,4 +938,90 @@ def mark_calendar_reminder_notified(event_uid):
         return True
     finally:
         conn.close()
+
+
+def save_calendar_cache(calendar_id, calendar_name, calendar_url, events_list):
+    """캘린더 구독별 파싱된 일정 목록을 SQLite 캐시 테이블에 저장 (UPSERT)"""
+    conn = get_db_connection()
+    try:
+        events_json = json.dumps(events_list or [], ensure_ascii=False)
+        with conn:
+            conn.execute("""
+                INSERT INTO calendar_events_cache (calendar_id, calendar_name, calendar_url, events_json, updated_at)
+                VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
+                ON CONFLICT(calendar_id) DO UPDATE SET
+                    calendar_name = excluded.calendar_name,
+                    calendar_url = excluded.calendar_url,
+                    events_json = excluded.events_json,
+                    updated_at = datetime('now', 'localtime')
+            """, (str(calendar_id), calendar_name or "", calendar_url or "", events_json))
+        return True
+    finally:
+        conn.close()
+
+
+def get_calendar_cache(calendar_id=None):
+    """저장된 캘린더 일정 로컬 캐시 조회 (단일 ID 또는 전체 맵 반환)"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        if calendar_id is not None:
+            cur.execute("""
+                SELECT calendar_id, calendar_name, calendar_url, events_json, updated_at
+                FROM calendar_events_cache
+                WHERE calendar_id = ?
+            """, (str(calendar_id),))
+            row = cur.fetchone()
+            if not row:
+                return None
+            try:
+                events = json.loads(row["events_json"] or "[]")
+            except Exception:
+                events = []
+            return {
+                "calendar_id": row["calendar_id"],
+                "calendar_name": row["calendar_name"],
+                "calendar_url": row["calendar_url"],
+                "events": events,
+                "updated_at": row["updated_at"]
+            }
+        else:
+            cur.execute("""
+                SELECT calendar_id, calendar_name, calendar_url, events_json, updated_at
+                FROM calendar_events_cache
+            """)
+            rows = cur.fetchall()
+            result = {}
+            for row in rows:
+                try:
+                    events = json.loads(row["events_json"] or "[]")
+                except Exception:
+                    events = []
+                result[row["calendar_id"]] = {
+                    "calendar_id": row["calendar_id"],
+                    "calendar_name": row["calendar_name"],
+                    "calendar_url": row["calendar_url"],
+                    "events": events,
+                    "updated_at": row["updated_at"]
+                }
+            return result
+    finally:
+        conn.close()
+
+
+def prune_calendar_cache(valid_calendar_ids):
+    """구독 해제된 캘린더의 오래된 캐시 레코드 정리"""
+    conn = get_db_connection()
+    try:
+        valid_ids = [str(cid) for cid in (valid_calendar_ids or []) if cid is not None]
+        with conn:
+            if not valid_ids:
+                conn.execute("DELETE FROM calendar_events_cache")
+            else:
+                placeholders = ",".join("?" for _ in valid_ids)
+                conn.execute(f"DELETE FROM calendar_events_cache WHERE calendar_id NOT IN ({placeholders})", valid_ids)
+        return True
+    finally:
+        conn.close()
+
 

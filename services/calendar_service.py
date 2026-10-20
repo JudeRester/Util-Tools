@@ -227,32 +227,129 @@ def get_calendar_config():
         return {"status": "error", "message": str(e), "data": DEFAULT_CONFIG}
 
 
+def _get_calendar_cache_key(cal_item):
+    """캘린더 설정 항목의 고유 캐시 키 반환"""
+    raw_url = (cal_item.get("url") or "").strip()
+    norm_url = normalize_calendar_url(raw_url)
+    cal_id = str(cal_item.get("id") or "").strip()
+    return cal_id if cal_id else norm_url
+
+
+def _merge_reminders_and_sort(events):
+    """일정 목록을 시작일시 순으로 정렬하고 SQLite 알림 설정 정보를 병합"""
+    events.sort(key=lambda x: (x.get("startDate", ""), x.get("startTime") or "00:00"))
+    try:
+        reminders = db_service.get_calendar_reminders()
+        reminder_map = {r["event_uid"]: r for r in reminders}
+        for e in events:
+            uid = e.get("uid")
+            r = reminder_map.get(uid)
+            if r and r.get("is_enabled"):
+                e["reminderMinutes"] = r.get("reminder_minutes", 10)
+                e["hasReminder"] = True
+                e["isNotified"] = bool(r.get("is_notified"))
+            else:
+                e["reminderMinutes"] = None
+                e["hasReminder"] = False
+                e["isNotified"] = False
+    except Exception as rem_ex:
+        core.logger.log_warn("Calendar", f"알림 정보 병합 실패: {rem_ex}")
+    return events
+
+
 @eel.expose
 def save_calendar_config(config):
     """캘린더 설정 저장하기 (로컬 calendar_config.json)"""
     try:
-        # 저장 시 모든 url 정규화
+        # 저장 시 모든 url 정규화 및 삭제된 캘린더 캐시 정리
+        valid_ids = []
         if "ics_urls" in config:
             for item in config["ics_urls"]:
                 item["url"] = normalize_calendar_url(item.get("url", ""))
+                cache_key = _get_calendar_cache_key(item)
+                if cache_key:
+                    valid_ids.append(cache_key)
 
         with open(CALENDAR_CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
+
+        try:
+            db_service.prune_calendar_cache(valid_ids)
+        except Exception:
+            pass
+
         return {"status": "success", "message": "캘린더 설정이 저장되었습니다."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 
 @eel.expose
-def fetch_calendar_events(force_refresh=False):
-    """구독된 모든 iCal URL에서 일정을 가져와 합산 반환"""
+def get_cached_calendar_events():
+    """SQLite 로컬 캐시에 저장된 캘린더 일정을 즉시 반환 (네트워크 대기 없음)"""
     try:
         cfg_res = get_calendar_config()
         config = cfg_res.get("data", DEFAULT_CONFIG)
         ics_urls = config.get("ics_urls", [])
 
         if not ics_urls:
+            return {"status": "success", "events": [], "count": 0, "lastUpdated": None, "fromCache": True}
+
+        cache_map = db_service.get_calendar_cache() or {}
+        all_events = []
+        latest_updated_at = None
+
+        for cal in ics_urls:
+            raw_url = cal.get("url", "").strip()
+            if not raw_url:
+                continue
+            cache_key = _get_calendar_cache_key(cal)
+            cached_entry = cache_map.get(cache_key)
+            if not cached_entry:
+                continue
+
+            cal_name = cal.get("name") or cached_entry.get("calendar_name") or "캘린더"
+            cal_color = cal.get("color", "#6366f1")
+            updated_at = cached_entry.get("updated_at")
+            if updated_at and (not latest_updated_at or updated_at > latest_updated_at):
+                latest_updated_at = updated_at
+
+            for ev in cached_entry.get("events", []):
+                ev_copy = dict(ev)
+                ev_copy["calendarName"] = cal_name
+                ev_copy["color"] = cal_color
+                all_events.append(ev_copy)
+
+        _merge_reminders_and_sort(all_events)
+
+        return {
+            "status": "success",
+            "events": all_events,
+            "count": len(all_events),
+            "lastUpdated": latest_updated_at,
+            "fromCache": True
+        }
+    except Exception as e:
+        core.logger.log_warn("Calendar", f"로컬 캐시 일정 조회 실패: {e}")
+        return {"status": "error", "message": str(e), "events": [], "fromCache": True}
+
+
+@eel.expose
+def fetch_calendar_events(force_refresh=False):
+    """구독된 모든 iCal URL에서 일정을 가져와 합산 반환 (성공 시 로컬 캐시 갱신, 실패 시 캐시 폴백)"""
+    try:
+        cfg_res = get_calendar_config()
+        config = cfg_res.get("data", DEFAULT_CONFIG)
+        ics_urls = config.get("ics_urls", [])
+
+        if not ics_urls:
+            db_service.prune_calendar_cache([])
             return {"status": "success", "events": [], "count": 0}
+
+        valid_cache_keys = [_get_calendar_cache_key(c) for c in ics_urls if c.get("url", "").strip()]
+        try:
+            db_service.prune_calendar_cache(valid_cache_keys)
+        except Exception:
+            pass
 
         all_events = []
         errors = []
@@ -268,6 +365,7 @@ def fetch_calendar_events(force_refresh=False):
                 continue
 
             url = normalize_calendar_url(raw_url)
+            cache_key = _get_calendar_cache_key(cal)
 
             try:
                 req = urllib.request.Request(url, headers=headers)
@@ -275,29 +373,32 @@ def fetch_calendar_events(force_refresh=False):
                     ics_data = response.read().decode('utf-8', errors='ignore')
                     cal_events = parse_ics_content(ics_data, cal)
                     all_events.extend(cal_events)
+                    try:
+                        db_service.save_calendar_cache(cache_key, name, url, cal_events)
+                    except Exception as cache_ex:
+                        core.logger.log_warn("Calendar", f"[{name}] 캐시 저장 실패: {cache_ex}")
             except Exception as ex:
-                errors.append(f"[{name}] 동기화 실패: {str(ex)}")
+                # 네트워크 실패 시 SQLite 로컬 캐시 폴백
+                cached_entry = None
+                try:
+                    cached_entry = db_service.get_calendar_cache(cache_key)
+                except Exception:
+                    pass
 
-        # 시작 날짜 및 시간순 정렬
-        all_events.sort(key=lambda x: (x.get("startDate", ""), x.get("startTime") or "00:00"))
-
-        # DB에 저장된 개별 일정 알림 정보 조회 및 이벤트 객체에 병합
-        try:
-            reminders = db_service.get_calendar_reminders()
-            reminder_map = {r["event_uid"]: r for r in reminders}
-            for e in all_events:
-                uid = e.get("uid")
-                r = reminder_map.get(uid)
-                if r and r.get("is_enabled"):
-                    e["reminderMinutes"] = r.get("reminder_minutes", 10)
-                    e["hasReminder"] = True
-                    e["isNotified"] = bool(r.get("is_notified"))
+                if cached_entry and cached_entry.get("events"):
+                    cal_color = cal.get("color", "#6366f1")
+                    fallback_events = []
+                    for ev in cached_entry["events"]:
+                        ev_copy = dict(ev)
+                        ev_copy["calendarName"] = name
+                        ev_copy["color"] = cal_color
+                        fallback_events.append(ev_copy)
+                    all_events.extend(fallback_events)
+                    errors.append(f"[{name}] 동기화 실패 (로컬 캐시 {len(fallback_events)}개 유지): {str(ex)}")
                 else:
-                    e["reminderMinutes"] = None
-                    e["hasReminder"] = False
-                    e["isNotified"] = False
-        except Exception as rem_ex:
-            core.logger.log_warn("Calendar", f"알림 정보 병합 실패: {rem_ex}")
+                    errors.append(f"[{name}] 동기화 실패: {str(ex)}")
+
+        _merge_reminders_and_sort(all_events)
 
         if errors:
             core.logger.log_warn("Calendar", f"일부 캘린더 동기화 실패 ({len(errors)}건)", details="\n".join(errors))
