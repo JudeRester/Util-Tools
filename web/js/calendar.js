@@ -2,11 +2,19 @@
  * 구글 캘린더 및 iCal 일정 동기화 / 월간 달력 모듈
  */
 
+// 로컬 타임존(KST 등) 기준 YYYY-MM-DD 날짜 문자열 반환 헬퍼
+function getLocalDateStr(date = new Date()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
 let calendarEvents = [];
 let calendarConfig = { ics_urls: [] };
 let currentCalendarYear = new Date().getFullYear();
 let currentCalendarMonth = new Date().getMonth(); // 0-indexed (0: 1월, 11: 12월)
-let selectedDateStr = new Date().toISOString().slice(0, 10);
+let selectedDateStr = getLocalDateStr();
 let editingCalendarUrlId = null;
 let midnightTimer = null;
 let periodicSyncInterval = null;
@@ -193,7 +201,7 @@ function scheduleNextMidnightSync() {
     const msUntilMidnight = nextMidnight.getTime() - now.getTime();
 
     midnightTimer = setTimeout(async () => {
-        const todayStr = new Date().toISOString().slice(0, 10);
+        const todayStr = getLocalDateStr();
         logToConsole('자정 배치 동기화', `${todayStr} 자정 자동 일정 동기화 및 오늘 날짜 갱신 완료.`);
 
         // 자정이 지나 날짜가 바뀌었으므로 달력과 일정 화면 자동 갱신
@@ -381,7 +389,7 @@ function renderCalendarMonthGrid() {
     const lastDate = new Date(currentCalendarYear, currentCalendarMonth + 1, 0).getDate();
     const prevMonthLastDate = new Date(currentCalendarYear, currentCalendarMonth, 0).getDate();
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getLocalDateStr();
     let html = '';
 
     // 1) 이전 달 날짜들 (비활성 셀)
@@ -558,7 +566,7 @@ function goToCalendarToday() {
     const today = new Date();
     currentCalendarYear = today.getFullYear();
     currentCalendarMonth = today.getMonth();
-    selectedDateStr = today.toISOString().slice(0, 10);
+    selectedDateStr = getLocalDateStr(today);
     renderCalendarUI();
 }
 

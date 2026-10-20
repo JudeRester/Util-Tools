@@ -572,7 +572,8 @@ function renderIssueCards(issues) {
         return;
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const nowLocal = new Date();
+    const todayStr = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, '0')}-${String(nowLocal.getDate()).padStart(2, '0')}`;
 
     container.innerHTML = issues.map(iss => {
         const isSelected = (iss.id === redmineState.selectedIssueId);
