@@ -19,6 +19,9 @@ let editingCalendarUrlId = null;
 let midnightTimer = null;
 let periodicSyncInterval = null;
 
+const CALENDAR_CACHE_EVENTS_KEY = 'cached_calendar_events';
+const CALENDAR_CACHE_TIME_KEY = 'cached_calendar_sync_time';
+
 const DEFAULT_CALENDAR_CONFIG_FALLBACK = {
     "ics_urls": [
         {
@@ -31,11 +34,12 @@ const DEFAULT_CALENDAR_CONFIG_FALLBACK = {
     "auto_refresh_minutes": 30
 };
 
-// 1. 초기 로드
+// 1. 초기 로드 (Stale-While-Revalidate: 로컬 캐시 선 렌더링 후 백그라운드 동기화)
 async function initCalendar() {
     initCalendarYearMonthSelect();
     initCalendarResizer();
     await loadCalendarConfig();
+    await loadCachedCalendarEvents();
     renderCalendarUI();
     
     // 백그라운드 최초 1회 일정 동기화 실행
@@ -236,11 +240,74 @@ async function loadCalendarConfig() {
     }
 }
 
+// 로컬 캐시(localStorage + SQLite)에서 기존 동기화 일정을 즉시 복원
+async function loadCachedCalendarEvents() {
+    const syncStatusEl = document.getElementById('calendar-sync-time');
+
+    // 1) localStorage 스냅샷 즉시 복원 (0ms 렌더링용)
+    try {
+        const rawEvents = localStorage.getItem(CALENDAR_CACHE_EVENTS_KEY);
+        const cachedTime = localStorage.getItem(CALENDAR_CACHE_TIME_KEY);
+        if (rawEvents) {
+            const parsed = JSON.parse(rawEvents);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                const activeNames = new Set((calendarConfig.ics_urls || []).map(u => u.name || '캘린더'));
+                calendarEvents = activeNames.size > 0
+                    ? parsed.filter(e => activeNames.has(e.calendarName || '캘린더'))
+                    : parsed;
+                if (syncStatusEl && calendarEvents.length > 0) {
+                    const shortTime = cachedTime ? cachedTime.slice(11) : '이전 기록';
+                    syncStatusEl.textContent = `캐시 표시 중: ${shortTime} (${calendarEvents.length}개)`;
+                    syncStatusEl.className = 'cal-sync-status';
+                }
+                renderCalendarUI();
+            }
+        }
+    } catch (e) {
+        console.warn("로컬스토리지 캘린더 캐시 복원 실패:", e);
+    }
+
+    // 2) 백엔드 SQLite 캐시 조회 (알림 상태 및 최신 설정 색상/이름 반영)
+    try {
+        if (window.eel && typeof eel.get_cached_calendar_events === 'function') {
+            const res = await eel.get_cached_calendar_events()();
+            if (res && res.status === 'success' && Array.isArray(res.events) && res.events.length > 0) {
+                calendarEvents = res.events;
+                saveCachedCalendarEvents(calendarEvents, res.lastUpdated);
+                if (syncStatusEl) {
+                    const shortTime = res.lastUpdated ? res.lastUpdated.slice(11) : '이전 기록';
+                    syncStatusEl.textContent = `캐시 표시 중: ${shortTime} (${calendarEvents.length}개)`;
+                    syncStatusEl.className = 'cal-sync-status';
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("SQLite 캘린더 캐시 조회 실패:", e);
+    }
+}
+
+function saveCachedCalendarEvents(events, lastUpdated = null) {
+    try {
+        if (Array.isArray(events)) {
+            localStorage.setItem(CALENDAR_CACHE_EVENTS_KEY, JSON.stringify(events));
+        }
+        if (lastUpdated) {
+            localStorage.setItem(CALENDAR_CACHE_TIME_KEY, lastUpdated);
+        }
+    } catch (e) {
+        console.warn("캘린더 캐시 저장 실패:", e);
+    }
+}
+
 // 캘린더 일정 동기화 (iCal fetch)
 async function syncCalendarEvents(force = false) {
     const syncStatusEl = document.getElementById('calendar-sync-time');
     if (syncStatusEl) {
-        syncStatusEl.textContent = '⏳ 일정 동기화 중...';
+        if (calendarEvents.length > 0) {
+            syncStatusEl.textContent = `⏳ 일정 동기화 중... (캐시 ${calendarEvents.length}개 표시 중)`;
+        } else {
+            syncStatusEl.textContent = '⏳ 일정 동기화 중...';
+        }
         syncStatusEl.className = 'cal-sync-status syncing';
     }
 
@@ -253,9 +320,12 @@ async function syncCalendarEvents(force = false) {
             const res = await eel.fetch_calendar_events(force)();
             if (res.status === 'success' || res.status === 'partial') {
                 calendarEvents = res.events || [];
+                saveCachedCalendarEvents(calendarEvents, res.lastUpdated);
                 const updatedTime = res.lastUpdated ? res.lastUpdated.slice(11) : '완료';
                 if (syncStatusEl) {
-                    syncStatusEl.textContent = `동기화: ${updatedTime} (${calendarEvents.length}개)`;
+                    syncStatusEl.textContent = res.status === 'partial'
+                        ? `동기화(일부 캐시): ${updatedTime} (${calendarEvents.length}개)`
+                        : `동기화: ${updatedTime} (${calendarEvents.length}개)`;
                     syncStatusEl.className = 'cal-sync-status';
                 }
 
@@ -274,7 +344,9 @@ async function syncCalendarEvents(force = false) {
                 });
             } else {
                 if (syncStatusEl) {
-                    syncStatusEl.textContent = '⚠️ 동기화 실패';
+                    syncStatusEl.textContent = calendarEvents.length > 0
+                        ? `⚠️ 동기화 실패 (캐시 ${calendarEvents.length}개 유지)`
+                        : '⚠️ 동기화 실패';
                     syncStatusEl.className = 'cal-sync-status error';
                 }
                 logToConsole('캘린더 동기화 오류', res.message || '일정을 가져오지 못했습니다.');
@@ -292,7 +364,9 @@ async function syncCalendarEvents(force = false) {
     } catch (err) {
         console.error("일정 동기화 오류:", err);
         if (syncStatusEl) {
-            syncStatusEl.textContent = '⚠️ 연결 실패';
+            syncStatusEl.textContent = calendarEvents.length > 0
+                ? `⚠️ 연결 실패 (캐시 ${calendarEvents.length}개 유지)`
+                : '⚠️ 연결 실패';
             syncStatusEl.className = 'cal-sync-status error';
         }
         logToConsole('캘린더 통신 예외 발생', err.message || String(err));
@@ -770,6 +844,7 @@ async function saveCalendarManageChanges() {
         calendarConfig = JSON.parse(JSON.stringify(draftCalendarConfig));
     }
     await saveCalendarConfigLocally();
+    await loadCachedCalendarEvents();
     syncCalendarEvents(true);
     closeCalendarModal();
 
@@ -879,6 +954,7 @@ async function selectCalendarReminderOption(uid, minutes) {
         // 알림 해제
         targetEvent.hasReminder = false;
         targetEvent.reminderMinutes = null;
+        saveCachedCalendarEvents(calendarEvents);
         renderCalendarUI();
 
         try {
@@ -895,6 +971,7 @@ async function selectCalendarReminderOption(uid, minutes) {
         // 알림 등록 / 시간 변경
         targetEvent.hasReminder = true;
         targetEvent.reminderMinutes = minutes;
+        saveCachedCalendarEvents(calendarEvents);
         renderCalendarUI();
 
         const startDt = `${targetEvent.startDate} ${targetEvent.startTime || '00:00'}`;
