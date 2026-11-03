@@ -3246,12 +3246,12 @@
 
     <!-- IMAP 메일 계정 연동 및 원본 아카이브 모달 -->
     <div id="imap-sync-modal" class="modal-overlay">
-        <div class="modal-card" style="max-width: 620px; width: 94%;">
+        <div class="modal-card" style="max-width: 680px; width: 95%;">
             <div class="modal-header">
                 <h3>📥 IMAP 메일 계정 연동 & 원본 아카이브</h3>
                 <button class="modal-close-btn" onclick="closeImapSyncModal()">&times;</button>
             </div>
-            <div class="modal-body" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px;">
+            <div class="modal-body" style="padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; overflow-x: hidden;">
                 <!-- 단방향 영구 보존 안내 배너 -->
                 <div class="imap-guide-banner">
                     <span class="guide-icon">🛡️</span>
@@ -3278,13 +3278,13 @@
                         <label class="form-label" for="imap-host">IMAP 호스트 주소:</label>
                         <input type="text" id="imap-host" class="form-input" placeholder="imap.gmail.com">
                     </div>
-                    <div class="form-row form-row-inline" style="display: flex; gap: 10px; align-items: flex-end;">
-                        <div style="flex: 1;">
+                    <div class="form-row form-row-inline" style="display: flex; gap: 12px; align-items: flex-end;">
+                        <div style="flex: 1; display: flex; flex-direction: column; gap: 5px;">
                             <label class="form-label" for="imap-port">포트:</label>
                             <input type="number" id="imap-port" class="form-input" value="993">
                         </div>
-                        <div style="padding-bottom: 8px;">
-                            <label><input type="checkbox" id="imap-ssl" checked> SSL 사용</label>
+                        <div style="padding-bottom: 8px; white-space: nowrap;">
+                            <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" id="imap-ssl" checked> SSL 사용</label>
                         </div>
                     </div>
                 </div>
@@ -3301,7 +3301,7 @@
                                 🔑 일반 / 앱 비밀번호
                             </button>
                             <button type="button" id="imap-auth-tab-oauth2" class="imap-auth-toggle-btn" onclick="setImapAuthType('oauth2_google')">
-                                🔐 Google OAuth 2.0 (Client ID)
+                                🔐 Google OAuth 2.0
                             </button>
                         </div>
                     </div>
