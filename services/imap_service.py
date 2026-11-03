@@ -71,7 +71,7 @@ def _normalize_imap_credentials(host: str, username: str, password: str):
     return host_clean, user_clean, pwd_clean
 
 
-def _format_imap_error(err: Exception, host: str = "") -> str:
+def _format_imap_error(err: Exception, host: str = "", auth_type: str = "password") -> str:
     """imaplib 바이트 에러 메시지를 가독성 높은 한국어 원인 안내로 변환"""
     raw = str(err)
     if hasattr(err, "args") and err.args:
@@ -84,10 +84,14 @@ def _format_imap_error(err: Exception, host: str = "") -> str:
     raw_upper = raw.upper()
     if "APPLICATION-SPECIFIC PASSWORD REQUIRED" in raw_upper or "185833" in raw_upper:
         return (
-            "Google 계정은 일반 비밀번호 대신 16자리 '앱 비밀번호'가 필요합니다. "
-            "(Google 계정 관리 → 보안 → 2단계 인증 활성화 → '앱 비밀번호'에서 생성 후 입력)"
+            "Google 계정은 일반 비밀번호 대신 16자리 '앱 비밀번호' 또는 'Google OAuth 2.0' 인증이 필요합니다."
         )
     if "AUTHENTICATIONFAILED" in raw_upper or "INVALID CREDENTIALS" in raw_upper:
+        if (auth_type or "password") == "oauth2_google":
+            return (
+                "Google OAuth 2.0 인증 실패(Invalid credentials): 입력된 이메일 계정 주소가 브라우저에서 로그인한 Google 계정 주소와 "
+                "정확히 일치하는지 확인해 주세요. (또는 Gmail 설정 → 전달 및 POP/IMAP에서 IMAP이 활성화되어 있어야 합니다.)"
+            )
         if "gmail" in (host or "").lower():
             return (
                 "인증 실패(Invalid credentials): 이메일 주소(전체 주소) 또는 16자리 Google 앱 비밀번호가 정확한지 확인해 주세요. "
@@ -443,20 +447,19 @@ def start_google_oauth_flow(client_id: str, client_secret: str, username: str = 
     if not access_token:
         return {"status": "error", "message": "Google OAuth 토큰 응답에 access_token이 없습니다."}
 
-    # 이메일 주소가 비어있으면 userinfo API로 자동 조회
-    if not user_clean:
-        try:
-            u_req = urllib.request.Request(
-                "https://www.googleapis.com/oauth2/v2/userinfo",
-                headers={"Authorization": f"Bearer {access_token}"},
-                method="GET",
-            )
-            with urllib.request.urlopen(u_req, timeout=10) as u_resp:
-                u_info = json.loads(u_resp.read().decode("utf-8"))
-                if u_info.get("email"):
-                    user_clean = u_info["email"].strip()
-        except Exception:
-            pass
+    # 브라우저에서 실제 인증된 Google 계정 이메일 주소를 userinfo API로 조회하여 오타 자동 보정
+    try:
+        u_req = urllib.request.Request(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+            method="GET",
+        )
+        with urllib.request.urlopen(u_req, timeout=10) as u_resp:
+            u_info = json.loads(u_resp.read().decode("utf-8"))
+            if u_info.get("email"):
+                user_clean = u_info["email"].strip()
+    except Exception:
+        pass
 
     if not user_clean:
         return {
@@ -500,7 +503,7 @@ def start_google_oauth_flow(client_id: str, client_secret: str, username: str = 
                 pass
             return {
                 "status": "error",
-                "message": f"Google OAuth 토큰은 발급되었으나 Gmail IMAP 접속에 실패했습니다: {_format_imap_error(imap_err, 'imap.gmail.com')}"
+                "message": f"Google OAuth 토큰은 발급되었으나 Gmail IMAP 접속에 실패했습니다: {_format_imap_error(imap_err, 'imap.gmail.com', 'oauth2_google')}"
             }
     except Exception as conn_err:
         return {
@@ -570,7 +573,7 @@ def test_imap_connection(
                 client.logout()
             except Exception:
                 pass
-            friendly_msg = _format_imap_error(auth_err, host)
+            friendly_msg = _format_imap_error(auth_err, host, auth_mode)
             log_event("warn", "IMAP", f"로그인 실패: {friendly_msg} (원본: {auth_err})")
             return {"status": "error", "message": friendly_msg}
     except Exception as conn_err:
@@ -995,7 +998,7 @@ def _run_imap_sync_worker(options: Dict[str, Any]):
         })
 
     except Exception as e:
-        friendly_msg = _format_imap_error(e, host)
+        friendly_msg = _format_imap_error(e, host, auth_type)
         log_event("error", "IMAP", f"메일 동기화 중 에러: {friendly_msg} (원본: {e})")
         _notify_sync_error(friendly_msg)
     finally:
