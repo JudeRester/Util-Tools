@@ -1464,9 +1464,34 @@ const IMAP_PRESETS = {
     outlook: { host: "outlook.office365.com", port: 993, ssl: true }
 };
 
+function setImapModalFeedback(type, message) {
+    const box = document.getElementById("imap-status-feedback");
+    if (!box) return;
+
+    if (!message || type === "clear") {
+        box.style.display = "none";
+        box.className = "imap-status-feedback";
+        box.innerHTML = "";
+        return;
+    }
+
+    const iconMap = {
+        info: "⏳",
+        success: "✅",
+        warn: "⚠️",
+        error: "❌"
+    };
+    const icon = iconMap[type] || "ℹ️";
+    box.className = `imap-status-feedback status-${type}`;
+    box.innerHTML = `<span>${icon}</span><div style="flex:1;">${escapeHtml(message)}</div>`;
+    box.style.display = "flex";
+}
+
 async function openImapSyncModal() {
     const modal = document.getElementById("imap-sync-modal");
     if (!modal) return;
+
+    setImapModalFeedback("clear", "");
 
     try {
         if (window.eel && eel.get_imap_config) {
@@ -1480,7 +1505,8 @@ async function openImapSyncModal() {
                 if (document.getElementById("imap-pass")) document.getElementById("imap-pass").value = c.password || "";
                 const folderSel = document.getElementById("imap-folder-select");
                 if (folderSel && c.folder) {
-                    folderSel.innerHTML = `<option value="${escapeHtmlAttr(c.folder)}" selected>${escapeHtml(c.folder)}</option>`;
+                    const labelText = c.folder === "INBOX" ? "INBOX (받은편지함)" : c.folder;
+                    folderSel.innerHTML = `<option value="${escapeHtmlAttr(c.folder)}" selected>${escapeHtml(labelText)}</option>`;
                 }
             }
         }
@@ -1504,6 +1530,7 @@ function applyImapPreset(service) {
     if (document.getElementById("imap-port")) document.getElementById("imap-port").value = p.port;
     if (document.getElementById("imap-ssl")) document.getElementById("imap-ssl").checked = p.ssl;
 
+    setImapModalFeedback("info", `${service.toUpperCase()} 서버(${p.host}:${p.port}) 프리셋이 적용되었습니다.`);
     if (typeof showToast === "function") {
         showToast("프리셋 적용", `${service.toUpperCase()} 호스트 및 포트가 자동 설정되었습니다.`, "info");
     }
@@ -1529,12 +1556,29 @@ function getImapFormInputs() {
 async function testImapConnectionUi(isFolderOnly = false) {
     const inputs = getImapFormInputs();
     if (!inputs.host || !inputs.username || !inputs.password) {
+        const warnMsg = "호스트, 계정 아이디 및 비밀번호를 모두 입력해 주세요.";
+        setImapModalFeedback("warn", warnMsg);
         if (typeof showToast === "function") {
-            showToast("입력 확인", "호스트, 계정 아이디 및 비밀번호를 모두 입력해 주세요.", "warn");
+            showToast("입력 확인", warnMsg, "warn");
         }
         return;
     }
 
+    const testBtn = document.getElementById("imap-test-conn-btn");
+    const folderBtn = document.getElementById("imap-folder-refresh-btn");
+    const origTestHtml = testBtn ? testBtn.innerHTML : "";
+    const origFolderHtml = folderBtn ? folderBtn.innerHTML : "";
+
+    if (testBtn) {
+        testBtn.disabled = true;
+        if (!isFolderOnly) testBtn.innerHTML = "<span>⏳</span> 연결 확인 중...";
+    }
+    if (folderBtn) {
+        folderBtn.disabled = true;
+        if (isFolderOnly) folderBtn.innerHTML = "<span>⏳</span> 조회 중...";
+    }
+
+    setImapModalFeedback("info", `${inputs.host}:${inputs.port} 서버에 연결 및 로그인 인증을 확인하는 중입니다...`);
     if (typeof showToast === "function") {
         showToast("IMAP 연결 시도", "서버 연결 및 인증을 확인하는 중입니다...", "info");
     }
@@ -1547,39 +1591,69 @@ async function testImapConnectionUi(isFolderOnly = false) {
 
             if (res && res.status === "success") {
                 const folderSel = document.getElementById("imap-folder-select");
-                if (folderSel && Array.isArray(res.folders) && res.folders.length > 0) {
+                const folderList = Array.isArray(res.folders) ? res.folders : [];
+                if (folderSel && folderList.length > 0) {
                     const currentVal = folderSel.value || "INBOX";
                     folderSel.innerHTML = "";
-                    res.folders.forEach(f => {
+                    folderList.forEach(f => {
+                        const rawName = (typeof f === "object" && f !== null) ? f.name : String(f);
+                        const displayLabel = (typeof f === "object" && f !== null) ? (f.label || f.name) : String(f);
                         const opt = document.createElement("option");
-                        opt.value = f;
-                        opt.textContent = f;
-                        if (f.toLowerCase() === currentVal.toLowerCase()) opt.selected = true;
+                        opt.value = rawName;
+                        opt.textContent = displayLabel;
+                        if (rawName.toLowerCase() === currentVal.toLowerCase()) opt.selected = true;
                         folderSel.appendChild(opt);
                     });
                 }
+                const okMsg = isFolderOnly
+                    ? `사서함 폴더 목록(${folderList.length}개)을 갱신했습니다.`
+                    : `IMAP 서버 연결 및 로그인 인증 성공! (사서함 ${folderList.length}개 조회됨)`;
+                setImapModalFeedback("success", okMsg);
+                if (typeof logToConsole === "function") {
+                    logToConsole("IMAP 연결 성공", okMsg);
+                }
                 if (typeof showToast === "function") {
-                    showToast("연결 성공", isFolderOnly ? "사서함 폴더 목록을 갱신했습니다." : "IMAP 서버 인증에 성공했습니다.", "info");
+                    showToast("연결 성공", okMsg, "success");
                 }
             } else {
+                const errMsg = (res && res.message) || "서버 응답 오류";
+                setImapModalFeedback("error", errMsg);
+                if (typeof logToConsole === "function") {
+                    logToConsole("IMAP 연결 실패", errMsg);
+                }
                 if (typeof showToast === "function") {
-                    showToast("연결 실패", res.message || "서버 응답 오류", "error");
+                    showToast("연결 실패", errMsg, "error");
                 }
             }
         }
     } catch (e) {
         console.error("[IMAP] 연결 테스트 오류:", e);
+        const errStr = String(e?.message || e);
+        setImapModalFeedback("error", `연결 테스트 중 예외 발생: ${errStr}`);
         if (typeof showToast === "function") {
-            showToast("연결 에러", String(e), "error");
+            showToast("연결 에러", errStr, "error");
+        }
+    } finally {
+        if (testBtn) {
+            testBtn.disabled = false;
+            testBtn.innerHTML = origTestHtml || "<span>🔍</span> 연결 테스트";
+        }
+        if (folderBtn) {
+            folderBtn.disabled = false;
+            folderBtn.innerHTML = origFolderHtml || "<span>📂</span> 폴더 조회";
         }
     }
 }
 
-async function saveImapConfigUi() {
+async function saveImapConfigUi(silent = false) {
     const inputs = getImapFormInputs();
     if (!inputs.host || !inputs.username) {
-        if (typeof showToast === "function") {
-            showToast("입력 확인", "호스트와 계정 아이디를 입력해 주세요.", "warn");
+        if (!silent) {
+            const warnMsg = "호스트와 계정 아이디를 입력해 주세요.";
+            setImapModalFeedback("warn", warnMsg);
+            if (typeof showToast === "function") {
+                showToast("입력 확인", warnMsg, "warn");
+            }
         }
         return;
     }
@@ -1588,33 +1662,45 @@ async function saveImapConfigUi() {
         if (window.eel && eel.save_imap_config) {
             const res = await eel.save_imap_config(inputs)();
             if (res && res.status === "success") {
-                if (typeof showToast === "function") {
-                    showToast("설정 저장 완료", "IMAP 계정 설정이 SQLite에 저장되었습니다.", "info");
+                if (!silent) {
+                    const okMsg = "IMAP 계정 설정이 로컬 DB에 저장되었습니다.";
+                    setImapModalFeedback("success", okMsg);
+                    if (typeof showToast === "function") {
+                        showToast("설정 저장 완료", okMsg, "success");
+                    }
                 }
-            } else {
+            } else if (!silent) {
+                const errMsg = (res && res.message) || "설정 저장 중 오류가 발생했습니다.";
+                setImapModalFeedback("error", errMsg);
                 if (typeof showToast === "function") {
-                    showToast("저장 실패", res.message || "오류", "error");
+                    showToast("저장 실패", errMsg, "error");
                 }
             }
         }
     } catch (e) {
         console.error("[IMAP] 설정 저장 실패:", e);
+        if (!silent) {
+            setImapModalFeedback("error", `설정 저장 실패: ${String(e)}`);
+        }
     }
 }
 
 async function startImapSyncUi() {
     const inputs = getImapFormInputs();
     if (!inputs.host || !inputs.username || !inputs.password) {
+        const warnMsg = "호스트, 계정 아이디 및 비밀번호를 입력해 주세요.";
+        setImapModalFeedback("warn", warnMsg);
         if (typeof showToast === "function") {
-            showToast("입력 확인", "호스트, 계정 아이디 및 비밀번호를 입력해 주세요.", "warn");
+            showToast("입력 확인", warnMsg, "warn");
         }
         return;
     }
 
-    // 설정 자동 저장
-    saveImapConfigUi();
+    // 설정 자동 저장 (배너 덮어쓰기 방지)
+    await saveImapConfigUi(true);
+    setImapModalFeedback("info", "IMAP 서버에 접속하여 메일 아카이브 작업을 시작합니다...");
 
-    const sinceDays = parseInt(document.getElementById("imap-since-days")?.value || "30", 10);
+    const sinceDays = parseInt(document.getElementById("imap-since-days")?.value || "0", 10);
     const limitCount = parseInt(document.getElementById("imap-limit-count")?.value || "100", 10);
     const autoEmbed = document.getElementById("imap-auto-embed")?.checked ?? true;
 
@@ -1638,6 +1724,7 @@ async function startImapSyncUi() {
         if (window.eel && eel.start_imap_sync) {
             const res = await eel.start_imap_sync(options)();
             if (res && res.status === "error") {
+                setImapModalFeedback("error", res.message || "동기화 시작 실패");
                 if (typeof showToast === "function") {
                     showToast("동기화 시작 실패", res.message, "error");
                 }
@@ -1646,6 +1733,7 @@ async function startImapSyncUi() {
         }
     } catch (e) {
         console.error("[IMAP] 동기화 시작 실패:", e);
+        setImapModalFeedback("error", `동기화 시작 오류: ${String(e)}`);
         resetImapSyncUiState();
     }
 }
@@ -1654,6 +1742,7 @@ async function cancelImapSyncUi() {
     try {
         if (window.eel && eel.cancel_imap_sync) {
             await eel.cancel_imap_sync()();
+            setImapModalFeedback("warn", "진행 중인 메일 다운로드 중지를 요청했습니다.");
             if (typeof showToast === "function") {
                 showToast("취소 요청", "진행 중인 다운로드 중지를 요청했습니다.", "warn");
             }
@@ -1704,18 +1793,33 @@ function on_imap_sync_progress(current, total, subject, percent) {
 
 function on_imap_sync_complete(result) {
     resetImapSyncUiState();
-    closeImapSyncModal();
 
     const downloaded = result.downloaded || 0;
     const skipped = result.skipped || 0;
     const embedded = result.embedded || 0;
 
+    if (downloaded === 0 && skipped === 0 && result.message) {
+        setImapModalFeedback("warn", result.message);
+        if (typeof showToast === "function") {
+            showToast("IMAP 조회 결과", result.message, "warn");
+        }
+        return;
+    }
+
     let msg = `신규 메일 ${downloaded}건 다운로드 완료`;
     if (skipped > 0) msg += ` (${skipped}건 중복 건너뜀)`;
     if (embedded > 0) msg += ` / AI 벡터 DB ${embedded}건 임베딩 완료`;
 
+    setImapModalFeedback("success", msg);
+    if (typeof logToConsole === "function") {
+        logToConsole("IMAP 아카이브 완료", msg);
+    }
     if (typeof showToast === "function") {
-        showToast("IMAP 아카이브 완료", msg, "info");
+        showToast("IMAP 아카이브 완료", msg, "success");
+    }
+
+    if (downloaded > 0) {
+        closeImapSyncModal();
     }
 
     // 이메일 목록 자동 갱신
@@ -1724,7 +1828,12 @@ function on_imap_sync_complete(result) {
 
 function on_imap_sync_error(message) {
     resetImapSyncUiState();
+    const errMsg = message || "메일 다운로드 중 오류가 발생했습니다.";
+    setImapModalFeedback("error", errMsg);
+    if (typeof logToConsole === "function") {
+        logToConsole("IMAP 동기화 오류", errMsg);
+    }
     if (typeof showToast === "function") {
-        showToast("IMAP 동기화 오류", message || "다운로드 실패", "error");
+        showToast("IMAP 동기화 오류", errMsg, "error");
     }
 }

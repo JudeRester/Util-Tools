@@ -92,6 +92,42 @@ def _format_imap_error(err: Exception, host: str = "") -> str:
     return raw
 
 
+import base64
+
+_IMAP_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _decode_imap_utf7(text: str) -> str:
+    """RFC 3501 IMAP Modified UTF-7 폴더명 디코딩 (예: [Gmail]/&vPSwuNO4ycDVaA- -> [Gmail]/보낸편지함)"""
+    if not text or "&" not in text:
+        return text
+
+    def _replace_match(m):
+        b64_part = m.group(1)
+        if not b64_part:
+            return "&"
+        try:
+            b64_std = b64_part.replace(",", "/")
+            pad = (4 - len(b64_std) % 4) % 4
+            raw = base64.b64decode(b64_std + ("=" * pad))
+            return raw.decode("utf-16-be", errors="replace")
+        except Exception:
+            return m.group(0)
+
+    return re.sub(r"&([A-Za-z0-9+,]*)-", _replace_match, text)
+
+
+def _quote_imap_folder(folder: str) -> str:
+    """공백이나 특수문자가 포함된 IMAP 폴더명을 안전하게 큰따옴표로 감싸기"""
+    f = (folder or "INBOX").strip()
+    if f.startswith('"') and f.endswith('"'):
+        return f
+    if any(ch in f for ch in (' ', '[', ']', '&', '/', '\\')):
+        escaped = f.replace('\\', '\\\\').replace('"', '\\"')
+        return f'"{escaped}"'
+    return f
+
+
 def _connect_imap(host: str, port: int, use_ssl: bool, timeout: int = 15):
     """IMAP 연결 인스턴스 생성"""
     if use_ssl:
@@ -116,21 +152,38 @@ def test_imap_connection(host: str, port: int, use_ssl: bool, username: str, pas
             client.login(username, password)
             status, folders_raw = client.list()
             folders = []
+            has_inbox = False
             if status == "OK" and folders_raw:
                 for f in folders_raw:
                     if not f:
                         continue
                     # f: b'(\\HasNoChildren) "/" "INBOX"'
                     line = f.decode('utf-8', errors='replace')
-                    parts = line.split(' "/" ')
+                    if "\\Noselect" in line or "\\noselect" in line.lower():
+                        continue
+                    parts = re.split(r'\s+"[^"]*"\s+', line, maxsplit=1)
                     if len(parts) == 2:
-                        folder_name = parts[1].strip().strip('"')
-                        folders.append(folder_name)
+                        raw_name = parts[1].strip().strip('"')
                     else:
-                        folders.append(line.strip())
+                        raw_name = line.strip()
 
-            if "INBOX" not in folders and "inbox" not in [x.lower() for x in folders]:
-                folders.insert(0, "INBOX")
+                    if not raw_name:
+                        continue
+                    if raw_name.upper() == "INBOX":
+                        has_inbox = True
+
+                    decoded_label = _decode_imap_utf7(raw_name)
+                    if raw_name.upper() == "INBOX":
+                        display_label = "INBOX (받은편지함)"
+                    elif decoded_label != raw_name:
+                        display_label = f"{decoded_label} ({raw_name})"
+                    else:
+                        display_label = raw_name
+
+                    folders.append({"name": raw_name, "label": display_label})
+
+            if not has_inbox:
+                folders.insert(0, {"name": "INBOX", "label": "INBOX (받은편지함)"})
 
             client.logout()
             return {
@@ -316,28 +369,43 @@ def _run_imap_sync_worker(options: Dict[str, Any]):
         client.login(username, password)
 
         # 1. 단방향 보존 원칙: readonly=True로 열어 서버 메일 상태(플래그/삭제)를 절대 건드리지 않음
-        status, _ = client.select(folder, readonly=True)
+        quoted_folder = _quote_imap_folder(folder)
+        status, _ = client.select(quoted_folder, readonly=True)
+        if status != "OK" and folder.upper() != "INBOX":
+            # 이전 테스트 등으로 존재하지 않는 폴더명이 남아있는 경우 INBOX 폴백
+            log_event("warn", "IMAP", f"사서함 '{folder}' 선택 실패, 'INBOX'로 대체합니다.")
+            folder = "INBOX"
+            status, _ = client.select("INBOX", readonly=True)
         if status != "OK":
-            raise Exception(f"사서함 '{folder}' 폴더를 선택할 수 없습니다.")
+            raise Exception(f"사서함 '{folder}' 폴더를 선택할 수 없습니다. '폴더 조회' 버튼으로 사서함 목록을 다시 확인해 주세요.")
 
-        # 2. 검색 조건 생성
+        # 2. 검색 조건 생성 (RFC 3501 표준 토큰 전달 및 영문 월 약어 보장)
         search_criteria = ["ALL"]
         if since_days and int(since_days) > 0:
             since_date = datetime.date.today() - datetime.timedelta(days=int(since_days))
-            # IMAP date format: 01-Jan-2026
-            date_str = since_date.strftime("%d-%b-%Y")
-            search_criteria = [f'(SINCE "{date_str}")']
+            month_abbr = _IMAP_MONTH_NAMES[since_date.month - 1]
+            date_str = f"{since_date.day:02d}-{month_abbr}-{since_date.year}"
+            search_criteria = ["SINCE", date_str]
 
         _notify_sync_progress(0, 1, "사서함 메일 목록 조회 중...", 5)
         status, search_data = client.uid('search', None, *search_criteria)
 
         if status != "OK" or not search_data or not search_data[0]:
+            empty_msg = "조회된 메일이 없습니다."
+            if since_days and int(since_days) > 0:
+                st_all, all_data = client.uid('search', None, 'ALL')
+                total_in_box = len(all_data[0].split()) if (st_all == "OK" and all_data and all_data[0]) else 0
+                if total_in_box > 0:
+                    empty_msg = (
+                        f"선택한 기간(최근 {since_days}일, {date_str} 이후) 내에 수신된 메일이 없습니다. "
+                        f"(사서함 전체 메일: {total_in_box}건 — 수신 기간 범위를 '전체 기간'으로 변경하여 다시 시도해 보세요.)"
+                    )
             _notify_sync_complete({
                 "status": "success",
                 "downloaded": 0,
                 "skipped": 0,
                 "embedded": 0,
-                "message": "조회된 메일이 없습니다."
+                "message": empty_msg
             })
             return
 

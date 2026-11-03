@@ -311,6 +311,31 @@ function showToast(title, content, icon = '🔔', duration = 3800) {
     const container = document.getElementById('toast-container');
     if (!container) return;
 
+    const TYPE_ICON_MAP = {
+        info: 'ℹ️',
+        success: '✅',
+        warn: '⚠️',
+        warning: '⚠️',
+        error: '❌'
+    };
+    const TYPE_TITLE_MAP = {
+        info: '알림',
+        success: '완료',
+        warn: '경고',
+        warning: '경고',
+        error: '오류'
+    };
+
+    // 2개 인자 호출 호환: showToast("메시지", "info" | "success" | "warn" | "error")
+    if (typeof content === 'string' && TYPE_ICON_MAP[content.toLowerCase()] && icon === '🔔') {
+        const levelKey = content.toLowerCase();
+        content = title;
+        title = TYPE_TITLE_MAP[levelKey] || '알림';
+        icon = TYPE_ICON_MAP[levelKey];
+    } else if (typeof icon === 'string' && TYPE_ICON_MAP[icon.toLowerCase()]) {
+        icon = TYPE_ICON_MAP[icon.toLowerCase()];
+    }
+
     let bodyText = '';
     if (typeof content === 'object' && content !== null) {
         try {
@@ -368,6 +393,7 @@ function showToast(title, content, icon = '🔔', duration = 3800) {
     toast.addEventListener('mouseenter', stopTimer);
     toast.addEventListener('mouseleave', startTimer);
 
+    container.appendChild(toast);
     startTimer();
 
     // 최대 3개까지만 유지 (화면 가림 방지 및 초과분 즉시 DOM 제거)

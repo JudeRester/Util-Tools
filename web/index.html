@@ -3314,7 +3314,7 @@
                         </select>
                     </div>
                     <div>
-                        <button type="button" class="form-btn close-btn btn-sm" onclick="testImapConnectionUi(true)" title="서버 폴더 목록 새로고침">
+                        <button type="button" id="imap-folder-refresh-btn" class="form-btn close-btn btn-sm" onclick="testImapConnectionUi(true)" title="서버 폴더 목록 새로고침">
                             <span>📂</span> 폴더 조회
                         </button>
                     </div>
@@ -3327,9 +3327,10 @@
                             <label class="form-label" for="imap-since-days">수신 기간 범위:</label>
                             <select id="imap-since-days" class="form-select">
                                 <option value="7">최근 7일</option>
-                                <option value="30" selected>최근 30일</option>
+                                <option value="30">최근 30일</option>
                                 <option value="90">최근 90일</option>
-                                <option value="0">전체 메일</option>
+                                <option value="365">최근 1년 (365일)</option>
+                                <option value="0" selected>전체 기간 (최신순)</option>
                             </select>
                         </div>
                         <div style="flex: 1; min-width: 130px;">
@@ -3350,6 +3351,9 @@
                     </div>
                 </div>
 
+                <!-- 실시간 연결 테스트 / 설정 저장 / 오류 상태 인라인 피드백 배너 -->
+                <div id="imap-status-feedback" class="imap-status-feedback" style="display: none;"></div>
+
                 <!-- 실시간 진행률 영역 (동기화 중일 때 노출) -->
                 <div id="imap-progress-wrap" class="imap-progress-card" style="display: none;">
                     <div class="imap-progress-header">
@@ -3366,10 +3370,10 @@
             </div>
             <div class="modal-footer" style="justify-content: space-between;">
                 <div style="display: flex; gap: 6px;">
-                    <button type="button" class="form-btn close-btn" onclick="testImapConnectionUi(false)">
+                    <button type="button" id="imap-test-conn-btn" class="form-btn close-btn" onclick="testImapConnectionUi(false)">
                         <span>🔍</span> 연결 테스트
                     </button>
-                    <button type="button" class="form-btn close-btn" onclick="saveImapConfigUi()">
+                    <button type="button" id="imap-save-config-btn" class="form-btn close-btn" onclick="saveImapConfigUi()">
                         <span>💾</span> 설정 저장
                     </button>
                 </div>

@@ -12700,6 +12700,44 @@ input[type="checkbox"] {
     transition: width 0.3s ease;
 }
 
+.imap-status-feedback {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.83rem;
+    line-height: 1.45;
+    word-break: keep-all;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(15, 23, 42, 0.75);
+    color: #e2e8f0;
+}
+
+.imap-status-feedback.status-info {
+    border-color: rgba(56, 189, 248, 0.4);
+    background: rgba(56, 189, 248, 0.1);
+    color: #bae6fd;
+}
+
+.imap-status-feedback.status-success {
+    border-color: rgba(34, 197, 94, 0.45);
+    background: rgba(34, 197, 94, 0.12);
+    color: #bbf7d0;
+}
+
+.imap-status-feedback.status-warn {
+    border-color: rgba(245, 158, 11, 0.45);
+    background: rgba(245, 158, 11, 0.12);
+    color: #fde68a;
+}
+
+.imap-status-feedback.status-error {
+    border-color: rgba(239, 68, 68, 0.5);
+    background: rgba(239, 68, 68, 0.14);
+    color: #fecaca;
+}
+
 @media (max-width: 600px) {
     .imap-form-grid {
         grid-template-columns: 1fr;

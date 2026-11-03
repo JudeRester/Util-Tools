@@ -21,7 +21,9 @@ from services.imap_service import (
     save_imap_config,
     test_imap_connection,
     _normalize_imap_credentials,
-    _format_imap_error
+    _format_imap_error,
+    _decode_imap_utf7,
+    _quote_imap_folder
 )
 from services.ai_search_service import embed_new_emails
 
@@ -30,38 +32,67 @@ def test_imap_config_crud():
     print("[RUN] test_imap_config_crud...")
     init_db()
 
-    # 1. 설정 저장
-    test_cfg = {
-        "account_name": "업무용 Gmail",
-        "host": "imap.gmail.com",
-        "port": 993,
-        "use_ssl": True,
-        "username": "tester@example.com",
-        "password": "app_password_secret",
-        "folder": "INBOX"
-    }
-    save_res = save_imap_config(test_cfg)
-    assert save_res["status"] == "success"
+    # 기존 DB 레코드 백업 (사용자 설정 보호)
+    conn = get_db_connection()
+    backup_rows = []
+    try:
+        rows = conn.execute("SELECT * FROM imap_accounts").fetchall()
+        backup_rows = [dict(r) for r in rows if r["username"] != "tester@example.com"]
+        conn.execute("DELETE FROM imap_accounts")
+        conn.commit()
+    finally:
+        conn.close()
 
-    # 2. 설정 조회
-    get_res = get_imap_config()
-    assert get_res["status"] == "success"
-    cfg = get_res["config"]
-    assert cfg["account_name"] == "업무용 Gmail"
-    assert cfg["host"] == "imap.gmail.com"
-    assert cfg["port"] == 993
-    assert cfg["use_ssl"] is True
-    assert cfg["username"] == "tester@example.com"
-    assert cfg["password"] == "app_password_secret"
-    assert cfg["folder"] == "INBOX"
+    try:
+        # 1. 설정 저장
+        test_cfg = {
+            "account_name": "업무용 Gmail",
+            "host": "imap.gmail.com",
+            "port": 993,
+            "use_ssl": True,
+            "username": "tester@example.com",
+            "password": "app_password_secret",
+            "folder": "INBOX"
+        }
+        save_res = save_imap_config(test_cfg)
+        assert save_res["status"] == "success"
 
-    # 3. 설정 업데이트
-    test_cfg["folder"] = "Sent"
-    update_res = save_imap_config(test_cfg)
-    assert update_res["status"] == "success"
+        # 2. 설정 조회
+        get_res = get_imap_config()
+        assert get_res["status"] == "success"
+        cfg = get_res["config"]
+        assert cfg["account_name"] == "업무용 Gmail"
+        assert cfg["host"] == "imap.gmail.com"
+        assert cfg["port"] == 993
+        assert cfg["use_ssl"] is True
+        assert cfg["username"] == "tester@example.com"
+        assert cfg["password"] == "app_password_secret"
+        assert cfg["folder"] == "INBOX"
 
-    updated_cfg = get_imap_config()["config"]
-    assert updated_cfg["folder"] == "Sent"
+        # 3. 설정 업데이트
+        test_cfg["folder"] = "Sent"
+        update_res = save_imap_config(test_cfg)
+        assert update_res["status"] == "success"
+
+        updated_cfg = get_imap_config()["config"]
+        assert updated_cfg["folder"] == "Sent"
+    finally:
+        # 테스트 더미 제거 및 기존 사용자 설정 복원
+        conn = get_db_connection()
+        try:
+            conn.execute("DELETE FROM imap_accounts")
+            for r in backup_rows:
+                conn.execute("""
+                    INSERT INTO imap_accounts (id, account_name, host, port, use_ssl, username, password, folder, last_sync_at, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    r["id"], r["account_name"], r["host"], r["port"], r["use_ssl"],
+                    r["username"], r["password"], r["folder"], r["last_sync_at"],
+                    r["created_at"], r["updated_at"]
+                ))
+            conn.commit()
+        finally:
+            conn.close()
 
     print("  [PASS] test_imap_config_crud")
 
@@ -89,6 +120,11 @@ def test_imap_connection_validation():
     # 4. 잘못된 호스트 연결 실패 검증 (타임아웃 핸들링)
     res_invalid = test_imap_connection("invalid.host.nonexistent.local", 993, True, "user", "pass")
     assert res_invalid["status"] == "error"
+
+    # 5. Gmail 한국어 사서함 Modified UTF-7 디코딩 및 쿼팅 검증
+    assert _decode_imap_utf7("[Gmail]/&vPSwuNO4ycDVaA-") == "[Gmail]/보낸편지함"
+    assert _quote_imap_folder("[Gmail]/All Mail") == '"[Gmail]/All Mail"'
+    assert _quote_imap_folder("INBOX") == "INBOX"
 
     print("  [PASS] test_imap_connection_validation")
 
