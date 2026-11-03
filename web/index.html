@@ -3295,15 +3295,56 @@
                         <input type="text" id="imap-user" class="form-input" placeholder="user@gmail.com">
                     </div>
                     <div class="form-row">
-                        <label class="form-label" for="imap-pass">비밀번호 (또는 16자리 앱 비밀번호):</label>
-                        <div style="display: flex; gap: 6px; align-items: center;">
-                            <input type="password" id="imap-pass" class="form-input" placeholder="앱 비밀번호 입력 (공백 자동 제거)" style="flex: 1;">
-                            <button type="button" class="mini-tool-btn" onclick="toggleImapPasswordVisibility()" title="비밀번호 표시/숨기기" style="height: 36px; padding: 0 10px;">👁️</button>
+                        <label class="form-label">인증 방식 선택:</label>
+                        <div class="imap-auth-toggle-bar">
+                            <button type="button" id="imap-auth-tab-password" class="imap-auth-toggle-btn active" onclick="setImapAuthType('password')">
+                                🔑 일반 / 앱 비밀번호
+                            </button>
+                            <button type="button" id="imap-auth-tab-oauth2" class="imap-auth-toggle-btn" onclick="setImapAuthType('oauth2_google')">
+                                🔐 Google OAuth 2.0 (Client ID)
+                            </button>
                         </div>
                     </div>
                 </div>
-                <div style="font-size: 0.76rem; color: var(--text-muted); background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; line-height: 1.45;">
-                    💡 <strong>인증 안내</strong>: <strong>Gmail</strong>은 일반 비밀번호 대신 <span style="color: var(--primary-color);">Google 계정 → 보안 → 2단계 인증 → 앱 비밀번호(16자리)</span>를 발급받아 입력해야 합니다. <strong>네이버/다음</strong>은 메일함 환경설정의 <span style="color: var(--primary-color);">POP3/IMAP 설정에서 'IMAP/SMTP 사용'을 '사용함'</span>으로 활성화해야 합니다.
+
+                <!-- A. 일반 / 앱 비밀번호 입력 섹션 -->
+                <div id="imap-password-auth-section" class="imap-auth-section">
+                    <div class="form-row">
+                        <label class="form-label" for="imap-pass">비밀번호 (또는 16자리 앱 비밀번호):</label>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <input type="password" id="imap-pass" class="form-input" placeholder="비밀번호 또는 16자리 앱 비밀번호 (공백 자동 제거)" style="flex: 1;">
+                            <button type="button" class="mini-tool-btn" onclick="toggleImapPasswordVisibility()" title="비밀번호 표시/숨기기" style="height: 36px; padding: 0 10px;">👁️</button>
+                        </div>
+                    </div>
+                    <div class="imap-auth-hint">
+                        💡 <strong>인증 안내</strong>: <strong>네이버/다음</strong>은 웹메일 환경설정의 <span style="color: var(--primary-color);">POP3/IMAP 설정에서 'IMAP/SMTP 사용'을 '사용함'</span>으로 활성화해야 합니다. <strong>Gmail</strong>은 우측 상단의 <strong>[🔐 Google OAuth 2.0 (Client ID)]</strong> 탭을 선택하거나 16자리 앱 비밀번호를 입력할 수 있습니다.
+                    </div>
+                </div>
+
+                <!-- B. Google OAuth 2.0 (Client ID & Client Secret) 입력 섹션 -->
+                <div id="imap-oauth2-auth-section" class="imap-auth-section" style="display: none;">
+                    <div class="imap-form-grid">
+                        <div class="form-row">
+                            <label class="form-label" for="imap-oauth-client-id">Google OAuth Client ID:</label>
+                            <input type="text" id="imap-oauth-client-id" class="form-input" placeholder="xxxx.apps.googleusercontent.com" autocomplete="off">
+                        </div>
+                        <div class="form-row">
+                            <label class="form-label" for="imap-oauth-client-secret">Google OAuth Client Secret:</label>
+                            <div style="display: flex; gap: 6px; align-items: center;">
+                                <input type="password" id="imap-oauth-client-secret" class="form-input" placeholder="GOCSPX-..." style="flex: 1;" autocomplete="off">
+                                <button type="button" class="mini-tool-btn" onclick="toggleImapOAuthSecretVisibility()" title="Client Secret 표시/숨기기" style="height: 36px; padding: 0 10px;">👁️</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="imap-oauth-action-row">
+                        <span id="imap-oauth-token-badge" class="imap-oauth-badge">⚪ 미인증 (로그인 필요)</span>
+                        <button type="button" id="imap-oauth-login-btn" class="form-btn add-btn btn-sm" onclick="startGoogleOAuthFlowUi()">
+                            <span>🌐</span> Google 브라우저 로그인 및 권한 승인
+                        </button>
+                    </div>
+                    <div class="imap-auth-hint">
+                        💡 <strong>Google Cloud Console 안내</strong>: OAuth 2.0 클라이언트 ID 생성 시 애플리케이션 유형을 <strong>[데스크톱 앱 (Desktop app)]</strong>으로 선택하면 별도의 리디렉션 URI 등록 없이 루프백(<code>http://localhost</code>) 인증이 즉시 동작합니다.
+                    </div>
                 </div>
 
                 <div class="form-row form-row-inline" style="display: flex; gap: 10px; align-items: flex-end;">

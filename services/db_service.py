@@ -841,13 +841,36 @@ def init_db():
                         port INTEGER DEFAULT 993,
                         use_ssl INTEGER DEFAULT 1,
                         username TEXT NOT NULL,
-                        password TEXT NOT NULL,
+                        password TEXT DEFAULT '',
+                        auth_type TEXT DEFAULT 'password',
+                        oauth_client_id TEXT DEFAULT '',
+                        oauth_client_secret TEXT DEFAULT '',
+                        oauth_refresh_token TEXT DEFAULT '',
+                        oauth_access_token TEXT DEFAULT '',
+                        oauth_token_expiry INTEGER DEFAULT 0,
                         folder TEXT DEFAULT 'INBOX',
                         last_sync_at TEXT,
                         created_at TEXT DEFAULT (datetime('now', 'localtime')),
                         updated_at TEXT DEFAULT (datetime('now', 'localtime'))
                     );
                 """)
+                existing_imap_cols = {
+                    row["name"] for row in conn.execute("PRAGMA table_info(imap_accounts)").fetchall()
+                }
+                imap_migration_cols = [
+                    ("auth_type", "TEXT DEFAULT 'password'"),
+                    ("oauth_client_id", "TEXT DEFAULT ''"),
+                    ("oauth_client_secret", "TEXT DEFAULT ''"),
+                    ("oauth_refresh_token", "TEXT DEFAULT ''"),
+                    ("oauth_access_token", "TEXT DEFAULT ''"),
+                    ("oauth_token_expiry", "INTEGER DEFAULT 0"),
+                ]
+                for col_name, col_def in imap_migration_cols:
+                    if col_name not in existing_imap_cols:
+                        try:
+                            conn.execute(f"ALTER TABLE imap_accounts ADD COLUMN {col_name} {col_def};")
+                        except Exception:
+                            pass
 
                 # 비정상 종료 등으로 진행 중 상태에 머물러 있는 오래된 작업 복구 (Stale Run Recovery)
                 conn.execute("""

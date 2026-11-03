@@ -17,6 +17,14 @@ import imaplib
 import email
 import datetime
 import threading
+import base64
+import hashlib
+import secrets
+import webbrowser
+import http.server
+import urllib.request
+import urllib.parse
+import urllib.error
 from typing import Dict, Any, List, Optional
 
 import eel
@@ -92,8 +100,6 @@ def _format_imap_error(err: Exception, host: str = "") -> str:
     return raw
 
 
-import base64
-
 _IMAP_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
@@ -137,54 +143,422 @@ def _connect_imap(host: str, port: int, use_ssl: bool, timeout: int = 15):
         return imaplib.IMAP4(host, port, timeout=timeout)
 
 
-@eel.expose
-def test_imap_connection(host: str, port: int, use_ssl: bool, username: str, password: str) -> Dict[str, Any]:
-    """IMAP 서버 연결 및 인증 테스트, 사서함 목록 조회"""
+def _build_xoauth2_bytes(username: str, access_token: str) -> bytes:
+    """Google/표준 IMAP XOAUTH2 SASL 인증 바이트열 생성 (imaplib.authenticate가 base64 인코딩 수행)"""
+    user_clean = (username or "").strip()
+    token_clean = (access_token or "").strip()
+    return f"user={user_clean}\x01auth=Bearer {token_clean}\x01\x01".encode("utf-8")
+
+
+def _authenticate_imap_client(client, auth_type: str, username: str, password: str = "", access_token: str = ""):
+    """인증 방식(password vs oauth2_google)에 따라 IMAP 세션 로그인 수행"""
+    if (auth_type or "password") == "oauth2_google":
+        if not access_token:
+            raise Exception("Google OAuth 2.0 Access Token이 없습니다. 브라우저 로그인을 먼저 진행해 주세요.")
+        client.authenticate("XOAUTH2", lambda _: _build_xoauth2_bytes(username, access_token))
+    else:
+        client.login(username, password)
+
+
+def _list_imap_folders(client) -> List[Dict[str, str]]:
+    """인증된 IMAP 클라이언트로부터 사서함 폴더 목록 조회 및 Modified UTF-7 디코딩"""
+    status, folders_raw = client.list()
+    folders: List[Dict[str, str]] = []
+    has_inbox = False
+    if status == "OK" and folders_raw:
+        for f in folders_raw:
+            if not f:
+                continue
+            line = f.decode("utf-8", errors="replace")
+            if "\\Noselect" in line or "\\noselect" in line.lower():
+                continue
+            parts = re.split(r'\s+"[^"]*"\s+', line, maxsplit=1)
+            if len(parts) == 2:
+                raw_name = parts[1].strip().strip('"')
+            else:
+                raw_name = line.strip()
+
+            if not raw_name:
+                continue
+            if raw_name.upper() == "INBOX":
+                has_inbox = True
+
+            decoded_label = _decode_imap_utf7(raw_name)
+            if raw_name.upper() == "INBOX":
+                display_label = "INBOX (받은편지함)"
+            elif decoded_label != raw_name:
+                display_label = f"{decoded_label} ({raw_name})"
+            else:
+                display_label = raw_name
+
+            folders.append({"name": raw_name, "label": display_label})
+
+    if not has_inbox:
+        folders.insert(0, {"name": "INBOX", "label": "INBOX (받은편지함)"})
+    return folders
+
+
+def _refresh_google_access_token(client_id: str, client_secret: str, refresh_token: str) -> Dict[str, Any]:
+    """Google OAuth 2.0 Refresh Token으로 신규 Access Token 발급"""
+    payload = urllib.parse.urlencode({
+        "client_id": (client_id or "").strip(),
+        "client_secret": (client_secret or "").strip(),
+        "refresh_token": (refresh_token or "").strip(),
+        "grant_type": "refresh_token",
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://oauth2.googleapis.com/token",
+        data=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
     try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if not data.get("access_token"):
+                raise Exception(f"토큰 응답에 access_token이 없습니다: {data}")
+            return data
+    except urllib.error.HTTPError as http_err:
+        err_body = http_err.read().decode("utf-8", errors="replace")
+        raise Exception(f"Google OAuth 토큰 갱신 실패 ({http_err.code}): {err_body}")
+
+
+def _get_latest_imap_account_row() -> Optional[Dict[str, Any]]:
+    """DB에 저장된 최신 imap_accounts 전체 컬럼 조회"""
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT * FROM imap_accounts ORDER BY id DESC LIMIT 1").fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def _get_valid_google_access_token(account_cfg: Dict[str, Any]) -> str:
+    """유효한 Google Access Token 반환 (만료 60초 전이면 자동 갱신 및 DB 업데이트)"""
+    access_token = (account_cfg.get("oauth_access_token") or "").strip()
+    expiry = int(account_cfg.get("oauth_token_expiry") or 0)
+    now_ts = int(time.time())
+
+    if access_token and expiry > now_ts + 60:
+        return access_token
+
+    client_id = (account_cfg.get("oauth_client_id") or "").strip()
+    client_secret = (account_cfg.get("oauth_client_secret") or "").strip()
+    refresh_token = (account_cfg.get("oauth_refresh_token") or "").strip()
+
+    if not (client_id and client_secret and refresh_token):
+        raise Exception(
+            "Google OAuth 2.0 인증 토큰이 없거나 만료되었습니다. "
+            "[Google 브라우저 로그인 및 권한 승인] 버튼을 눌러 인증을 진행해 주세요."
+        )
+
+    refreshed = _refresh_google_access_token(client_id, client_secret, refresh_token)
+    new_access_token = refreshed["access_token"]
+    expires_in = int(refreshed.get("expires_in") or 3600)
+    new_expiry = now_ts + expires_in
+
+    account_cfg["oauth_access_token"] = new_access_token
+    account_cfg["oauth_token_expiry"] = new_expiry
+
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT id FROM imap_accounts ORDER BY id DESC LIMIT 1").fetchone()
+        if row:
+            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            conn.execute("""
+                UPDATE imap_accounts
+                SET oauth_access_token = ?, oauth_token_expiry = ?, updated_at = ?
+                WHERE id = ?
+            """, (new_access_token, new_expiry, now_str, row["id"]))
+            conn.commit()
+    finally:
+        conn.close()
+
+    return new_access_token
+
+
+@eel.expose
+def start_google_oauth_flow(client_id: str, client_secret: str, username: str = "") -> Dict[str, Any]:
+    """
+    Google OAuth 2.0 Desktop Loopback + PKCE 브라우저 인증 수행 후 토큰 저장 및 사서함 폴더 목록 반환
+    """
+    client_id_clean = (client_id or "").strip()
+    client_secret_clean = (client_secret or "").strip()
+    user_clean = (username or "").strip()
+    if user_clean and "@" not in user_clean:
+        user_clean = f"{user_clean}@gmail.com"
+
+    if not client_id_clean or not client_secret_clean:
+        return {
+            "status": "error",
+            "message": "Google Cloud OAuth 2.0 Client ID와 Client Secret을 모두 입력해 주세요."
+        }
+
+    code_verifier = secrets.token_urlsafe(48)
+    challenge_digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
+    code_challenge = base64.urlsafe_b64encode(challenge_digest).rstrip(b"=").decode("ascii")
+    state_token = secrets.token_urlsafe(16)
+
+    callback_result: Dict[str, Any] = {"code": None, "error": None, "state": None}
+    done_event = threading.Event()
+
+    class _OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, format, *args):
+            pass
+
+        def do_GET(self):
+            parsed_url = urllib.parse.urlparse(self.path)
+            if parsed_url.path == "/favicon.ico":
+                self.send_response(204)
+                self.end_headers()
+                return
+
+            qs = urllib.parse.parse_qs(parsed_url.query)
+            err = qs.get("error", [None])[0]
+            code = qs.get("code", [None])[0]
+            st = qs.get("state", [None])[0]
+
+            if not err and not code:
+                self.send_response(204)
+                self.end_headers()
+                return
+
+            callback_result["error"] = err
+            callback_result["code"] = code
+            callback_result["state"] = st
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            if code and not err:
+                body = (
+                    "<html><head><meta charset='utf-8'><title>Util-Tools Google OAuth 인증 완료</title></head>"
+                    "<body style='font-family:sans-serif;background:#0f172a;color:#f8fafc;text-align:center;padding:60px;'>"
+                    "<h2 style='color:#4ade80;'>✅ Google OAuth 2.0 인증이 완료되었습니다!</h2>"
+                    "<p style='color:#cbd5e1;'>이 브라우저 탭을 닫고 Util-Tools 앱 화면으로 돌아가 주세요.</p>"
+                    "<script>setTimeout(function(){window.close();}, 1500);</script>"
+                    "</body></html>"
+                )
+            else:
+                body = (
+                    "<html><head><meta charset='utf-8'><title>Util-Tools Google OAuth 인증 실패</title></head>"
+                    "<body style='font-family:sans-serif;background:#0f172a;color:#f8fafc;text-align:center;padding:60px;'>"
+                    f"<h2 style='color:#f87171;'>❌ 인증 실패: {err or '알 수 없는 오류'}</h2>"
+                    "<p style='color:#cbd5e1;'>Util-Tools 앱으로 돌아가 설정을 확인해 주세요.</p>"
+                    "</body></html>"
+                )
+            self.wfile.write(body.encode("utf-8"))
+            done_event.set()
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), _OAuthCallbackHandler)
+    server.timeout = 1.0
+    local_port = server.server_port
+    redirect_uri = f"http://localhost:{local_port}/"
+
+    def _serve_until_done():
+        deadline = time.time() + 180.0
+        while not done_event.is_set() and time.time() < deadline:
+            try:
+                server.handle_request()
+            except Exception:
+                break
+        try:
+            server.server_close()
+        except Exception:
+            pass
+
+    srv_thread = threading.Thread(target=_serve_until_done, daemon=True)
+    srv_thread.start()
+
+    auth_params = {
+        "client_id": client_id_clean,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "https://mail.google.com/ https://www.googleapis.com/auth/userinfo.email",
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state_token,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+    }
+    if user_clean:
+        auth_params["login_hint"] = user_clean
+
+    auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(auth_params)
+    try:
+        webbrowser.open(auth_url)
+    except Exception as wb_err:
+        done_event.set()
+        return {"status": "error", "message": f"브라우저를 열 수 없습니다: {wb_err}"}
+
+    if not done_event.wait(timeout=180.0):
+        return {
+            "status": "error",
+            "message": "브라우저 인증 대기 시간(3분)이 초과되었습니다. 다시 시도해 주세요."
+        }
+
+    if callback_result["error"]:
+        return {
+            "status": "error",
+            "message": f"Google OAuth 인증 거부 또는 오류: {callback_result['error']}"
+        }
+
+    if callback_result["state"] != state_token or not callback_result["code"]:
+        return {
+            "status": "error",
+            "message": "유효하지 않은 OAuth 콜백 응답입니다 (state 불일치 또는 인가 코드 누락)."
+        }
+
+    # 인가 코드(code)를 Access Token / Refresh Token으로 교환
+    token_payload = urllib.parse.urlencode({
+        "code": callback_result["code"],
+        "client_id": client_id_clean,
+        "client_secret": client_secret_clean,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code",
+        "code_verifier": code_verifier,
+    }).encode("utf-8")
+
+    token_req = urllib.request.Request(
+        "https://oauth2.googleapis.com/token",
+        data=token_payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(token_req, timeout=15) as resp:
+            token_data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as http_err:
+        err_body = http_err.read().decode("utf-8", errors="replace")
+        return {"status": "error", "message": f"토큰 발급 실패 ({http_err.code}): {err_body}"}
+    except Exception as ex:
+        return {"status": "error", "message": f"토큰 발급 중 오류: {ex}"}
+
+    access_token = (token_data.get("access_token") or "").strip()
+    refresh_token = (token_data.get("refresh_token") or "").strip()
+    expires_in = int(token_data.get("expires_in") or 3600)
+    token_expiry = int(time.time()) + expires_in
+
+    if not access_token:
+        return {"status": "error", "message": "Google OAuth 토큰 응답에 access_token이 없습니다."}
+
+    # 이메일 주소가 비어있으면 userinfo API로 자동 조회
+    if not user_clean:
+        try:
+            u_req = urllib.request.Request(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"},
+                method="GET",
+            )
+            with urllib.request.urlopen(u_req, timeout=10) as u_resp:
+                u_info = json.loads(u_resp.read().decode("utf-8"))
+                if u_info.get("email"):
+                    user_clean = u_info["email"].strip()
+        except Exception:
+            pass
+
+    if not user_clean:
+        return {
+            "status": "error",
+            "message": "인증된 이메일 계정 주소를 확인할 수 없습니다. 이메일 계정 입력란에 Gmail 주소를 입력한 뒤 다시 시도해 주세요."
+        }
+
+    # 기존 refresh_token 보존 (Google이 재로그인 시 refresh_token을 생략한 경우 대비)
+    prev_row = _get_latest_imap_account_row()
+    if not refresh_token and prev_row and prev_row.get("oauth_refresh_token"):
+        refresh_token = prev_row["oauth_refresh_token"]
+
+    save_imap_config({
+        "account_name": user_clean,
+        "host": "imap.gmail.com",
+        "port": 993,
+        "use_ssl": True,
+        "username": user_clean,
+        "password": (prev_row.get("password") if prev_row else "") or "",
+        "auth_type": "oauth2_google",
+        "oauth_client_id": client_id_clean,
+        "oauth_client_secret": client_secret_clean,
+        "oauth_refresh_token": refresh_token,
+        "oauth_access_token": access_token,
+        "oauth_token_expiry": token_expiry,
+        "folder": (prev_row.get("folder") if prev_row else "INBOX") or "INBOX",
+    })
+
+    # 발급된 토큰으로 즉시 Gmail IMAP 연결 및 폴더 목록 조회
+    folders = [{"name": "INBOX", "label": "INBOX (받은편지함)"}]
+    try:
+        client = _connect_imap("imap.gmail.com", 993, True, timeout=15)
+        try:
+            _authenticate_imap_client(client, "oauth2_google", user_clean, access_token=access_token)
+            folders = _list_imap_folders(client)
+            client.logout()
+        except Exception as imap_err:
+            try:
+                client.logout()
+            except Exception:
+                pass
+            return {
+                "status": "error",
+                "message": f"Google OAuth 토큰은 발급되었으나 Gmail IMAP 접속에 실패했습니다: {_format_imap_error(imap_err, 'imap.gmail.com')}"
+            }
+    except Exception as conn_err:
+        return {
+            "status": "error",
+            "message": f"Gmail IMAP 서버 연결 실패: {conn_err}"
+        }
+
+    log_event("info", "IMAP", f"Google OAuth 2.0 (XOAUTH2) 인증 및 사서함 조회 성공: {user_clean} (폴더 {len(folders)}개)")
+    return {
+        "status": "success",
+        "message": f"Google OAuth 2.0 인증 및 사서함 연결 성공! ({user_clean}, 사서함 {len(folders)}개 조회됨)",
+        "username": user_clean,
+        "has_token": True,
+        "folders": folders,
+    }
+
+
+@eel.expose
+def test_imap_connection(
+    host: str,
+    port: int,
+    use_ssl: bool,
+    username: str,
+    password: str,
+    auth_type: str = "password",
+    oauth_client_id: str = "",
+    oauth_client_secret: str = ""
+) -> Dict[str, Any]:
+    """IMAP 서버 연결 및 인증 테스트, 사서함 목록 조회 (일반 비밀번호 & Google OAuth 2.0 지원)"""
+    try:
+        auth_mode = (auth_type or "password").strip()
         host, username, password = _normalize_imap_credentials(host, username, password)
         port = int(port or 993)
 
-        if not host or not username or not password:
-            return {"status": "error", "message": "호스트 주소, 계정 및 비밀번호를 모두 입력해 주세요."}
+        access_token = ""
+        if auth_mode == "oauth2_google":
+            saved_row = _get_latest_imap_account_row() or {}
+            host = host or saved_row.get("host") or "imap.gmail.com"
+            username = username or saved_row.get("username") or ""
+            if username and "@" not in username and "gmail" in host.lower():
+                username = f"{username}@gmail.com"
+            if not host or not username:
+                return {"status": "error", "message": "이메일 계정 주소(Gmail)를 입력해 주세요."}
+
+            merged_cfg = dict(saved_row)
+            if oauth_client_id:
+                merged_cfg["oauth_client_id"] = oauth_client_id.strip()
+            if oauth_client_secret:
+                merged_cfg["oauth_client_secret"] = oauth_client_secret.strip()
+            access_token = _get_valid_google_access_token(merged_cfg)
+        else:
+            if not host or not username or not password:
+                return {"status": "error", "message": "호스트 주소, 계정 및 비밀번호를 모두 입력해 주세요."}
 
         client = _connect_imap(host, port, use_ssl, timeout=12)
         try:
-            client.login(username, password)
-            status, folders_raw = client.list()
-            folders = []
-            has_inbox = False
-            if status == "OK" and folders_raw:
-                for f in folders_raw:
-                    if not f:
-                        continue
-                    # f: b'(\\HasNoChildren) "/" "INBOX"'
-                    line = f.decode('utf-8', errors='replace')
-                    if "\\Noselect" in line or "\\noselect" in line.lower():
-                        continue
-                    parts = re.split(r'\s+"[^"]*"\s+', line, maxsplit=1)
-                    if len(parts) == 2:
-                        raw_name = parts[1].strip().strip('"')
-                    else:
-                        raw_name = line.strip()
-
-                    if not raw_name:
-                        continue
-                    if raw_name.upper() == "INBOX":
-                        has_inbox = True
-
-                    decoded_label = _decode_imap_utf7(raw_name)
-                    if raw_name.upper() == "INBOX":
-                        display_label = "INBOX (받은편지함)"
-                    elif decoded_label != raw_name:
-                        display_label = f"{decoded_label} ({raw_name})"
-                    else:
-                        display_label = raw_name
-
-                    folders.append({"name": raw_name, "label": display_label})
-
-            if not has_inbox:
-                folders.insert(0, {"name": "INBOX", "label": "INBOX (받은편지함)"})
-
+            _authenticate_imap_client(client, auth_mode, username, password=password, access_token=access_token)
+            folders = _list_imap_folders(client)
             client.logout()
             return {
                 "status": "success",
@@ -211,7 +585,10 @@ def get_imap_config() -> Dict[str, Any]:
         conn = get_db_connection()
         try:
             row = conn.execute("""
-                SELECT id, account_name, host, port, use_ssl, username, password, folder, last_sync_at
+                SELECT id, account_name, host, port, use_ssl, username, password,
+                       auth_type, oauth_client_id, oauth_client_secret,
+                       oauth_refresh_token, oauth_access_token, oauth_token_expiry,
+                       folder, last_sync_at
                 FROM imap_accounts
                 ORDER BY id DESC LIMIT 1
             """).fetchone()
@@ -226,7 +603,11 @@ def get_imap_config() -> Dict[str, Any]:
                         "port": row["port"],
                         "use_ssl": bool(row["use_ssl"]),
                         "username": row["username"],
-                        "password": row["password"],
+                        "password": row["password"] or "",
+                        "auth_type": row["auth_type"] or "password",
+                        "oauth_client_id": row["oauth_client_id"] or "",
+                        "oauth_client_secret": row["oauth_client_secret"] or "",
+                        "has_oauth_token": bool(row["oauth_refresh_token"] or row["oauth_access_token"]),
                         "folder": row["folder"] or "INBOX",
                         "last_sync_at": row["last_sync_at"] or ""
                     }
@@ -240,6 +621,10 @@ def get_imap_config() -> Dict[str, Any]:
                     "use_ssl": True,
                     "username": "",
                     "password": "",
+                    "auth_type": "password",
+                    "oauth_client_id": "",
+                    "oauth_client_secret": "",
+                    "has_oauth_token": False,
                     "folder": "INBOX",
                     "last_sync_at": ""
                 }
@@ -263,26 +648,67 @@ def save_imap_config(config: Dict[str, Any]) -> Dict[str, Any]:
         use_ssl = 1 if config.get("use_ssl", True) else 0
         folder = (config.get("folder") or "INBOX").strip()
         account_name = (config.get("account_name") or username or "이메일 계정").strip()
+        auth_type = (config.get("auth_type") or "password").strip()
+        oauth_client_id = (config.get("oauth_client_id") or "").strip()
+        oauth_client_secret = (config.get("oauth_client_secret") or "").strip()
 
         if not host or not username:
             return {"status": "error", "message": "호스트 주소와 계정 아이디는 필수입니다."}
 
         conn = get_db_connection()
         try:
-            row = conn.execute("SELECT id FROM imap_accounts ORDER BY id DESC LIMIT 1").fetchone()
+            row = conn.execute("SELECT * FROM imap_accounts ORDER BY id DESC LIMIT 1").fetchone()
             now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            prev_dict = dict(row) if row else {}
+            oauth_refresh_token = config.get("oauth_refresh_token")
+            if oauth_refresh_token is None:
+                oauth_refresh_token = prev_dict.get("oauth_refresh_token") or ""
+
+            oauth_access_token = config.get("oauth_access_token")
+            if oauth_access_token is None:
+                oauth_access_token = prev_dict.get("oauth_access_token") or ""
+
+            oauth_token_expiry = config.get("oauth_token_expiry")
+            if oauth_token_expiry is None:
+                oauth_token_expiry = int(prev_dict.get("oauth_token_expiry") or 0)
+            else:
+                oauth_token_expiry = int(oauth_token_expiry or 0)
+
+            if not oauth_client_id and prev_dict.get("oauth_client_id"):
+                oauth_client_id = prev_dict["oauth_client_id"]
+            if not oauth_client_secret and prev_dict.get("oauth_client_secret"):
+                oauth_client_secret = prev_dict["oauth_client_secret"]
 
             if row:
                 conn.execute("""
                     UPDATE imap_accounts
-                    SET account_name = ?, host = ?, port = ?, use_ssl = ?, username = ?, password = ?, folder = ?, updated_at = ?
+                    SET account_name = ?, host = ?, port = ?, use_ssl = ?, username = ?, password = ?,
+                        auth_type = ?, oauth_client_id = ?, oauth_client_secret = ?,
+                        oauth_refresh_token = ?, oauth_access_token = ?, oauth_token_expiry = ?,
+                        folder = ?, updated_at = ?
                     WHERE id = ?
-                """, (account_name, host, port, use_ssl, username, password, folder, now_str, row["id"]))
+                """, (
+                    account_name, host, port, use_ssl, username, password,
+                    auth_type, oauth_client_id, oauth_client_secret,
+                    oauth_refresh_token, oauth_access_token, oauth_token_expiry,
+                    folder, now_str, row["id"]
+                ))
             else:
                 conn.execute("""
-                    INSERT INTO imap_accounts (account_name, host, port, use_ssl, username, password, folder, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (account_name, host, port, use_ssl, username, password, folder, now_str, now_str))
+                    INSERT INTO imap_accounts (
+                        account_name, host, port, use_ssl, username, password,
+                        auth_type, oauth_client_id, oauth_client_secret,
+                        oauth_refresh_token, oauth_access_token, oauth_token_expiry,
+                        folder, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    account_name, host, port, use_ssl, username, password,
+                    auth_type, oauth_client_id, oauth_client_secret,
+                    oauth_refresh_token, oauth_access_token, oauth_token_expiry,
+                    folder, now_str, now_str
+                ))
 
             conn.commit()
             return {"status": "success", "message": "IMAP 설정이 저장되었습니다."}
@@ -305,7 +731,7 @@ def start_imap_sync(options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     백그라운드 스레드에서 IMAP 메일 다운로드 및 단방향 아카이빙 실행
     - options:
-        - host, port, use_ssl, username, password, folder
+        - host, port, use_ssl, username, password, auth_type, oauth_client_id, oauth_client_secret, folder
         - since_days: 최근 N일 (None이면 전체)
         - limit: 최대 다운로드 메일 개수 (기본 100건, None이면 제한 없음)
         - auto_embed: 다운로드 후 AI 벡터 DB 즉시 임베딩 여부 (기본 True)
@@ -332,41 +758,46 @@ def _run_imap_sync_worker(options: Dict[str, Any]):
 
     _ensure_emails_dir()
 
-    # 설정 불러오기
-    host = options.get("host")
-    username = options.get("username")
-    password = options.get("password")
-    port = int(options.get("port") or 993)
-    use_ssl = bool(options.get("use_ssl", True))
-    folder = options.get("folder") or "INBOX"
+    saved_row = _get_latest_imap_account_row() or {}
+
+    host = options.get("host") or saved_row.get("host") or ""
+    username = options.get("username") or saved_row.get("username") or ""
+    password = options.get("password") if options.get("password") is not None else (saved_row.get("password") or "")
+    auth_type = (options.get("auth_type") or saved_row.get("auth_type") or "password").strip()
+    port = int(options.get("port") or saved_row.get("port") or 993)
+    use_ssl = bool(options.get("use_ssl", saved_row.get("use_ssl", True)))
+    folder = options.get("folder") or saved_row.get("folder") or "INBOX"
     since_days = options.get("since_days")  # None 또는 int
     limit = options.get("limit")  # None 또는 int
     auto_embed = options.get("auto_embed", True)
 
-    # 파라미터가 없으면 DB에서 최신 설정 가져오기
-    if not (host and username and password):
-        cfg_res = get_imap_config()
-        if cfg_res.get("status") == "success" and cfg_res.get("config"):
-            cfg = cfg_res["config"]
-            host = host or cfg.get("host")
-            username = username or cfg.get("username")
-            password = password or cfg.get("password")
-            port = port or cfg.get("port", 993)
-            use_ssl = use_ssl if "use_ssl" in options else cfg.get("use_ssl", True)
-            folder = folder or cfg.get("folder", "INBOX")
+    host, username, password = _normalize_imap_credentials(host, username, password)
 
-    host, username, password = _normalize_imap_credentials(host or "", username or "", password or "")
-
-    if not (host and username and password):
-        _is_sync_running = False
-        _notify_sync_error("IMAP 계정 설정 정보가 올바르지 않습니다.")
-        return
+    if auth_type == "oauth2_google":
+        if not (host and username):
+            _is_sync_running = False
+            _notify_sync_error("IMAP 호스트와 이메일 계정 주소를 확인해 주세요.")
+            return
+    else:
+        if not (host and username and password):
+            _is_sync_running = False
+            _notify_sync_error("IMAP 계정 설정 정보가 올바르지 않습니다.")
+            return
 
     client = None
     try:
         _notify_sync_progress(0, 1, "IMAP 서버에 연결 중...", 0)
+        access_token = ""
+        if auth_type == "oauth2_google":
+            merged_cfg = dict(saved_row)
+            if options.get("oauth_client_id"):
+                merged_cfg["oauth_client_id"] = options["oauth_client_id"].strip()
+            if options.get("oauth_client_secret"):
+                merged_cfg["oauth_client_secret"] = options["oauth_client_secret"].strip()
+            access_token = _get_valid_google_access_token(merged_cfg)
+
         client = _connect_imap(host, port, use_ssl, timeout=20)
-        client.login(username, password)
+        _authenticate_imap_client(client, auth_type, username, password=password, access_token=access_token)
 
         # 1. 단방향 보존 원칙: readonly=True로 열어 서버 메일 상태(플래그/삭제)를 절대 건드리지 않음
         quoted_folder = _quote_imap_folder(folder)

@@ -23,7 +23,9 @@ from services.imap_service import (
     _normalize_imap_credentials,
     _format_imap_error,
     _decode_imap_utf7,
-    _quote_imap_folder
+    _quote_imap_folder,
+    _build_xoauth2_bytes,
+    _get_valid_google_access_token,
 )
 from services.ai_search_service import embed_new_emails
 
@@ -44,7 +46,7 @@ def test_imap_config_crud():
         conn.close()
 
     try:
-        # 1. 설정 저장
+        # 1. 설정 저장 (일반 비밀번호 모드)
         test_cfg = {
             "account_name": "업무용 Gmail",
             "host": "imap.gmail.com",
@@ -52,6 +54,7 @@ def test_imap_config_crud():
             "use_ssl": True,
             "username": "tester@example.com",
             "password": "app_password_secret",
+            "auth_type": "password",
             "folder": "INBOX"
         }
         save_res = save_imap_config(test_cfg)
@@ -67,15 +70,59 @@ def test_imap_config_crud():
         assert cfg["use_ssl"] is True
         assert cfg["username"] == "tester@example.com"
         assert cfg["password"] == "app_password_secret"
+        assert cfg["auth_type"] == "password"
+        assert cfg["has_oauth_token"] is False
         assert cfg["folder"] == "INBOX"
 
-        # 3. 설정 업데이트
-        test_cfg["folder"] = "Sent"
-        update_res = save_imap_config(test_cfg)
+        # 3. OAuth 2.0 설정 및 토큰 저장 검증
+        future_exp = int(time.time()) + 3600
+        oauth_cfg = {
+            "account_name": "tester@gmail.com",
+            "host": "imap.gmail.com",
+            "port": 993,
+            "use_ssl": True,
+            "username": "tester@gmail.com",
+            "password": "",
+            "auth_type": "oauth2_google",
+            "oauth_client_id": "12345-abcde.apps.googleusercontent.com",
+            "oauth_client_secret": "GOCSPX-secret123",
+            "oauth_refresh_token": "1//refresh_token_sample",
+            "oauth_access_token": "ya29.access_token_sample",
+            "oauth_token_expiry": future_exp,
+            "folder": "Sent"
+        }
+        update_res = save_imap_config(oauth_cfg)
         assert update_res["status"] == "success"
 
         updated_cfg = get_imap_config()["config"]
         assert updated_cfg["folder"] == "Sent"
+        assert updated_cfg["auth_type"] == "oauth2_google"
+        assert updated_cfg["oauth_client_id"] == "12345-abcde.apps.googleusercontent.com"
+        assert updated_cfg["oauth_client_secret"] == "GOCSPX-secret123"
+        assert updated_cfg["has_oauth_token"] is True
+
+        # 4. 폴더만 변경 저장해도 기존 OAuth 토큰이 유지되는지 검증
+        partial_save = save_imap_config({
+            "host": "imap.gmail.com",
+            "port": 993,
+            "use_ssl": True,
+            "username": "tester@gmail.com",
+            "auth_type": "oauth2_google",
+            "oauth_client_id": "12345-abcde.apps.googleusercontent.com",
+            "oauth_client_secret": "GOCSPX-secret123",
+            "folder": "[Gmail]/보낸편지함"
+        })
+        assert partial_save["status"] == "success"
+        after_partial = get_imap_config()["config"]
+        assert after_partial["has_oauth_token"] is True
+        assert after_partial["folder"] == "[Gmail]/보낸편지함"
+
+        # 5. 만료 전 캐시된 Access Token 반환 검증
+        valid_tok = _get_valid_google_access_token({
+            "oauth_access_token": "ya29.cached_valid_token",
+            "oauth_token_expiry": int(time.time()) + 1800,
+        })
+        assert valid_tok == "ya29.cached_valid_token"
     finally:
         # 테스트 더미 제거 및 기존 사용자 설정 복원
         conn = get_db_connection()
@@ -83,11 +130,23 @@ def test_imap_config_crud():
             conn.execute("DELETE FROM imap_accounts")
             for r in backup_rows:
                 conn.execute("""
-                    INSERT INTO imap_accounts (id, account_name, host, port, use_ssl, username, password, folder, last_sync_at, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO imap_accounts (
+                        id, account_name, host, port, use_ssl, username, password,
+                        auth_type, oauth_client_id, oauth_client_secret,
+                        oauth_refresh_token, oauth_access_token, oauth_token_expiry,
+                        folder, last_sync_at, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     r["id"], r["account_name"], r["host"], r["port"], r["use_ssl"],
-                    r["username"], r["password"], r["folder"], r["last_sync_at"],
+                    r["username"], r.get("password") or "",
+                    r.get("auth_type") or "password",
+                    r.get("oauth_client_id") or "",
+                    r.get("oauth_client_secret") or "",
+                    r.get("oauth_refresh_token") or "",
+                    r.get("oauth_access_token") or "",
+                    int(r.get("oauth_token_expiry") or 0),
+                    r["folder"], r["last_sync_at"],
                     r["created_at"], r["updated_at"]
                 ))
             conn.commit()
@@ -125,6 +184,10 @@ def test_imap_connection_validation():
     assert _decode_imap_utf7("[Gmail]/&vPSwuNO4ycDVaA-") == "[Gmail]/보낸편지함"
     assert _quote_imap_folder("[Gmail]/All Mail") == '"[Gmail]/All Mail"'
     assert _quote_imap_folder("INBOX") == "INBOX"
+
+    # 6. XOAUTH2 SASL 인증 바이트열 포맷 검증
+    xoauth_raw = _build_xoauth2_bytes("user@gmail.com", "ya29.token_abc")
+    assert xoauth_raw == b"user=user@gmail.com\x01auth=Bearer ya29.token_abc\x01\x01"
 
     print("  [PASS] test_imap_connection_validation")
 
