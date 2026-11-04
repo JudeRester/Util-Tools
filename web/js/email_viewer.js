@@ -1564,6 +1564,13 @@ async function openImapSyncModal() {
                 }
                 setImapAuthType(c.auth_type || "password");
                 updateImapOAuthTokenBadge(Boolean(c.has_oauth_token));
+                if (document.getElementById("imap-poll-interval")) {
+                    document.getElementById("imap-poll-interval").value = String(c.poll_interval_minutes || 0);
+                }
+                const lastSyncEl = document.getElementById("imap-last-sync-info");
+                if (lastSyncEl) {
+                    lastSyncEl.textContent = `🕒 마지막 동기화: ${c.last_sync_at || "기록 없음"}`;
+                }
 
                 const folderSel = document.getElementById("imap-folder-select");
                 if (folderSel && c.folder) {
@@ -1624,6 +1631,7 @@ function getImapFormInputs() {
         auth_type: _currentImapAuthType,
         oauth_client_id: (document.getElementById("imap-oauth-client-id")?.value || "").trim(),
         oauth_client_secret: (document.getElementById("imap-oauth-client-secret")?.value || "").trim(),
+        poll_interval_minutes: parseInt(document.getElementById("imap-poll-interval")?.value || "0", 10),
         folder: document.getElementById("imap-folder-select")?.value || "INBOX"
     };
 }
@@ -1947,6 +1955,13 @@ function resetImapSyncUiState() {
     if (pFill) pFill.style.width = "0%";
     if (pText) pText.textContent = "메일 다운로드 대기 중...";
     if (pPct) pPct.textContent = "0%";
+
+    const quickBtn = document.getElementById("email-quick-sync-btn");
+    const quickIcon = document.getElementById("email-quick-sync-icon");
+    const quickText = document.getElementById("email-quick-sync-text");
+    if (quickBtn) quickBtn.disabled = false;
+    if (quickIcon) quickIcon.textContent = "🔄";
+    if (quickText) quickText.textContent = "실시간 동기화";
 }
 
 // Eel 콜백 함수 등록
@@ -1963,6 +1978,12 @@ function on_imap_sync_progress(current, total, subject, percent) {
 
     const pct = Math.max(0, Math.min(100, percent || 0));
     if (pFill) pFill.style.width = `${pct}%`;
+    const quickBtn = document.getElementById("email-quick-sync-btn");
+    const quickIcon = document.getElementById("email-quick-sync-icon");
+    const quickText = document.getElementById("email-quick-sync-text");
+    if (quickBtn) quickBtn.disabled = true;
+    if (quickIcon) quickIcon.textContent = "⏳";
+    if (quickText) quickText.textContent = `동기화 중 (${pct}%)`;
     if (pPct) pPct.textContent = `${pct}%`;
     if (pText) {
         pText.textContent = total > 1
@@ -1975,6 +1996,13 @@ function on_imap_sync_complete(result) {
     resetImapSyncUiState();
 
     const downloaded = result.downloaded || 0;
+    const lastSyncEl = document.getElementById("imap-last-sync-info");
+    if (lastSyncEl && result.last_sync_at) {
+        lastSyncEl.textContent = `🕒 마지막 동기화: ${result.last_sync_at}`;
+    }
+    if (result.is_background_poll && downloaded === 0) {
+        return;
+    }
     const skipped = result.skipped || 0;
     const embedded = result.embedded || 0;
 
@@ -2015,5 +2043,49 @@ function on_imap_sync_error(message) {
     }
     if (typeof showToast === "function") {
         showToast("IMAP 동기화 오류", errMsg, "error");
+    }
+}
+
+
+async function triggerQuickImapSync() {
+    const quickBtn = document.getElementById("email-quick-sync-btn");
+    const quickIcon = document.getElementById("email-quick-sync-icon");
+    const quickText = document.getElementById("email-quick-sync-text");
+
+    try {
+        if (window.eel && eel.start_imap_sync) {
+            const res = await eel.start_imap_sync({
+                quick_sync: true,
+                since_days: 14,
+                limit: 50,
+                auto_embed: true
+            })();
+
+            if (res && res.status === "not_configured") {
+                if (typeof showToast === "function") {
+                    showToast("IMAP 설정 필요", res.message || "먼저 IMAP 계정 연동 설정을 완료해 주세요.", "warn");
+                }
+                openImapSyncModal();
+                return;
+            }
+
+            if (res && res.status === "started") {
+                if (quickBtn) quickBtn.disabled = true;
+                if (quickIcon) quickIcon.textContent = "⏳";
+                if (quickText) quickText.textContent = "동기화 중...";
+                if (typeof showToast === "function") {
+                    showToast("실시간 동기화 시작", "저장된 IMAP 계정에서 최신 메일을 확인하고 있습니다...", "info");
+                }
+            } else if (res && res.status === "error") {
+                if (typeof showToast === "function") {
+                    showToast("동기화 안내", res.message || "이미 동기화가 진행 중입니다.", "warn");
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[IMAP Quick Sync] 오류:", e);
+        if (typeof showToast === "function") {
+            showToast("동기화 오류", String(e?.message || e), "error");
+        }
     }
 }

@@ -617,6 +617,9 @@
                             <button class="form-btn select-file-btn" onclick="openImapSyncModal()" title="IMAP 메일 서버 연동 및 원본 다운로드 (단방향 보존 & AI 벡터 임베딩)">
                                 <span>📥</span> IMAP 연동
                             </button>
+                            <button id="email-quick-sync-btn" class="form-btn select-file-btn" onclick="triggerQuickImapSync()" title="저장된 IMAP 계정에서 최신 메일 즉시 동기화">
+                                <span id="email-quick-sync-icon">🔄</span> <span id="email-quick-sync-text">실시간 동기화</span>
+                            </button>
                             <button id="email-thread-toggle-btn" class="form-btn email-thread-toggle active" onclick="toggleThreadView()" title="대화별 묶어보기 (스레드 뷰) / 개별 메일 목록 전환">
                                 <span>💬</span> <span id="email-thread-toggle-text">대화별 묶기</span>
                             </button>
@@ -3365,6 +3368,17 @@
                 <div class="imap-options-box">
                     <div style="display: flex; gap: 12px; flex-wrap: wrap;">
                         <div style="flex: 1; min-width: 130px;">
+                            <label class="form-label" for="imap-poll-interval">자동 폴링 주기:</label>
+                            <select id="imap-poll-interval" class="form-select">
+                                <option value="0" selected>사용 안 함 (수동)</option>
+                                <option value="5">5분마다 자동 확인</option>
+                                <option value="10">10분마다 자동 확인</option>
+                                <option value="15">15분마다 자동 확인</option>
+                                <option value="30">30분마다 자동 확인</option>
+                                <option value="60">1시간마다 자동 확인</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 130px;">
                             <label class="form-label" for="imap-since-days">수신 기간 범위:</label>
                             <select id="imap-since-days" class="form-select">
                                 <option value="7">최근 7일</option>
@@ -3385,6 +3399,7 @@
                         </div>
                     </div>
                     <div style="margin-top: 10px;">
+                        <div id="imap-last-sync-info" class="imap-last-sync-info">🕒 마지막 동기화: 기록 없음</div>
                         <label class="imap-checkbox-label">
                             <input type="checkbox" id="imap-auto-embed" checked>
                             <span>🧠 다운로드 즉시 AI 신경망 벡터 DB(ai_embeddings) 자동 임베딩 생성 (Ctrl+K 시맨틱 검색 연동)</span>

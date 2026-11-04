@@ -12859,3 +12859,9 @@ input[type="checkbox"] {
 
 
 
+
+.imap-last-sync-info {
+    font-size: 0.77rem;
+    color: #94a3b8;
+    margin-bottom: 6px;
+}

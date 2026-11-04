@@ -849,6 +849,7 @@ def init_db():
                         oauth_access_token TEXT DEFAULT '',
                         oauth_token_expiry INTEGER DEFAULT 0,
                         folder TEXT DEFAULT 'INBOX',
+                        poll_interval_minutes INTEGER DEFAULT 0,
                         last_sync_at TEXT,
                         created_at TEXT DEFAULT (datetime('now', 'localtime')),
                         updated_at TEXT DEFAULT (datetime('now', 'localtime'))
@@ -864,6 +865,7 @@ def init_db():
                     ("oauth_refresh_token", "TEXT DEFAULT ''"),
                     ("oauth_access_token", "TEXT DEFAULT ''"),
                     ("oauth_token_expiry", "INTEGER DEFAULT 0"),
+                    ("poll_interval_minutes", "INTEGER DEFAULT 0"),
                 ]
                 for col_name, col_def in imap_migration_cols:
                     if col_name not in existing_imap_cols:

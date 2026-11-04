@@ -19,6 +19,7 @@ from services.db_service import init_db, get_db_connection
 from services.imap_service import (
     get_imap_config,
     save_imap_config,
+    start_imap_sync,
     test_imap_connection,
     _normalize_imap_credentials,
     _format_imap_error,
@@ -46,6 +47,10 @@ def test_imap_config_crud():
         conn.close()
 
     try:
+        # 0. 설정 없을 때 quick_sync 호출 시 not_configured 반환 검증
+        no_cfg_res = start_imap_sync({"quick_sync": True})
+        assert no_cfg_res["status"] == "not_configured"
+
         # 1. 설정 저장 (일반 비밀번호 모드)
         test_cfg = {
             "account_name": "업무용 Gmail",
@@ -89,7 +94,8 @@ def test_imap_config_crud():
             "oauth_refresh_token": "1//refresh_token_sample",
             "oauth_access_token": "ya29.access_token_sample",
             "oauth_token_expiry": future_exp,
-            "folder": "Sent"
+            "folder": "Sent",
+            "poll_interval_minutes": 15
         }
         update_res = save_imap_config(oauth_cfg)
         assert update_res["status"] == "success"
@@ -100,6 +106,7 @@ def test_imap_config_crud():
         assert updated_cfg["oauth_client_id"] == "12345-abcde.apps.googleusercontent.com"
         assert updated_cfg["oauth_client_secret"] == "GOCSPX-secret123"
         assert updated_cfg["has_oauth_token"] is True
+        assert updated_cfg["poll_interval_minutes"] == 15
 
         # 4. 폴더만 변경 저장해도 기존 OAuth 토큰이 유지되는지 검증
         partial_save = save_imap_config({
@@ -116,6 +123,7 @@ def test_imap_config_crud():
         after_partial = get_imap_config()["config"]
         assert after_partial["has_oauth_token"] is True
         assert after_partial["folder"] == "[Gmail]/보낸편지함"
+        assert after_partial["poll_interval_minutes"] == 15
 
         # 5. 만료 전 캐시된 Access Token 반환 검증
         valid_tok = _get_valid_google_access_token({
@@ -134,9 +142,9 @@ def test_imap_config_crud():
                         id, account_name, host, port, use_ssl, username, password,
                         auth_type, oauth_client_id, oauth_client_secret,
                         oauth_refresh_token, oauth_access_token, oauth_token_expiry,
-                        folder, last_sync_at, created_at, updated_at
+                        folder, poll_interval_minutes, last_sync_at, created_at, updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     r["id"], r["account_name"], r["host"], r["port"], r["use_ssl"],
                     r["username"], r.get("password") or "",
@@ -146,7 +154,7 @@ def test_imap_config_crud():
                     r.get("oauth_refresh_token") or "",
                     r.get("oauth_access_token") or "",
                     int(r.get("oauth_token_expiry") or 0),
-                    r["folder"], r["last_sync_at"],
+                    r["folder"], int(r.get("poll_interval_minutes") or 0), r["last_sync_at"],
                     r["created_at"], r["updated_at"]
                 ))
             conn.commit()

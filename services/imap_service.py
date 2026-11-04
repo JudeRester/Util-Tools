@@ -591,7 +591,7 @@ def get_imap_config() -> Dict[str, Any]:
                 SELECT id, account_name, host, port, use_ssl, username, password,
                        auth_type, oauth_client_id, oauth_client_secret,
                        oauth_refresh_token, oauth_access_token, oauth_token_expiry,
-                       folder, last_sync_at
+                       folder, poll_interval_minutes, last_sync_at
                 FROM imap_accounts
                 ORDER BY id DESC LIMIT 1
             """).fetchone()
@@ -612,6 +612,7 @@ def get_imap_config() -> Dict[str, Any]:
                         "oauth_client_secret": row["oauth_client_secret"] or "",
                         "has_oauth_token": bool(row["oauth_refresh_token"] or row["oauth_access_token"]),
                         "folder": row["folder"] or "INBOX",
+                        "poll_interval_minutes": int(row["poll_interval_minutes"] or 0),
                         "last_sync_at": row["last_sync_at"] or ""
                     }
                 }
@@ -629,6 +630,7 @@ def get_imap_config() -> Dict[str, Any]:
                     "oauth_client_secret": "",
                     "has_oauth_token": False,
                     "folder": "INBOX",
+                    "poll_interval_minutes": 0,
                     "last_sync_at": ""
                 }
             }
@@ -683,19 +685,25 @@ def save_imap_config(config: Dict[str, Any]) -> Dict[str, Any]:
             if not oauth_client_secret and prev_dict.get("oauth_client_secret"):
                 oauth_client_secret = prev_dict["oauth_client_secret"]
 
+            poll_interval_raw = config.get("poll_interval_minutes")
+            if poll_interval_raw is None:
+                poll_interval_minutes = int(prev_dict.get("poll_interval_minutes") or 0)
+            else:
+                poll_interval_minutes = max(0, int(poll_interval_raw or 0))
+
             if row:
                 conn.execute("""
                     UPDATE imap_accounts
                     SET account_name = ?, host = ?, port = ?, use_ssl = ?, username = ?, password = ?,
                         auth_type = ?, oauth_client_id = ?, oauth_client_secret = ?,
                         oauth_refresh_token = ?, oauth_access_token = ?, oauth_token_expiry = ?,
-                        folder = ?, updated_at = ?
+                        folder = ?, poll_interval_minutes = ?, updated_at = ?
                     WHERE id = ?
                 """, (
                     account_name, host, port, use_ssl, username, password,
                     auth_type, oauth_client_id, oauth_client_secret,
                     oauth_refresh_token, oauth_access_token, oauth_token_expiry,
-                    folder, now_str, row["id"]
+                    folder, poll_interval_minutes, now_str, row["id"]
                 ))
             else:
                 conn.execute("""
@@ -703,14 +711,14 @@ def save_imap_config(config: Dict[str, Any]) -> Dict[str, Any]:
                         account_name, host, port, use_ssl, username, password,
                         auth_type, oauth_client_id, oauth_client_secret,
                         oauth_refresh_token, oauth_access_token, oauth_token_expiry,
-                        folder, created_at, updated_at
+                        folder, poll_interval_minutes, created_at, updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     account_name, host, port, use_ssl, username, password,
                     auth_type, oauth_client_id, oauth_client_secret,
                     oauth_refresh_token, oauth_access_token, oauth_token_expiry,
-                    folder, now_str, now_str
+                    folder, poll_interval_minutes, now_str, now_str
                 ))
 
             conn.commit()
@@ -744,7 +752,31 @@ def start_imap_sync(options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     if _is_sync_running:
         return {"status": "error", "message": "이미 메일 동기화가 진행 중입니다."}
 
-    options = options or {}
+    options = dict(options or {})
+
+    if options.get("quick_sync"):
+        saved_row = _get_latest_imap_account_row()
+        if not saved_row or not (saved_row.get("username") or "").strip():
+            return {
+                "status": "not_configured",
+                "message": "저장된 IMAP 계정 설정이 없습니다. 먼저 IMAP 연동을 설정해 주세요."
+            }
+        auth_type = (saved_row.get("auth_type") or "password").strip()
+        if auth_type == "oauth2_google":
+            if not saved_row.get("oauth_refresh_token") and not saved_row.get("oauth_access_token"):
+                return {
+                    "status": "not_configured",
+                    "message": "저장된 IMAP 계정 설정이 없습니다. 먼저 IMAP 연동을 설정해 주세요."
+                }
+        else:
+            if not (saved_row.get("password") or "").strip():
+                return {
+                    "status": "not_configured",
+                    "message": "저장된 IMAP 계정 설정이 없습니다. 먼저 IMAP 연동을 설정해 주세요."
+                }
+        options.setdefault("since_days", 14)
+        options.setdefault("limit", 50)
+        options.setdefault("auto_embed", True)
 
     # 스레드로 비동기 실행
     worker = threading.Thread(target=_run_imap_sync_worker, args=(options,), daemon=True)
@@ -773,6 +805,8 @@ def _run_imap_sync_worker(options: Dict[str, Any]):
     since_days = options.get("since_days")  # None 또는 int
     limit = options.get("limit")  # None 또는 int
     auto_embed = options.get("auto_embed", True)
+    is_bg_poll = bool(options.get("is_background_poll"))
+    is_quick_sync = bool(options.get("quick_sync"))
 
     host, username, password = _normalize_imap_credentials(host, username, password)
 
@@ -826,6 +860,13 @@ def _run_imap_sync_worker(options: Dict[str, Any]):
 
         if status != "OK" or not search_data or not search_data[0]:
             empty_msg = "조회된 메일이 없습니다."
+            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            conn = get_db_connection()
+            try:
+                conn.execute("UPDATE imap_accounts SET last_sync_at = ? WHERE username = ?", (now_str, username))
+                conn.commit()
+            finally:
+                conn.close()
             if since_days and int(since_days) > 0:
                 st_all, all_data = client.uid('search', None, 'ALL')
                 total_in_box = len(all_data[0].split()) if (st_all == "OK" and all_data and all_data[0]) else 0
@@ -839,7 +880,10 @@ def _run_imap_sync_worker(options: Dict[str, Any]):
                 "downloaded": 0,
                 "skipped": 0,
                 "embedded": 0,
-                "message": empty_msg
+                "message": empty_msg,
+                "last_sync_at": now_str,
+                "is_background_poll": is_bg_poll,
+                "quick_sync": is_quick_sync
             })
             return
 
@@ -994,7 +1038,9 @@ def _run_imap_sync_worker(options: Dict[str, Any]):
             "skipped": skipped_count,
             "embedded": embedded_count,
             "total_processed": total_uids,
-            "last_sync_at": now_str
+            "last_sync_at": now_str,
+            "is_background_poll": is_bg_poll,
+            "quick_sync": is_quick_sync
         })
 
     except Exception as e:
@@ -1033,5 +1079,80 @@ def _notify_sync_error(message: str):
     try:
         if hasattr(eel, 'on_imap_sync_error'):
             eel.on_imap_sync_error(message)()
+
     except Exception:
         pass
+
+
+
+_poll_daemon_started = False
+_poll_daemon_lock = threading.Lock()
+
+
+def _imap_poll_daemon_loop():
+    """주기적으로 imap_accounts.poll_interval_minutes를 확인하여 백그라운드 동기화 수행"""
+    while True:
+        time.sleep(30)
+        try:
+            if _is_sync_running:
+                continue
+            row = _get_latest_imap_account_row()
+            if not row:
+                continue
+            poll_min = int(row.get("poll_interval_minutes") or 0)
+            if poll_min <= 0:
+                continue
+
+            username = (row.get("username") or "").strip()
+            if not username:
+                continue
+            auth_type = (row.get("auth_type") or "password").strip()
+            if auth_type == "oauth2_google":
+                if not row.get("oauth_refresh_token") and not row.get("oauth_access_token"):
+                    continue
+            else:
+                if not (row.get("password") or "").strip():
+                    continue
+
+            last_sync_str = (row.get("last_sync_at") or "").strip()
+            should_sync = False
+            if not last_sync_str:
+                should_sync = True
+            else:
+                try:
+                    parsed_last = datetime.datetime.strptime(last_sync_str, "%Y-%m-%d %H:%M:%S")
+                    elapsed = (datetime.datetime.now() - parsed_last).total_seconds()
+                    if elapsed >= poll_min * 60:
+                        should_sync = True
+                except Exception:
+                    should_sync = True
+
+            if should_sync and not _is_sync_running:
+                log_event("info", "IMAP", f"백그라운드 자동 폴링 시작 (주기: {poll_min}분, 계정: {username})")
+                worker = threading.Thread(
+                    target=_run_imap_sync_worker,
+                    args=({
+                        "is_background_poll": True,
+                        "since_days": 14,
+                        "limit": 50,
+                        "auto_embed": True,
+                    },),
+                    daemon=True,
+                )
+                worker.start()
+        except Exception as e:
+            log_event("warn", "IMAP", f"백그라운드 폴링 루프 예외: {e}")
+
+
+def start_imap_polling_daemon():
+    """IMAP 주기적 백그라운드 폴링 데몬 스레드 1회 기동"""
+    global _poll_daemon_started
+    with _poll_daemon_lock:
+        if _poll_daemon_started:
+            return
+        _poll_daemon_started = True
+        t = threading.Thread(target=_imap_poll_daemon_loop, name="ImapPollingDaemon", daemon=True)
+        t.start()
+
+
+start_imap_polling_daemon()
