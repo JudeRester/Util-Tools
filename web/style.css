@@ -12865,3 +12865,73 @@ input[type="checkbox"] {
     color: #94a3b8;
     margin-bottom: 6px;
 }
+
+/* 이메일 외부 이미지/트래킹 픽셀 차단 보안 가드 배너 */
+.email-remote-guard-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 14px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    font-size: 0.81rem;
+    line-height: 1.4;
+}
+
+.email-remote-guard-banner.blocked {
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fcd34d;
+}
+
+.email-remote-guard-banner.allowed {
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.32);
+    color: #93c5fd;
+}
+
+.email-remote-guard-banner .guard-banner-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.email-remote-guard-banner .guard-icon {
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+.email-remote-guard-banner .guard-text {
+    word-break: keep-all;
+}
+
+.email-remote-guard-banner .guard-allow-btn {
+    flex-shrink: 0;
+    padding: 5px 11px;
+    border-radius: 6px;
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    background: rgba(245, 158, 11, 0.2);
+    color: #fef3c7;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.email-remote-guard-banner .guard-allow-btn:hover {
+    background: rgba(245, 158, 11, 0.32);
+    border-color: rgba(245, 158, 11, 0.65);
+}
+
+.email-remote-guard-banner .guard-allow-btn.secondary {
+    border-color: rgba(148, 163, 184, 0.4);
+    background: rgba(30, 41, 59, 0.65);
+    color: #e2e8f0;
+}
+
+.email-remote-guard-banner .guard-allow-btn.secondary:hover {
+    background: rgba(51, 65, 85, 0.8);
+}
+

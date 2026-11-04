@@ -18,7 +18,8 @@ let emailState = {
     listWidthPercent: 38,
     displayedLimit: 50,        // 인피니트 스크롤 1회 렌더링 개수
     isThreadView: true,        // 대화별 묶어보기 모드 (기본 ON)
-    expandedThreadCardIds: new Set() // 현재 타임라인에서 펼쳐진 메일 ID 목록
+    expandedThreadCardIds: new Set(), // 현재 타임라인에서 펼쳐진 메일 ID 목록
+    allowedRemoteImageIds: new Set()  // 사용자가 외부 이미지 표시를 허용한 메일 ID 집합
 };
 
 // ==========================================
@@ -592,6 +593,128 @@ function renderEmailAttachmentsBar(email, customStyle = '') {
     `;
 }
 
+// ==========================================
+// 5-1. 이메일 HTML 보안 가드 (외부 이미지/트래킹 픽셀 차단 및 CSP 격리)
+// ==========================================
+function sanitizeAndPrepareEmailHtml(rawHtml, allowRemoteImages = false) {
+    if (!rawHtml) return { html: '', hasRemoteResources: false, blockedCount: 0 };
+
+    let html = String(rawHtml);
+    let blockedCount = 0;
+
+    // 1. 위험한 실행형 태그 및 인라인 이벤트 핸들러 원천 제거
+    html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    html = html.replace(/<(object|embed|applet|base)\b[^>]*>([\s\S]*?<\/\1>)?/gi, '');
+    html = html.replace(/<meta\b[^>]*http-equiv\s*=\s*["']?refresh["']?[^>]*>/gi, '');
+    html = html.replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+
+    const placeholderSvg = "data:image/svg+xml;utf8," + encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="34" viewBox="0 0 180 34">` +
+        `<rect width="100%" height="100%" rx="6" fill="#f1f5f9" stroke="#cbd5e1" stroke-dasharray="3,3"/>` +
+        `<text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="#64748b" font-family="sans-serif" font-size="11">🛡️ 외부 이미지 차단됨</text>` +
+        `</svg>`
+    );
+
+    // 2. <img src="..."> 외부 원격 URL 감지 및 차단
+    html = html.replace(/<img\b([^>]*?)\bsrc\s*=\s*(["'])(\s*(?:https?:)?\/\/[^"']+)\2([^>]*?)>/gi, (match, pre, quote, url, post) => {
+        blockedCount++;
+        if (allowRemoteImages) return match;
+        return `<img${pre}src="${placeholderSvg}" data-blocked-src="${escapeHtmlAttr(url.trim())}" title="보안을 위해 차단된 외부 이미지 (${escapeHtmlAttr(url.trim())})"${post}>`;
+    });
+
+    // 따옴표 없는 img src=http... 처리
+    html = html.replace(/<img\b([^>]*?)\bsrc\s*=\s*((?:https?:)?\/\/[^\s>]+)([^>]*?)>/gi, (match, pre, url, post) => {
+        blockedCount++;
+        if (allowRemoteImages) return match;
+        return `<img${pre}src="${placeholderSvg}" data-blocked-src="${escapeHtmlAttr(url.trim())}"${post}>`;
+    });
+
+    // 3. srcset / background 속성 내 원격 URL 감지 및 차단
+    html = html.replace(/\b(srcset|background)\s*=\s*(["'])([^"']*(?:https?:)?\/\/[^"']*)\2/gi, (match, attr, quote, val) => {
+        blockedCount++;
+        if (allowRemoteImages) return match;
+        return `data-blocked-${attr}=${quote}${escapeHtmlAttr(val)}${quote}`;
+    });
+
+    // 4. CSS url(http://...) 원격 배경/폰트 감지 및 차단
+    html = html.replace(/url\(\s*(['"]?)\s*((?:https?:)?\/\/[^)'"]+)\1\s*\)/gi, (match, quote, url) => {
+        blockedCount++;
+        if (allowRemoteImages) return match;
+        return 'url("about:blank")';
+    });
+
+    // 5. 외부 스타일시트 <link rel="stylesheet" href="http..."> 감지 및 차단
+    html = html.replace(/<link\b[^>]*?\bhref\s*=\s*(["']?)\s*(?:https?:)?\/\/[^>]+>/gi, (match) => {
+        blockedCount++;
+        if (allowRemoteImages) return match;
+        return '<!-- blocked external link -->';
+    });
+
+    // 6. 엄격한 Content-Security-Policy (CSP) 메타 헤더 주입
+    // - 기본 차단 모드: img-src data: cid: blob: 만 허용 (트래킹 픽셀/웹 비콘 100% 네트워크 차단)
+    // - 허용 모드: 사용자가 명시적으로 승인한 해당 메일에만 https: http: 이미지/스타일 허용
+    const cspPolicy = allowRemoteImages
+        ? "default-src 'none'; img-src data: cid: blob: https: http:; style-src 'unsafe-inline' https: http:; font-src data: https: http:;"
+        : "default-src 'none'; img-src data: cid: blob:; style-src 'unsafe-inline'; font-src data:;";
+
+    const securityHead = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${cspPolicy}"><base target="_blank" rel="noopener noreferrer">`;
+
+    return {
+        html: securityHead + html,
+        hasRemoteResources: blockedCount > 0,
+        blockedCount: blockedCount
+    };
+}
+
+function renderRemoteImageGuardBanner(emailId, hasRemoteResources, blockedCount, isAllowed) {
+    if (!hasRemoteResources) return '';
+    const safeId = escapeHtmlAttr(emailId);
+    if (!isAllowed) {
+        return `
+            <div class="email-remote-guard-banner blocked">
+                <div class="guard-banner-left">
+                    <span class="guard-icon">🛡️</span>
+                    <span class="guard-text">개인정보 보호(트래킹 픽셀 방지) 및 악성코드 예방을 위해 외부 원격 리소스(${blockedCount}건)를 차단했습니다.</span>
+                </div>
+                <button type="button" class="guard-allow-btn" onclick="toggleEmailRemoteImages('${safeId}', true)">
+                    🖼️ 외부 이미지 표시
+                </button>
+            </div>
+        `;
+    } else {
+        return `
+            <div class="email-remote-guard-banner allowed">
+                <div class="guard-banner-left">
+                    <span class="guard-icon">🔓</span>
+                    <span class="guard-text">이 메일의 외부 이미지(${blockedCount}건)가 표시되고 있습니다.</span>
+                </div>
+                <button type="button" class="guard-allow-btn secondary" onclick="toggleEmailRemoteImages('${safeId}', false)">
+                    🔒 외부 이미지 다시 차단
+                </button>
+            </div>
+        `;
+    }
+}
+
+function toggleEmailRemoteImages(emailId, allow) {
+    if (!emailId) return;
+    if (allow) {
+        emailState.allowedRemoteImageIds.add(emailId);
+    } else {
+        emailState.allowedRemoteImageIds.delete(emailId);
+    }
+
+    if (emailState.selectedEmailId) {
+        const list = getProcessedEmailList();
+        const selectedItem = list.find(e => e.id === emailState.selectedEmailId);
+        if (selectedItem && selectedItem.thread_count > 1 && document.getElementById(`thread-card-${emailId}`)) {
+            fetchAndRenderThreadCardBody(emailId);
+            return;
+        }
+        renderEmailDetail(emailState.selectedEmailId);
+    }
+}
+
 function renderSingleEmailContent(email) {
     const container = document.getElementById('email-detail-container');
     if (!container) return;
@@ -607,9 +730,13 @@ function renderSingleEmailContent(email) {
 
     let bodyContentHtml = '';
     if (emailState.viewMode === 'html' && email.body_html) {
+        const isAllowed = emailState.allowedRemoteImageIds.has(email.id);
+        const prepared = sanitizeAndPrepareEmailHtml(email.body_html, isAllowed);
+        const guardBannerHtml = renderRemoteImageGuardBanner(email.id, prepared.hasRemoteResources, prepared.blockedCount, isAllowed);
         bodyContentHtml = `
+            ${guardBannerHtml}
             <div class="email-body-html-wrapper">
-                <iframe id="email-html-iframe" class="email-html-iframe" sandbox="allow-same-origin" srcdoc="${escapeHtmlAttr(email.body_html)}"></iframe>
+                <iframe id="email-html-iframe" class="email-html-iframe" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" srcdoc="${escapeHtmlAttr(prepared.html)}"></iframe>
             </div>
         `;
     } else {
@@ -716,9 +843,13 @@ async function renderConversationTimeline(threadObj, threadEmails) {
         let bodyHtml = '';
         if (isExpanded) {
             if (emailState.viewMode === 'html' && cached.body_html) {
+                const isAllowed = emailState.allowedRemoteImageIds.has(em.id);
+                const prepared = sanitizeAndPrepareEmailHtml(cached.body_html, isAllowed);
+                const guardBannerHtml = renderRemoteImageGuardBanner(em.id, prepared.hasRemoteResources, prepared.blockedCount, isAllowed);
                 bodyHtml = `
                     <div class="thread-body-content">
-                        <iframe class="thread-body-html-frame" sandbox="allow-same-origin" srcdoc="${escapeHtmlAttr(cached.body_html)}"></iframe>
+                        ${guardBannerHtml}
+                        <iframe class="thread-body-html-frame" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" srcdoc="${escapeHtmlAttr(prepared.html)}"></iframe>
                     </div>
                 `;
             } else {
@@ -886,9 +1017,13 @@ async function fetchAndRenderThreadCardBody(emailId) {
     let contentHtml = '';
 
     if (emailState.viewMode === 'html' && email.body_html) {
+        const isAllowed = emailState.allowedRemoteImageIds.has(email.id);
+        const prepared = sanitizeAndPrepareEmailHtml(email.body_html, isAllowed);
+        const guardBannerHtml = renderRemoteImageGuardBanner(email.id, prepared.hasRemoteResources, prepared.blockedCount, isAllowed);
         contentHtml = `
             <div class="thread-body-content">
-                <iframe class="thread-body-html-frame" sandbox="allow-same-origin" srcdoc="${escapeHtmlAttr(email.body_html)}"></iframe>
+                ${guardBannerHtml}
+                <iframe class="thread-body-html-frame" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" srcdoc="${escapeHtmlAttr(prepared.html)}"></iframe>
             </div>
         `;
     } else {
