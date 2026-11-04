@@ -12582,6 +12582,274 @@ input[type="checkbox"] {
     }
 }
 
+/* ==========================================================================
+   17. IMAP 메일 계정 연동 및 원본 아카이브 모달 스타일
+   ========================================================================== */
+
+.imap-guide-banner {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    background: rgba(56, 189, 248, 0.08);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    border-radius: 8px;
+    padding: 12px 14px;
+}
+
+.imap-guide-banner .guide-icon {
+    font-size: 1.8rem;
+    flex-shrink: 0;
+}
+
+.imap-guide-banner .guide-text {
+    font-size: 0.85rem;
+    color: #cbd5e1;
+}
+
+.imap-guide-banner .guide-text strong {
+    color: #38bdf8;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.imap-guide-banner .guide-text p {
+    margin: 0;
+    color: #94a3b8;
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+.imap-preset-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.imap-preset-chip {
+    padding: 5px 12px;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.imap-preset-chip:hover {
+    background: #6366f1;
+    color: #ffffff;
+    border-color: #818cf8;
+}
+
+.imap-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    min-width: 0;
+}
+
+#imap-sync-modal .form-row:not(.form-row-inline) {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+    min-width: 0;
+}
+
+#imap-sync-modal .form-label {
+    display: block;
+    font-size: 0.81rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    margin-bottom: 2px;
+    white-space: nowrap;
+}
+
+#imap-sync-modal .form-input,
+#imap-sync-modal .form-select {
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+    box-sizing: border-box;
+}
+
+.imap-options-box {
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.imap-checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: #cbd5e1;
+    cursor: pointer;
+    line-height: 1.4;
+}
+
+.imap-checkbox-label input {
+    margin-top: 3px;
+    flex-shrink: 0;
+}
+
+.imap-progress-card {
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    border-radius: 8px;
+    padding: 14px;
+}
+
+.imap-progress-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.84rem;
+    color: #cbd5e1;
+    margin-bottom: 8px;
+}
+
+.imap-progress-bar-bg {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.imap-progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6366f1, #38bdf8);
+    transition: width 0.3s ease;
+}
+
+.imap-status-feedback {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.83rem;
+    line-height: 1.45;
+    word-break: keep-all;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(15, 23, 42, 0.75);
+    color: #e2e8f0;
+}
+
+.imap-status-feedback.status-info {
+    border-color: rgba(56, 189, 248, 0.4);
+    background: rgba(56, 189, 248, 0.1);
+    color: #bae6fd;
+}
+
+.imap-status-feedback.status-success {
+    border-color: rgba(34, 197, 94, 0.45);
+    background: rgba(34, 197, 94, 0.12);
+    color: #bbf7d0;
+}
+
+.imap-status-feedback.status-warn {
+    border-color: rgba(245, 158, 11, 0.45);
+    background: rgba(245, 158, 11, 0.12);
+    color: #fde68a;
+}
+
+.imap-status-feedback.status-error {
+    border-color: rgba(239, 68, 68, 0.5);
+    background: rgba(239, 68, 68, 0.14);
+    color: #fecaca;
+}
+
+.imap-auth-toggle-bar {
+    display: flex;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 3px;
+    height: 36px;
+    box-sizing: border-box;
+}
+
+.imap-auth-toggle-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    white-space: nowrap;
+    padding: 0 8px;
+}
+
+.imap-auth-toggle-btn:hover {
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.imap-auth-toggle-btn.active {
+    background: #6366f1;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+.imap-auth-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: rgba(15, 23, 42, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.imap-auth-hint {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px 10px;
+    line-height: 1.45;
+}
+
+.imap-oauth-action-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-top: 2px;
+}
+
+.imap-oauth-badge {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: rgba(148, 163, 184, 0.15);
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.imap-oauth-badge.authenticated {
+    background: rgba(34, 197, 94, 0.15);
+    color: #86efac;
+    border-color: rgba(34, 197, 94, 0.4);
+}
+
+@media (max-width: 600px) {
+    .imap-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
 
 
 
@@ -12589,3 +12857,11 @@ input[type="checkbox"] {
 
 
 
+
+
+
+.imap-last-sync-info {
+    font-size: 0.77rem;
+    color: #94a3b8;
+    margin-bottom: 6px;
+}

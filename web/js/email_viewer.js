@@ -1452,3 +1452,640 @@ function teardownEmailViewer() {
         emailState.detailCache = {};
     }
 }
+
+// ==========================================
+// 13. IMAP 메일 계정 연동 & 단방향 아카이빙
+// ==========================================
+
+const IMAP_PRESETS = {
+    gmail: { host: "imap.gmail.com", port: 993, ssl: true },
+    naver: { host: "imap.naver.com", port: 993, ssl: true },
+    daum: { host: "imap.daum.net", port: 993, ssl: true },
+    outlook: { host: "outlook.office365.com", port: 993, ssl: true }
+};
+
+let _currentImapAuthType = "password";
+let _hasImapOAuthToken = false;
+
+function setImapAuthType(authType) {
+    _currentImapAuthType = (authType === "oauth2_google") ? "oauth2_google" : "password";
+    const tabPass = document.getElementById("imap-auth-tab-password");
+    const tabOAuth = document.getElementById("imap-auth-tab-oauth2");
+    const secPass = document.getElementById("imap-password-auth-section");
+    const secOAuth = document.getElementById("imap-oauth2-auth-section");
+
+    if (tabPass) tabPass.classList.toggle("active", _currentImapAuthType === "password");
+    if (tabOAuth) tabOAuth.classList.toggle("active", _currentImapAuthType === "oauth2_google");
+    if (secPass) secPass.style.display = (_currentImapAuthType === "password") ? "flex" : "none";
+    if (secOAuth) secOAuth.style.display = (_currentImapAuthType === "oauth2_google") ? "flex" : "none";
+
+    if (_currentImapAuthType === "oauth2_google") {
+        const hostInput = document.getElementById("imap-host");
+        if (hostInput && !hostInput.value.trim()) {
+            hostInput.value = "imap.gmail.com";
+        }
+    }
+}
+
+function updateImapOAuthTokenBadge(hasToken) {
+    _hasImapOAuthToken = Boolean(hasToken);
+    const badge = document.getElementById("imap-oauth-token-badge");
+    if (!badge) return;
+    if (_hasImapOAuthToken) {
+        badge.className = "imap-oauth-badge authenticated";
+        badge.textContent = "✅ OAuth 인증 토큰 보유 중 (자동 갱신 지원)";
+    } else {
+        badge.className = "imap-oauth-badge";
+        badge.textContent = "⚪ 미인증 (로그인 필요)";
+    }
+}
+
+function populateImapFolderSelect(folderList, selectedValue = "INBOX") {
+    const folderSel = document.getElementById("imap-folder-select");
+    if (!folderSel || !Array.isArray(folderList) || folderList.length === 0) return;
+
+    const currentVal = selectedValue || folderSel.value || "INBOX";
+    folderSel.innerHTML = "";
+    folderList.forEach(f => {
+        const rawName = (typeof f === "object" && f !== null) ? f.name : String(f);
+        const displayLabel = (typeof f === "object" && f !== null) ? (f.label || f.name) : String(f);
+        const opt = document.createElement("option");
+        opt.value = rawName;
+        opt.textContent = displayLabel;
+        if (rawName.toLowerCase() === currentVal.toLowerCase()) opt.selected = true;
+        folderSel.appendChild(opt);
+    });
+}
+
+function setImapModalFeedback(type, message) {
+    const box = document.getElementById("imap-status-feedback");
+    if (!box) return;
+
+    if (!message || type === "clear") {
+        box.style.display = "none";
+        box.className = "imap-status-feedback";
+        box.innerHTML = "";
+        return;
+    }
+
+    const iconMap = {
+        info: "⏳",
+        success: "✅",
+        warn: "⚠️",
+        error: "❌"
+    };
+    const icon = iconMap[type] || "ℹ️";
+    box.className = `imap-status-feedback status-${type}`;
+    box.innerHTML = `<span>${icon}</span><div style="flex:1;">${escapeHtml(message)}</div>`;
+    box.style.display = "flex";
+}
+
+async function openImapSyncModal() {
+    const modal = document.getElementById("imap-sync-modal");
+    if (!modal) return;
+
+    setImapModalFeedback("clear", "");
+
+    try {
+        if (window.eel && eel.get_imap_config) {
+            const res = await eel.get_imap_config()();
+            if (res && res.status === "success" && res.config) {
+                const c = res.config;
+                if (document.getElementById("imap-host")) document.getElementById("imap-host").value = c.host || "";
+                if (document.getElementById("imap-port")) document.getElementById("imap-port").value = c.port || 993;
+                if (document.getElementById("imap-ssl")) document.getElementById("imap-ssl").checked = (c.use_ssl !== false);
+                if (document.getElementById("imap-user")) document.getElementById("imap-user").value = c.username || "";
+                if (document.getElementById("imap-pass")) document.getElementById("imap-pass").value = c.password || "";
+                if (document.getElementById("imap-oauth-client-id")) {
+                    document.getElementById("imap-oauth-client-id").value = c.oauth_client_id || "";
+                }
+                if (document.getElementById("imap-oauth-client-secret")) {
+                    document.getElementById("imap-oauth-client-secret").value = c.oauth_client_secret || "";
+                }
+                setImapAuthType(c.auth_type || "password");
+                updateImapOAuthTokenBadge(Boolean(c.has_oauth_token));
+                if (document.getElementById("imap-poll-interval")) {
+                    document.getElementById("imap-poll-interval").value = String(c.poll_interval_minutes || 0);
+                }
+                const lastSyncEl = document.getElementById("imap-last-sync-info");
+                if (lastSyncEl) {
+                    lastSyncEl.textContent = `🕒 마지막 동기화: ${c.last_sync_at || "기록 없음"}`;
+                }
+
+                const folderSel = document.getElementById("imap-folder-select");
+                if (folderSel && c.folder) {
+                    const labelText = c.folder === "INBOX" ? "INBOX (받은편지함)" : c.folder;
+                    folderSel.innerHTML = `<option value="${escapeHtmlAttr(c.folder)}" selected>${escapeHtml(labelText)}</option>`;
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("[IMAP] 설정 로드 실패:", e);
+    }
+
+    modal.classList.add("active");
+}
+
+function closeImapSyncModal() {
+    const modal = document.getElementById("imap-sync-modal");
+    if (modal) modal.classList.remove("active");
+}
+
+function applyImapPreset(service) {
+    const p = IMAP_PRESETS[service];
+    if (!p) return;
+
+    if (document.getElementById("imap-host")) document.getElementById("imap-host").value = p.host;
+    if (document.getElementById("imap-port")) document.getElementById("imap-port").value = p.port;
+    if (document.getElementById("imap-ssl")) document.getElementById("imap-ssl").checked = p.ssl;
+
+    if (service !== "gmail" && _currentImapAuthType === "oauth2_google") {
+        setImapAuthType("password");
+    }
+
+    setImapModalFeedback("info", `${service.toUpperCase()} 서버(${p.host}:${p.port}) 프리셋이 적용되었습니다.`);
+    if (typeof showToast === "function") {
+        showToast("프리셋 적용", `${service.toUpperCase()} 호스트 및 포트가 자동 설정되었습니다.`, "info");
+    }
+}
+
+function toggleImapPasswordVisibility() {
+    const passInput = document.getElementById("imap-pass");
+    if (!passInput) return;
+    passInput.type = (passInput.type === "password") ? "text" : "password";
+}
+
+function toggleImapOAuthSecretVisibility() {
+    const secInput = document.getElementById("imap-oauth-client-secret");
+    if (!secInput) return;
+    secInput.type = (secInput.type === "password") ? "text" : "password";
+}
+
+function getImapFormInputs() {
+    return {
+        host: (document.getElementById("imap-host")?.value || "").trim(),
+        port: parseInt(document.getElementById("imap-port")?.value || "993", 10),
+        use_ssl: document.getElementById("imap-ssl")?.checked ?? true,
+        username: (document.getElementById("imap-user")?.value || "").trim(),
+        password: (document.getElementById("imap-pass")?.value || "").trim(),
+        auth_type: _currentImapAuthType,
+        oauth_client_id: (document.getElementById("imap-oauth-client-id")?.value || "").trim(),
+        oauth_client_secret: (document.getElementById("imap-oauth-client-secret")?.value || "").trim(),
+        poll_interval_minutes: parseInt(document.getElementById("imap-poll-interval")?.value || "0", 10),
+        folder: document.getElementById("imap-folder-select")?.value || "INBOX"
+    };
+}
+
+async function startGoogleOAuthFlowUi() {
+    const inputs = getImapFormInputs();
+    if (!inputs.oauth_client_id || !inputs.oauth_client_secret) {
+        const warnMsg = "Google OAuth Client ID와 Client Secret을 모두 입력해 주세요.";
+        setImapModalFeedback("warn", warnMsg);
+        if (typeof showToast === "function") {
+            showToast("입력 확인", warnMsg, "warn");
+        }
+        return;
+    }
+
+    const loginBtn = document.getElementById("imap-oauth-login-btn");
+    const origHtml = loginBtn ? loginBtn.innerHTML : "";
+    if (loginBtn) {
+        loginBtn.disabled = true;
+        loginBtn.innerHTML = "<span>⏳</span> 브라우저 인증 대기 중...";
+    }
+
+    setImapModalFeedback("info", "웹 브라우저가 열립니다. Google 계정으로 로그인하고 권한 승인(Consent)을 완료해 주세요...");
+    if (typeof showToast === "function") {
+        showToast("Google OAuth 로그인", "브라우저에서 Google 로그인 및 권한 승인을 완료해 주세요.", "info");
+    }
+
+    try {
+        if (window.eel && eel.start_google_oauth_flow) {
+            const res = await eel.start_google_oauth_flow(
+                inputs.oauth_client_id,
+                inputs.oauth_client_secret,
+                inputs.username
+            )();
+
+            if (res && res.status === "success") {
+                if (res.username && document.getElementById("imap-user")) {
+                    document.getElementById("imap-user").value = res.username;
+                }
+                if (document.getElementById("imap-host")) {
+                    document.getElementById("imap-host").value = "imap.gmail.com";
+                }
+                updateImapOAuthTokenBadge(true);
+                if (Array.isArray(res.folders) && res.folders.length > 0) {
+                    populateImapFolderSelect(res.folders, inputs.folder);
+                }
+                const okMsg = res.message || "Google OAuth 2.0 인증 및 사서함 조회에 성공했습니다.";
+                setImapModalFeedback("success", okMsg);
+                if (typeof logToConsole === "function") {
+                    logToConsole("Google OAuth 2.0 인증 성공", okMsg);
+                }
+                if (typeof showToast === "function") {
+                    showToast("OAuth 인증 완료", okMsg, "success");
+                }
+            } else {
+                const errMsg = (res && res.message) || "Google OAuth 인증에 실패했습니다.";
+                setImapModalFeedback("error", errMsg);
+                if (typeof logToConsole === "function") {
+                    logToConsole("Google OAuth 인증 실패", errMsg);
+                }
+                if (typeof showToast === "function") {
+                    showToast("OAuth 인증 실패", errMsg, "error");
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[IMAP OAuth] 오류:", e);
+        const errStr = String(e?.message || e);
+        setImapModalFeedback("error", `OAuth 인증 처리 중 오류 발생: ${errStr}`);
+    } finally {
+        if (loginBtn) {
+            loginBtn.disabled = false;
+            loginBtn.innerHTML = origHtml || "<span>🌐</span> Google 브라우저 로그인 및 권한 승인";
+        }
+    }
+}
+
+async function testImapConnectionUi(isFolderOnly = false) {
+    const inputs = getImapFormInputs();
+    if (inputs.auth_type === "oauth2_google") {
+        if (!inputs.host || !inputs.username) {
+            const warnMsg = "호스트 주소와 이메일 계정(Gmail 주소)을 입력해 주세요.";
+            setImapModalFeedback("warn", warnMsg);
+            if (typeof showToast === "function") {
+                showToast("입력 확인", warnMsg, "warn");
+            }
+            return;
+        }
+        if (!_hasImapOAuthToken) {
+            const warnMsg = "먼저 [🌐 Google 브라우저 로그인 및 권한 승인] 버튼을 눌러 OAuth 토큰을 발급받아 주세요.";
+            setImapModalFeedback("warn", warnMsg);
+            if (typeof showToast === "function") {
+                showToast("OAuth 로그인 필요", warnMsg, "warn");
+            }
+            return;
+        }
+    } else {
+        if (!inputs.host || !inputs.username || !inputs.password) {
+            const warnMsg = "호스트, 계정 아이디 및 비밀번호를 모두 입력해 주세요.";
+            setImapModalFeedback("warn", warnMsg);
+            if (typeof showToast === "function") {
+                showToast("입력 확인", warnMsg, "warn");
+            }
+            return;
+        }
+    }
+
+    const testBtn = document.getElementById("imap-test-conn-btn");
+    const folderBtn = document.getElementById("imap-folder-refresh-btn");
+    const origTestHtml = testBtn ? testBtn.innerHTML : "";
+    const origFolderHtml = folderBtn ? folderBtn.innerHTML : "";
+
+    if (testBtn) {
+        testBtn.disabled = true;
+        if (!isFolderOnly) testBtn.innerHTML = "<span>⏳</span> 연결 확인 중...";
+    }
+    if (folderBtn) {
+        folderBtn.disabled = true;
+        if (isFolderOnly) folderBtn.innerHTML = "<span>⏳</span> 조회 중...";
+    }
+
+    setImapModalFeedback("info", `${inputs.host}:${inputs.port} 서버에 연결 및 로그인 인증을 확인하는 중입니다...`);
+    if (typeof showToast === "function") {
+        showToast("IMAP 연결 시도", "서버 연결 및 인증을 확인하는 중입니다...", "info");
+    }
+
+    try {
+        if (window.eel && eel.test_imap_connection) {
+            const res = await eel.test_imap_connection(
+                inputs.host,
+                inputs.port,
+                inputs.use_ssl,
+                inputs.username,
+                inputs.password,
+                inputs.auth_type,
+                inputs.oauth_client_id,
+                inputs.oauth_client_secret
+            )();
+
+            if (res && res.status === "success") {
+                const folderList = Array.isArray(res.folders) ? res.folders : [];
+                populateImapFolderSelect(folderList, inputs.folder);
+                const okMsg = isFolderOnly
+                    ? `사서함 폴더 목록(${folderList.length}개)을 갱신했습니다.`
+                    : `IMAP 서버 연결 및 로그인 인증 성공! (사서함 ${folderList.length}개 조회됨)`;
+                setImapModalFeedback("success", okMsg);
+                if (typeof logToConsole === "function") {
+                    logToConsole("IMAP 연결 성공", okMsg);
+                }
+                if (typeof showToast === "function") {
+                    showToast("연결 성공", okMsg, "success");
+                }
+            } else {
+                const errMsg = (res && res.message) || "서버 응답 오류";
+                setImapModalFeedback("error", errMsg);
+                if (typeof logToConsole === "function") {
+                    logToConsole("IMAP 연결 실패", errMsg);
+                }
+                if (typeof showToast === "function") {
+                    showToast("연결 실패", errMsg, "error");
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[IMAP] 연결 테스트 오류:", e);
+        const errStr = String(e?.message || e);
+        setImapModalFeedback("error", `연결 테스트 중 예외 발생: ${errStr}`);
+        if (typeof showToast === "function") {
+            showToast("연결 에러", errStr, "error");
+        }
+    } finally {
+        if (testBtn) {
+            testBtn.disabled = false;
+            testBtn.innerHTML = origTestHtml || "<span>🔍</span> 연결 테스트";
+        }
+        if (folderBtn) {
+            folderBtn.disabled = false;
+            folderBtn.innerHTML = origFolderHtml || "<span>📂</span> 폴더 조회";
+        }
+    }
+}
+
+async function saveImapConfigUi(silent = false) {
+    const inputs = getImapFormInputs();
+    if (!inputs.host || !inputs.username) {
+        if (!silent) {
+            const warnMsg = "호스트와 계정 아이디를 입력해 주세요.";
+            setImapModalFeedback("warn", warnMsg);
+            if (typeof showToast === "function") {
+                showToast("입력 확인", warnMsg, "warn");
+            }
+        }
+        return;
+    }
+
+    try {
+        if (window.eel && eel.save_imap_config) {
+            const res = await eel.save_imap_config(inputs)();
+            if (res && res.status === "success") {
+                if (!silent) {
+                    const okMsg = "IMAP 계정 설정이 로컬 DB에 저장되었습니다.";
+                    setImapModalFeedback("success", okMsg);
+                    if (typeof showToast === "function") {
+                        showToast("설정 저장 완료", okMsg, "success");
+                    }
+                }
+            } else if (!silent) {
+                const errMsg = (res && res.message) || "설정 저장 중 오류가 발생했습니다.";
+                setImapModalFeedback("error", errMsg);
+                if (typeof showToast === "function") {
+                    showToast("저장 실패", errMsg, "error");
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[IMAP] 설정 저장 실패:", e);
+        if (!silent) {
+            setImapModalFeedback("error", `설정 저장 실패: ${String(e)}`);
+        }
+    }
+}
+
+async function startImapSyncUi() {
+    const inputs = getImapFormInputs();
+    if (inputs.auth_type === "oauth2_google") {
+        if (!inputs.host || !inputs.username) {
+            const warnMsg = "호스트와 이메일 계정(Gmail 주소)을 입력해 주세요.";
+            setImapModalFeedback("warn", warnMsg);
+            if (typeof showToast === "function") {
+                showToast("입력 확인", warnMsg, "warn");
+            }
+            return;
+        }
+        if (!_hasImapOAuthToken) {
+            const warnMsg = "먼저 [🌐 Google 브라우저 로그인 및 권한 승인] 버튼을 눌러 인증을 완료해 주세요.";
+            setImapModalFeedback("warn", warnMsg);
+            if (typeof showToast === "function") {
+                showToast("OAuth 로그인 필요", warnMsg, "warn");
+            }
+            return;
+        }
+    } else {
+        if (!inputs.host || !inputs.username || !inputs.password) {
+            const warnMsg = "호스트, 계정 아이디 및 비밀번호를 입력해 주세요.";
+            setImapModalFeedback("warn", warnMsg);
+            if (typeof showToast === "function") {
+                showToast("입력 확인", warnMsg, "warn");
+            }
+            return;
+        }
+    }
+
+    // 설정 자동 저장 (배너 덮어쓰기 방지)
+    await saveImapConfigUi(true);
+    setImapModalFeedback("info", "IMAP 서버에 접속하여 메일 아카이브 작업을 시작합니다...");
+
+    const sinceDays = parseInt(document.getElementById("imap-since-days")?.value || "0", 10);
+    const limitCount = parseInt(document.getElementById("imap-limit-count")?.value || "100", 10);
+    const autoEmbed = document.getElementById("imap-auto-embed")?.checked ?? true;
+
+    const options = {
+        ...inputs,
+        since_days: sinceDays > 0 ? sinceDays : null,
+        limit: limitCount > 0 ? limitCount : null,
+        auto_embed: autoEmbed
+    };
+
+    // UI 상태 전환: 프로그레스 바 표시
+    const pWrap = document.getElementById("imap-progress-wrap");
+    const startBtn = document.getElementById("imap-start-sync-btn");
+    if (pWrap) pWrap.style.display = "block";
+    if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.textContent = "다운로드 진행 중...";
+    }
+
+    try {
+        if (window.eel && eel.start_imap_sync) {
+            const res = await eel.start_imap_sync(options)();
+            if (res && res.status === "error") {
+                setImapModalFeedback("error", res.message || "동기화 시작 실패");
+                if (typeof showToast === "function") {
+                    showToast("동기화 시작 실패", res.message, "error");
+                }
+                resetImapSyncUiState();
+            }
+        }
+    } catch (e) {
+        console.error("[IMAP] 동기화 시작 실패:", e);
+        setImapModalFeedback("error", `동기화 시작 오류: ${String(e)}`);
+        resetImapSyncUiState();
+    }
+}
+
+async function cancelImapSyncUi() {
+    try {
+        if (window.eel && eel.cancel_imap_sync) {
+            await eel.cancel_imap_sync()();
+            setImapModalFeedback("warn", "진행 중인 메일 다운로드 중지를 요청했습니다.");
+            if (typeof showToast === "function") {
+                showToast("취소 요청", "진행 중인 다운로드 중지를 요청했습니다.", "warn");
+            }
+        }
+    } catch (e) {
+        console.error("[IMAP] 취소 요청 실패:", e);
+    }
+}
+
+function resetImapSyncUiState() {
+    const pWrap = document.getElementById("imap-progress-wrap");
+    const startBtn = document.getElementById("imap-start-sync-btn");
+    const pFill = document.getElementById("imap-progress-bar-fill");
+    const pText = document.getElementById("imap-progress-status-text");
+    const pPct = document.getElementById("imap-progress-percent");
+
+    if (pWrap) pWrap.style.display = "none";
+    if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.innerHTML = "<span>🚀</span> 메일 다운로드 시작";
+    }
+    if (pFill) pFill.style.width = "0%";
+    if (pText) pText.textContent = "메일 다운로드 대기 중...";
+    if (pPct) pPct.textContent = "0%";
+
+    const quickBtn = document.getElementById("email-quick-sync-btn");
+    const quickIcon = document.getElementById("email-quick-sync-icon");
+    const quickText = document.getElementById("email-quick-sync-text");
+    if (quickBtn) quickBtn.disabled = false;
+    if (quickIcon) quickIcon.textContent = "🔄";
+    if (quickText) quickText.textContent = "실시간 동기화";
+}
+
+// Eel 콜백 함수 등록
+if (window.eel) {
+    eel.expose(on_imap_sync_progress, "on_imap_sync_progress");
+    eel.expose(on_imap_sync_complete, "on_imap_sync_complete");
+    eel.expose(on_imap_sync_error, "on_imap_sync_error");
+}
+
+function on_imap_sync_progress(current, total, subject, percent) {
+    const pFill = document.getElementById("imap-progress-bar-fill");
+    const pText = document.getElementById("imap-progress-status-text");
+    const pPct = document.getElementById("imap-progress-percent");
+
+    const pct = Math.max(0, Math.min(100, percent || 0));
+    if (pFill) pFill.style.width = `${pct}%`;
+    const quickBtn = document.getElementById("email-quick-sync-btn");
+    const quickIcon = document.getElementById("email-quick-sync-icon");
+    const quickText = document.getElementById("email-quick-sync-text");
+    if (quickBtn) quickBtn.disabled = true;
+    if (quickIcon) quickIcon.textContent = "⏳";
+    if (quickText) quickText.textContent = `동기화 중 (${pct}%)`;
+    if (pPct) pPct.textContent = `${pct}%`;
+    if (pText) {
+        pText.textContent = total > 1
+            ? `[${current}/${total}] ${subject || ""}`
+            : (subject || "처리 중...");
+    }
+}
+
+function on_imap_sync_complete(result) {
+    resetImapSyncUiState();
+
+    const downloaded = result.downloaded || 0;
+    const lastSyncEl = document.getElementById("imap-last-sync-info");
+    if (lastSyncEl && result.last_sync_at) {
+        lastSyncEl.textContent = `🕒 마지막 동기화: ${result.last_sync_at}`;
+    }
+    if (result.is_background_poll && downloaded === 0) {
+        return;
+    }
+    const skipped = result.skipped || 0;
+    const embedded = result.embedded || 0;
+
+    if (downloaded === 0 && skipped === 0 && result.message) {
+        setImapModalFeedback("warn", result.message);
+        if (typeof showToast === "function") {
+            showToast("IMAP 조회 결과", result.message, "warn");
+        }
+        return;
+    }
+
+    let msg = `신규 메일 ${downloaded}건 다운로드 완료`;
+    if (skipped > 0) msg += ` (${skipped}건 중복 건너뜀)`;
+    if (embedded > 0) msg += ` / AI 벡터 DB ${embedded}건 임베딩 완료`;
+
+    setImapModalFeedback("success", msg);
+    if (typeof logToConsole === "function") {
+        logToConsole("IMAP 아카이브 완료", msg);
+    }
+    if (typeof showToast === "function") {
+        showToast("IMAP 아카이브 완료", msg, "success");
+    }
+
+    if (downloaded > 0) {
+        closeImapSyncModal();
+    }
+
+    // 이메일 목록 자동 갱신
+    loadAllEmails();
+}
+
+function on_imap_sync_error(message) {
+    resetImapSyncUiState();
+    const errMsg = message || "메일 다운로드 중 오류가 발생했습니다.";
+    setImapModalFeedback("error", errMsg);
+    if (typeof logToConsole === "function") {
+        logToConsole("IMAP 동기화 오류", errMsg);
+    }
+    if (typeof showToast === "function") {
+        showToast("IMAP 동기화 오류", errMsg, "error");
+    }
+}
+
+
+async function triggerQuickImapSync() {
+    const quickBtn = document.getElementById("email-quick-sync-btn");
+    const quickIcon = document.getElementById("email-quick-sync-icon");
+    const quickText = document.getElementById("email-quick-sync-text");
+
+    try {
+        if (window.eel && eel.start_imap_sync) {
+            const res = await eel.start_imap_sync({
+                quick_sync: true,
+                since_days: 14,
+                limit: 50,
+                auto_embed: true
+            })();
+
+            if (res && res.status === "not_configured") {
+                if (typeof showToast === "function") {
+                    showToast("IMAP 설정 필요", res.message || "먼저 IMAP 계정 연동 설정을 완료해 주세요.", "warn");
+                }
+                openImapSyncModal();
+                return;
+            }
+
+            if (res && res.status === "started") {
+                if (quickBtn) quickBtn.disabled = true;
+                if (quickIcon) quickIcon.textContent = "⏳";
+                if (quickText) quickText.textContent = "동기화 중...";
+                if (typeof showToast === "function") {
+                    showToast("실시간 동기화 시작", "저장된 IMAP 계정에서 최신 메일을 확인하고 있습니다...", "info");
+                }
+            } else if (res && res.status === "error") {
+                if (typeof showToast === "function") {
+                    showToast("동기화 안내", res.message || "이미 동기화가 진행 중입니다.", "warn");
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[IMAP Quick Sync] 오류:", e);
+        if (typeof showToast === "function") {
+            showToast("동기화 오류", String(e?.message || e), "error");
+        }
+    }
+}

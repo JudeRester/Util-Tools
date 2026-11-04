@@ -97,10 +97,10 @@ def open_external_url(url: str) -> Dict[str, Any]:
             return {"status": "error", "message": "허용되지 않은 프로토콜입니다."}
 
         webbrowser.open(trimmed)
-        log_event("info", f"[QR] 브라우저 링크 열기: {trimmed[:60]}")
+        log_event("info", "QR", f"브라우저 링크 열기: {trimmed[:60]}")
         return {"status": "success", "url": trimmed}
     except Exception as e:
-        log_event("error", f"[QR] 브라우저 링크 열기 실패: {str(e)}")
+        log_event("error", "QR", f"브라우저 링크 열기 실패: {str(e)}")
         return {"status": "error", "message": str(e)}
 
 
@@ -151,7 +151,7 @@ def save_qr_history(action_type: str, content: str, title: str = "", format_type
         finally:
             conn.close()
     except Exception as e:
-        log_event("error", f"[QR] 이력 저장 실패: {str(e)}")
+        log_event("error", "QR", f"이력 저장 실패: {str(e)}")
         return {"status": "error", "message": str(e)}
 
 
@@ -194,7 +194,7 @@ def get_qr_history(limit: int = 50, search: str = "") -> Dict[str, Any]:
         finally:
             conn.close()
     except Exception as e:
-        log_event("error", f"[QR] 이력 조회 실패: {str(e)}")
+        log_event("error", "QR", f"이력 조회 실패: {str(e)}")
         return {"status": "error", "message": str(e), "items": []}
 
 
@@ -211,7 +211,7 @@ def delete_qr_history(item_id: int) -> Dict[str, Any]:
         finally:
             conn.close()
     except Exception as e:
-        log_event("error", f"[QR] 이력 삭제 실패: {str(e)}")
+        log_event("error", "QR", f"이력 삭제 실패: {str(e)}")
         return {"status": "error", "message": str(e)}
 
 
@@ -231,7 +231,7 @@ def clear_qr_history(action_type: Optional[str] = None) -> Dict[str, Any]:
         finally:
             conn.close()
     except Exception as e:
-        log_event("error", f"[QR] 이력 초기화 실패: {str(e)}")
+        log_event("error", "QR", f"이력 초기화 실패: {str(e)}")
         return {"status": "error", "message": str(e)}
 
 
@@ -265,8 +265,8 @@ def save_qr_image_dialog(base64_data: str, default_filename: str = "qrcode.png")
             f.write(image_bytes)
 
         normalized_path = os.path.normpath(file_path)
-        log_event("info", f"[QR] 이미지 파일 저장 완료: {normalized_path}")
+        log_event("info", "QR", f"이미지 파일 저장 완료: {normalized_path}")
         return {"status": "success", "path": normalized_path}
     except Exception as e:
-        log_event("error", f"[QR] 이미지 파일 저장 실패: {str(e)}")
+        log_event("error", "QR", f"이미지 파일 저장 실패: {str(e)}")
         return {"status": "error", "message": str(e)}
