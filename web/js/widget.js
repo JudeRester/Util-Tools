@@ -317,6 +317,7 @@
 
             if (targetTab === 'launch') loadQuickLaunchItems();
             if (targetTab === 'system') updateSystemMetrics();
+            if (targetTab === 'stock') loadStockDashboard();
         });
     });
 
@@ -442,6 +443,10 @@
     function onExpanded() {
         loadQuickLaunchItems();
         updateSystemMetrics();
+        const stockTab = document.getElementById('wtab-stock');
+        if (stockTab && stockTab.classList.contains('active')) {
+            loadStockDashboard();
+        }
         if (!sysMetricInterval) {
             sysMetricInterval = setInterval(() => {
                 const sysTab = document.getElementById('wtab-system');
@@ -578,11 +583,357 @@
     }
 
     // =========================================================================
+    // 7-3. Real-Time Stock & FX Integration
+    // =========================================================================
+
+    let stockSearchDebounce = null;
+
+    window.onStockTickUpdate = function (tick) {
+        if (!tick || !tick.code) return;
+        const card = document.querySelector(`.stock-card[data-code="${tick.code}"]`);
+        if (!card) return;
+
+        const priceEl = card.querySelector('.stock-price');
+        const changeEl = card.querySelector('.stock-change');
+        const sessEl = card.querySelector('.session-badge');
+
+        if (priceEl && tick.formatted_price) {
+            priceEl.textContent = tick.formatted_price;
+        }
+
+        if (changeEl && typeof tick.change === 'number') {
+            const sign = tick.change > 0 ? '+' : '';
+            const chgRateStr = typeof tick.change_rate === 'number' ? ` (${sign}${tick.change_rate.toFixed(2)}%)` : '';
+            changeEl.textContent = `${sign}${tick.change}${chgRateStr}`;
+            changeEl.className = `stock-change ${tick.change > 0 ? 'up' : (tick.change < 0 ? 'down' : 'flat')}`;
+        }
+
+        if (sessEl && tick.session) {
+            sessEl.textContent = tick.session;
+            sessEl.className = `session-badge badge-${tick.session.toLowerCase()}`;
+        }
+
+        // Pulse animation
+        const flashClass = (tick.change >= 0) ? 'tick-flash-up' : 'tick-flash-down';
+        card.classList.remove('tick-flash-up', 'tick-flash-down');
+        void card.offsetWidth;
+        card.classList.add(flashClass);
+        setTimeout(() => card.classList.remove(flashClass), 600);
+    };
+
+    async function loadStockDashboard() {
+        if (!window.eel || !window.eel.get_stock_dashboard_data) return;
+        try {
+            const res = await window.eel.get_stock_dashboard_data()();
+            if (res && res.status === 'success') {
+                renderStockDashboard(res);
+            }
+        } catch (e) {
+            console.error('Failed to load stock dashboard:', e);
+        }
+    }
+
+    function renderStockDashboard(data) {
+        // FX Ticker Bar
+        const fx = data.fx || {};
+        if (fx.USD) {
+            const rateEl = document.getElementById('fx-rate-usd');
+            const chgEl = document.getElementById('fx-change-usd');
+            if (rateEl) rateEl.textContent = fx.USD.formatted;
+            if (chgEl) {
+                const sign = fx.USD.change > 0 ? '+' : '';
+                chgEl.textContent = `${sign}${fx.USD.change} (${sign}${fx.USD.change_rate}%)`;
+                chgEl.className = `fx-change ${fx.USD.change > 0 ? 'up' : (fx.USD.change < 0 ? 'down' : 'flat')}`;
+            }
+        }
+        if (fx.JPY) {
+            const rateEl = document.getElementById('fx-rate-jpy');
+            const chgEl = document.getElementById('fx-change-jpy');
+            if (rateEl) rateEl.textContent = fx.JPY.formatted;
+            if (chgEl) {
+                const sign = fx.JPY.change > 0 ? '+' : '';
+                chgEl.textContent = `${sign}${fx.JPY.change} (${sign}${fx.JPY.change_rate}%)`;
+                chgEl.className = `fx-change ${fx.JPY.change > 0 ? 'up' : (fx.JPY.change < 0 ? 'down' : 'flat')}`;
+            }
+        }
+
+        // Key configuration notice
+        const noticeEl = document.getElementById('stock-key-notice');
+        if (noticeEl) {
+            noticeEl.style.display = data.api_configured ? 'none' : 'flex';
+        }
+
+        // Watchlist cards
+        const listEl = document.getElementById('stock-card-list');
+        const badgeEl = document.getElementById('stock-count-badge');
+        const watchlist = data.watchlist || [];
+
+        if (badgeEl) badgeEl.textContent = watchlist.length;
+        if (!listEl) return;
+
+        listEl.innerHTML = '';
+        if (watchlist.length === 0) {
+            listEl.innerHTML = '<div class="stock-empty">등록된 관심 종목이 없습니다. [+ 종목 추가]로 추가하세요.</div>';
+            return;
+        }
+
+        watchlist.forEach((item) => {
+            const card = document.createElement('div');
+            card.className = 'stock-card';
+            card.setAttribute('data-code', item.code);
+
+            const mktClass = item.market === 'US' ? 'market-us' : 'market-kr';
+            const sessClass = `badge-${(item.session || 'reg').toLowerCase()}`;
+            const chgClass = item.change > 0 ? 'up' : (item.change < 0 ? 'down' : 'flat');
+            const sign = item.change > 0 ? '+' : '';
+            const chgRateStr = typeof item.change_rate === 'number' ? ` (${sign}${item.change_rate.toFixed(2)}%)` : '';
+
+            card.innerHTML = `
+                <div class="stock-card-left">
+                    <div class="stock-name-row">
+                        <span class="stock-name" title="${item.name}">${item.name}</span>
+                        <span class="stock-market-tag ${mktClass}">${item.market}</span>
+                    </div>
+                    <div class="stock-code-row">
+                        <span class="stock-code">${item.code}</span>
+                        <span class="session-badge ${sessClass}">${item.session || 'REG'}</span>
+                    </div>
+                </div>
+                <div class="stock-card-right">
+                    <div class="stock-price-col">
+                        <span class="stock-price">${item.formatted_price || '--'}</span>
+                        <span class="stock-change ${chgClass}">${sign}${item.change}${chgRateStr}</span>
+                    </div>
+                    <button class="stock-btn-del" title="관심 종목 삭제">✕</button>
+                </div>
+            `;
+
+            const delBtn = card.querySelector('.stock-btn-del');
+            if (delBtn) {
+                delBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (window.eel && window.eel.remove_stock_symbol) {
+                        try {
+                            const r = await window.eel.remove_stock_symbol(item.code)();
+                            if (r && r.success) {
+                                card.remove();
+                                const curCnt = document.querySelectorAll('.stock-card').length;
+                                if (badgeEl) badgeEl.textContent = curCnt;
+                            }
+                        } catch (err) {
+                            console.error('Failed to remove stock:', err);
+                        }
+                    }
+                });
+            }
+
+            listEl.appendChild(card);
+        });
+    }
+
+    function initStockUI() {
+        const btnStockRefresh = document.getElementById('btn-stock-refresh');
+        const btnStockAdd = document.getElementById('btn-stock-add');
+        const btnStockApiKey = document.getElementById('btn-stock-api-key');
+        const btnNoticeConfig = document.getElementById('btn-stock-notice-config');
+
+        const modalSearch = document.getElementById('modal-stock-search');
+        const btnCloseSearch = document.getElementById('btn-close-stock-search');
+        const inputSearch = document.getElementById('input-stock-search');
+        const resultsContainer = document.getElementById('stock-search-results');
+
+        const modalKey = document.getElementById('modal-stock-key');
+        const btnCloseKey = document.getElementById('btn-close-stock-key');
+        const btnCancelKey = document.getElementById('btn-stock-key-cancel');
+        const btnSaveKey = document.getElementById('btn-stock-key-save');
+        const inputClientId = document.getElementById('input-stock-client-id');
+        const inputClientSecret = document.getElementById('input-stock-client-secret');
+        const currentIpEl = document.getElementById('stock-current-ip');
+        const keyStatus = document.getElementById('stock-key-status');
+
+        if (btnStockRefresh) {
+            btnStockRefresh.addEventListener('click', async () => {
+                btnStockRefresh.classList.add('spinning');
+                if (window.eel && window.eel.refresh_stock_data) {
+                    try {
+                        const res = await window.eel.refresh_stock_data()();
+                        if (res) renderStockDashboard(res);
+                    } catch (e) {
+                        console.error('Refresh error:', e);
+                    }
+                }
+                setTimeout(() => btnStockRefresh.classList.remove('spinning'), 600);
+            });
+        }
+
+        // Search Modal
+        function openStockSearch() {
+            if (!modalSearch) return;
+            isModalOpen = true;
+            modalSearch.style.display = 'flex';
+            if (inputSearch) {
+                inputSearch.value = '';
+                inputSearch.focus();
+            }
+            if (resultsContainer) {
+                resultsContainer.innerHTML = '<div class="search-hint">검색어를 1글자 이상 입력하세요.</div>';
+            }
+        }
+
+        function closeStockSearch() {
+            if (!modalSearch) return;
+            modalSearch.style.display = 'none';
+            isModalOpen = false;
+        }
+
+        if (btnStockAdd) btnStockAdd.addEventListener('click', openStockSearch);
+        if (btnCloseSearch) btnCloseSearch.addEventListener('click', closeStockSearch);
+
+        if (inputSearch) {
+            inputSearch.addEventListener('input', () => {
+                const query = inputSearch.value.trim();
+                clearTimeout(stockSearchDebounce);
+                if (query.length === 0) {
+                    if (resultsContainer) {
+                        resultsContainer.innerHTML = '<div class="search-hint">검색어를 1글자 이상 입력하세요.</div>';
+                    }
+                    return;
+                }
+
+                stockSearchDebounce = setTimeout(async () => {
+                    if (window.eel && window.eel.search_stock_master) {
+                        try {
+                            const list = await window.eel.search_stock_master(query)();
+                            if (!resultsContainer) return;
+                            resultsContainer.innerHTML = '';
+                            if (!list || list.length === 0) {
+                                resultsContainer.innerHTML = '<div class="search-hint">검색 결과가 없습니다. 엔터를 눌러 직접 코드로 등록할 수 있습니다.</div>';
+                                return;
+                            }
+                            list.forEach((m) => {
+                                const item = document.createElement('div');
+                                item.className = 'stock-search-item';
+                                const mktClass = m.market === 'US' ? 'market-us' : 'market-kr';
+                                item.innerHTML = `
+                                    <div class="search-item-info">
+                                        <span class="search-item-name">${m.name}</span>
+                                        <span class="search-item-code">${m.code}</span>
+                                    </div>
+                                    <span class="stock-market-tag ${mktClass}">${m.market}</span>
+                                `;
+                                item.addEventListener('click', async () => {
+                                    if (window.eel && window.eel.add_stock_symbol) {
+                                        const r = await window.eel.add_stock_symbol(m.code, m.name, m.market)();
+                                        if (r && r.success) {
+                                            closeStockSearch();
+                                            loadStockDashboard();
+                                        }
+                                    }
+                                });
+                                resultsContainer.appendChild(item);
+                            });
+                        } catch (err) {
+                            console.error('Master stock search failed:', err);
+                        }
+                    }
+                }, 200);
+            });
+
+            // Enter key direct registration
+            inputSearch.addEventListener('keydown', async (e) => {
+                if (e.key === 'Enter') {
+                    const val = inputSearch.value.trim().toUpperCase();
+                    if (val && window.eel && window.eel.add_stock_symbol) {
+                        const mkt = val.match(/^\\d{6}$/) ? 'KR' : 'US';
+                        const r = await window.eel.add_stock_symbol(val, val, mkt)();
+                        if (r && r.success) {
+                            closeStockSearch();
+                            loadStockDashboard();
+                        }
+                    }
+                }
+            });
+        }
+
+        // Key Modal
+        async function openStockKeyModal() {
+            if (!modalKey) return;
+            isModalOpen = true;
+            modalKey.style.display = 'flex';
+            if (keyStatus) {
+                keyStatus.textContent = '';
+                keyStatus.className = 'stock-key-status';
+            }
+
+            if (currentIpEl) {
+                currentIpEl.textContent = '조회 중...';
+                try {
+                    const resp = await fetch('https://api.ipify.org?format=json');
+                    const ipData = await resp.json();
+                    if (ipData && ipData.ip) {
+                        currentIpEl.textContent = ipData.ip;
+                    }
+                } catch (e) {
+                    currentIpEl.textContent = '확인 불가 (포털 확인 요망)';
+                }
+            }
+        }
+
+        function closeStockKeyModal() {
+            if (!modalKey) return;
+            modalKey.style.display = 'none';
+            isModalOpen = false;
+        }
+
+        if (btnStockApiKey) btnStockApiKey.addEventListener('click', openStockKeyModal);
+        if (btnNoticeConfig) btnNoticeConfig.addEventListener('click', openStockKeyModal);
+        if (btnCloseKey) btnCloseKey.addEventListener('click', closeStockKeyModal);
+        if (btnCancelKey) btnCancelKey.addEventListener('click', closeStockKeyModal);
+
+        if (btnSaveKey) {
+            btnSaveKey.addEventListener('click', async () => {
+                const cid = inputClientId ? inputClientId.value.trim() : '';
+                const csec = inputClientSecret ? inputClientSecret.value.trim() : '';
+                if (keyStatus) {
+                    keyStatus.textContent = '인증 검증 중...';
+                    keyStatus.className = 'stock-key-status';
+                }
+                if (window.eel && window.eel.save_stock_api_keys) {
+                    try {
+                        const res = await window.eel.save_stock_api_keys(cid, csec)();
+                        if (res && res.success) {
+                            if (keyStatus) {
+                                keyStatus.textContent = res.message || '저장되었습니다.';
+                                keyStatus.className = 'stock-key-status success';
+                            }
+                            setTimeout(() => {
+                                closeStockKeyModal();
+                                loadStockDashboard();
+                            }, 800);
+                        } else {
+                            if (keyStatus) {
+                                keyStatus.textContent = (res && res.error) ? res.error : '인증 실패';
+                                keyStatus.className = 'stock-key-status error';
+                            }
+                        }
+                    } catch (err) {
+                        if (keyStatus) {
+                            keyStatus.textContent = '네트워크/서버 오류';
+                            keyStatus.className = 'stock-key-status error';
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    // =========================================================================
     // 8. Initialization
     // =========================================================================
 
     document.addEventListener('DOMContentLoaded', () => {
         initMemo();
+        initStockUI();
         // pywebview ready 대기
         window.addEventListener('pywebviewready', async () => {
             if (window.pywebview && window.pywebview.api) {

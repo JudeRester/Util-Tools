@@ -58,6 +58,7 @@
             <button class="wtab-btn active" data-tab="launch">⚡ 빠른 실행</button>
             <button class="wtab-btn" data-tab="memo">📝 퀵 메모</button>
             <button class="wtab-btn" data-tab="system">📊 시스템</button>
+            <button class="wtab-btn" data-tab="stock">📈 주식&환율</button>
         </nav>
 
         <!-- 탭 컨텐츠 영역 -->
@@ -131,6 +132,50 @@
                     </button>
                 </div>
             </section>
+            <!-- 탭 4: 실시간 주식 & 환율 -->
+            <section id="wtab-stock" class="wtab-content">
+                <!-- 상단 FX 환율 티커 바 -->
+                <div class="fx-ticker-bar">
+                    <div class="fx-item" id="fx-item-usd">
+                        <span class="fx-code">USD/KRW</span>
+                        <span class="fx-rate" id="fx-rate-usd">--</span>
+                        <span class="fx-change" id="fx-change-usd">--</span>
+                    </div>
+                    <div class="fx-divider"></div>
+                    <div class="fx-item" id="fx-item-jpy">
+                        <span class="fx-code">JPY(100)/KRW</span>
+                        <span class="fx-rate" id="fx-rate-jpy">--</span>
+                        <span class="fx-change" id="fx-change-jpy">--</span>
+                    </div>
+                </div>
+
+                <!-- 관심 종목 헤더 바 -->
+                <div class="stock-header-row">
+                    <div class="stock-title-wrap">
+                        <span class="stock-title">관심 종목</span>
+                        <span class="stock-count-badge" id="stock-count-badge">0</span>
+                    </div>
+                    <div class="stock-action-btns">
+                        <button id="btn-stock-add" class="mini-action-btn" title="종목 추가">+ 종목 추가</button>
+                        <button id="btn-stock-api-key" class="mini-action-btn" title="Toss API 키 설정">🔑 API 키</button>
+                        <button id="btn-stock-refresh" class="mini-action-btn" title="새로고침">🔄</button>
+                    </div>
+                </div>
+
+                <!-- API 키 미등록 안내 배너 -->
+                <div id="stock-key-notice" class="stock-key-notice" style="display: none;">
+                    <div class="notice-content">
+                        <span class="notice-icon">🔑</span>
+                        <span class="notice-text">Toss API 키를 등록하면 실시간 체결가를 수신합니다.</span>
+                    </div>
+                    <button id="btn-stock-notice-config" class="btn-notice-action">등록</button>
+                </div>
+
+                <!-- 실시간 종목 카드 컨테이너 -->
+                <div id="stock-card-list" class="stock-card-list">
+                    <div class="stock-empty">종목 데이터를 불러오는 중...</div>
+                </div>
+            </section>
         </main>
 
         <!-- 비차단 인레이어 확인 모달 (Non-blocking In-layer Modal) -->
@@ -144,6 +189,53 @@
                 <div class="widget-modal-actions">
                     <button id="widget-modal-btn-cancel" class="widget-modal-btn btn-cancel">취소</button>
                     <button id="widget-modal-btn-confirm" class="widget-modal-btn btn-confirm">확인</button>
+                </div>
+            </div>
+        </div>
+        <!-- 비차단 인레이어: 종목 검색 모달 -->
+        <div id="modal-stock-search" class="widget-modal-overlay" style="display: none;">
+            <div class="widget-modal-dialog stock-modal-dialog">
+                <div class="widget-modal-header">
+                    <span class="widget-modal-icon">🔍</span>
+                    <span class="widget-modal-title">종목 추가</span>
+                    <button id="btn-close-stock-search" class="modal-close-btn" title="닫기">✕</button>
+                </div>
+                <div class="stock-search-box">
+                    <input type="text" id="input-stock-search" class="stock-search-input" placeholder="종목명 또는 코드 (예: 삼성전자, AAPL, NVDA)" autocomplete="off">
+                </div>
+                <div id="stock-search-results" class="stock-search-results">
+                    <div class="search-hint">검색어를 1글자 이상 입력하세요.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 비차단 인레이어: Toss API 키 설정 모달 -->
+        <div id="modal-stock-key" class="widget-modal-overlay" style="display: none;">
+            <div class="widget-modal-dialog stock-modal-dialog">
+                <div class="widget-modal-header">
+                    <span class="widget-modal-icon">🔑</span>
+                    <span class="widget-modal-title">Toss Open API 연동 키</span>
+                    <button id="btn-close-stock-key" class="modal-close-btn" title="닫기">✕</button>
+                </div>
+                <div class="stock-key-body">
+                    <div class="stock-ip-banner">
+                        <span class="ip-label">현재 공인 IP:</span>
+                        <span id="stock-current-ip" class="ip-value">조회 중...</span>
+                        <span class="ip-tip">(Toss 개발자센터 등록 필수)</span>
+                    </div>
+                    <div class="stock-input-group">
+                        <label for="input-stock-client-id">Client ID</label>
+                        <input type="text" id="input-stock-client-id" class="stock-form-input" placeholder="Toss OpenAPI Client ID">
+                    </div>
+                    <div class="stock-input-group">
+                        <label for="input-stock-client-secret">Client Secret</label>
+                        <input type="password" id="input-stock-client-secret" class="stock-form-input" placeholder="Toss OpenAPI Client Secret">
+                    </div>
+                    <div id="stock-key-status" class="stock-key-status"></div>
+                </div>
+                <div class="widget-modal-actions">
+                    <button id="btn-stock-key-cancel" class="widget-modal-btn btn-cancel">취소</button>
+                    <button id="btn-stock-key-save" class="widget-modal-btn btn-confirm">저장 및 인증</button>
                 </div>
             </div>
         </div>

@@ -213,6 +213,13 @@ class EdgeWidgetManager:
 
         self.window.events.shown += self._on_window_shown
         self.window.events.moved += self._on_window_moved
+
+        try:
+            import services.stock_service as stock_service
+            stock_service.set_widget_window(self.window)
+        except Exception:
+            pass
+
         return self.window
 
     def start_guard(self) -> None:
@@ -282,6 +289,13 @@ class EdgeWidgetManager:
 
         logger.info("Widget state transitioned to EXPANDED")
         self._notify_client_state(WidgetState.EXPANDED)
+
+        try:
+            from services.stock_service import resume_streaming
+            threading.Thread(target=resume_streaming, name="StockResumeThread", daemon=True).start()
+        except Exception:
+            pass
+
         return {"success": True, "state": self.state}
 
     def collapse(self) -> Dict[str, Any]:
@@ -305,6 +319,13 @@ class EdgeWidgetManager:
 
         logger.info("Widget state transitioned to COLLAPSED")
         self._notify_client_state(WidgetState.COLLAPSED)
+
+        try:
+            from services.stock_service import pause_streaming
+            threading.Thread(target=pause_streaming, name="StockPauseThread", daemon=True).start()
+        except Exception:
+            pass
+
         return {"success": True, "state": self.state}
 
     def set_handle_size(self, size_key: str) -> Dict[str, Any]:
