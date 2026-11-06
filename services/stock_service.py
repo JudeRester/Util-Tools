@@ -204,13 +204,13 @@ def fetch_exchange_rates(force_refresh: bool = False) -> Dict[str, Any]:
     usd_change = 0.0
     jpy_change = 0.0
 
-    # 1. Try Toss Open API if token is active
+    # 1. Try Toss Open API for USD/KRW (requires baseCurrency=USD&quoteCurrency=KRW)
     token = get_valid_token()
     toss_success = False
     if token:
         try:
             req = urllib.request.Request(
-                "https://openapi.tossinvest.com/api/v1/exchange-rate",
+                "https://openapi.tossinvest.com/api/v1/exchange-rate?baseCurrency=USD&quoteCurrency=KRW",
                 headers={
                     "Authorization": f"Bearer {token}",
                     "User-Agent": "UtilTools-EdgeWidget/1.0"
@@ -218,43 +218,34 @@ def fetch_exchange_rates(force_refresh: bool = False) -> Dict[str, Any]:
             )
             with urllib.request.urlopen(req, timeout=3.0, context=_SSL_CTX) as resp:
                 tdata = json.loads(resp.read().decode("utf-8"))
-                rates = tdata.get("rates", tdata.get("data", []))
-                if isinstance(rates, list):
-                    for r in rates:
-                        cur = r.get("currency") or r.get("symbol")
-                        rate_val = float(r.get("rate") or r.get("price", 0))
-                        chg_val = float(r.get("change", 0))
-                        if cur == "USD":
-                            usd_krw = rate_val
-                            usd_change = chg_val
-                            toss_success = True
-                        elif cur in ("JPY", "JPY100"):
-                            jpy_krw = rate_val
-                            jpy_change = chg_val
+                item = tdata.get("result", {})
+                if item and "rate" in item:
+                    rate_val = float(item.get("rate", 0))
+                    mid_val = float(item.get("midRate", rate_val))
+                    chg_type = item.get("rateChangeType", "FLAT")
+                    chg_val = round(rate_val - mid_val, 2)
+                    if chg_type == "DOWN" and chg_val > 0:
+                        chg_val = -chg_val
+                    usd_krw = rate_val
+                    usd_change = chg_val
+                    toss_success = True
         except Exception as e:
-            logger.log_debug("StockService", f"Toss FX fetch bypass/error: {e}")
+            logger.log_warn("StockService", f"Toss FX fetch bypass: {e}")
 
-    # 2. Public Fallback API for USD & JPY
-    if not toss_success:
-        endpoints = [
-            "https://open.er-api.com/v6/latest/USD",
-            "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json"
-        ]
-        for ep in endpoints:
-            try:
-                req = urllib.request.Request(ep, headers={"User-Agent": "curl/7.68.0"})
-                with urllib.request.urlopen(req, timeout=2.5, context=_SSL_CTX) as resp:
-                    pdata = json.loads(resp.read().decode("utf-8"))
-                    rates_map = pdata.get("rates") or pdata.get("usd", {})
-                    krw_rate = float(rates_map.get("KRW") or rates_map.get("krw", 0))
-                    jpy_rate = float(rates_map.get("JPY") or rates_map.get("jpy", 0))
-                    if krw_rate > 0:
-                        usd_krw = round(krw_rate, 2)
-                        if jpy_rate > 0:
-                            jpy_krw = round((krw_rate / jpy_rate) * 100, 2)
-                        break
-            except Exception:
-                continue
+    # 2. Fetch JPY (and USD fallback) from Public Currency API
+    try:
+        req = urllib.request.Request("https://open.er-api.com/v6/latest/USD", headers={"User-Agent": "curl/7.68.0"})
+        with urllib.request.urlopen(req, timeout=2.5, context=_SSL_CTX) as resp:
+            pdata = json.loads(resp.read().decode("utf-8"))
+            rates_map = pdata.get("rates", {})
+            krw_rate = float(rates_map.get("KRW", 0))
+            jpy_rate = float(rates_map.get("JPY", 0))
+            if not toss_success and krw_rate > 0:
+                usd_krw = round(krw_rate, 2)
+            if krw_rate > 0 and jpy_rate > 0:
+                jpy_krw = round((krw_rate / jpy_rate) * 100, 2)
+    except Exception as e:
+        logger.log_warn("StockService", f"Public FX fetch bypass: {e}")
 
     result = {
         "USD": {
@@ -353,61 +344,63 @@ def load_master_stocks() -> List[Dict[str, Any]]:
 
 
 def fetch_initial_prices(symbols: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
-    """Fetch initial/fallback REST quotes for symbols."""
+    """Fetch initial quotes using batch GET /api/v1/prices?symbols=..."""
     token = get_valid_token()
     results = {}
+    code_list = [s.get("code") for s in symbols if s.get("code")]
 
+    # 1. Base skeleton
     for sym in symbols:
         code = sym.get("code", "")
         name = sym.get("name", code)
-        market = sym.get("market", "KR")
-
-        if code in _quote_cache:
-            results[code] = _quote_cache[code]
-            continue
-
-        base_price = 72000.0 if market == "KR" else 210.0
+        market = sym.get("market", "KR" if code.isdigit() else "US")
+        base_p = 72000.0 if market == "KR" else 210.0
         quote = {
             "code": code,
             "name": name,
             "market": market,
-            "price": base_price,
+            "price": base_p,
+            "base_price": base_p,
             "change": 0.0,
             "change_rate": 0.0,
             "session": "REG",
             "currency": "KRW" if market == "KR" else "USD",
-            "formatted_price": f"{int(base_price):,}원" if market == "KR" else f"${base_price:,.2f}"
+            "formatted_price": f"{int(base_p):,}원" if market == "KR" else f"${base_p:,.2f}"
         }
-
-        if token:
-            try:
-                url = f"https://openapi.tossinvest.com/api/v1/prices?symbol={urllib.parse.quote(code)}"
-                req = urllib.request.Request(
-                    url,
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "User-Agent": "UtilTools-EdgeWidget/1.0"
-                    }
-                )
-                with urllib.request.urlopen(req, timeout=2.0, context=_SSL_CTX) as resp:
-                    pdata = json.loads(resp.read().decode("utf-8"))
-                    item = pdata.get("data", pdata)
-                    p_val = float(item.get("price", base_price))
-                    c_val = float(item.get("change", 0.0))
-                    cr_val = float(item.get("change_rate", 0.0))
-                    session = parse_session_status(item.get("session", "REGULAR"))
-                    quote.update({
-                        "price": p_val,
-                        "change": c_val,
-                        "change_rate": cr_val,
-                        "session": session,
-                        "formatted_price": f"{int(p_val):,}원" if market == "KR" else f"${p_val:,.2f}"
-                    })
-            except Exception as e:
-                logger.log_debug("StockService", f"Price REST quote error for {code}: {e}")
-
-        _quote_cache[code] = quote
+        if code in _quote_cache:
+            quote.update(_quote_cache[code])
         results[code] = quote
+
+    # 2. Batch fetch live prices from Toss
+    if token and code_list:
+        try:
+            symbols_param = urllib.parse.quote(",".join(code_list))
+            url = f"https://openapi.tossinvest.com/api/v1/prices?symbols={symbols_param}"
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "User-Agent": "UtilTools-EdgeWidget/1.0"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=3.0, context=_SSL_CTX) as resp:
+                pdata = json.loads(resp.read().decode("utf-8"))
+                items = pdata.get("result", [])
+                for it in items:
+                    c = it.get("symbol")
+                    if c in results:
+                        p_val = float(it.get("lastPrice", results[c]["price"]))
+                        curr = it.get("currency", results[c]["currency"])
+                        results[c]["price"] = p_val
+                        results[c]["base_price"] = p_val
+                        results[c]["currency"] = curr
+                        results[c]["formatted_price"] = f"{int(p_val):,}원" if curr == "KRW" else f"${p_val:,.2f}"
+                        _quote_cache[c] = results[c]
+        except Exception as e:
+            logger.log_warn("StockService", f"Batch prices fetch notice: {e}")
+
+    for c, q in results.items():
+        _quote_cache[c] = q
 
     return results
 
@@ -490,34 +483,63 @@ def _streaming_worker():
                 def on_message(ws, msg):
                     try:
                         data = json.loads(msg)
-                        code = data.get("symbol") or data.get("code")
-                        if code:
-                            p_val = float(data.get("price", 0.0))
-                            c_val = float(data.get("change", 0.0))
-                            cr_val = float(data.get("change_rate", 0.0))
-                            sess = parse_session_status(data.get("session", "REG"))
-                            mkt = data.get("market", "KR" if code.isdigit() else "US")
-                            tick = {
-                                "code": code,
-                                "price": p_val,
-                                "change": c_val,
-                                "change_rate": cr_val,
-                                "session": sess,
-                                "formatted_price": f"{int(p_val):,}원" if mkt == "KR" else f"${p_val:,.2f}"
-                            }
-                            broadcast_tick_update(tick)
+                        if data.get("type") == "message":
+                            topic = data.get("topic", "")
+                            code = topic.split(":")[-1]
+                            trade = data.get("data", {})
+                            if code and trade:
+                                p_val = float(trade.get("price", 0.0))
+                                curr = trade.get("currency", "USD" if not code.isdigit() else "KRW")
+                                mkt = "KR" if curr == "KRW" or code.isdigit() else "US"
+
+                                prev = _quote_cache.get(code, {})
+                                base_p = float(prev.get("base_price", prev.get("price", p_val)))
+                                c_val = round(p_val - base_p, 2)
+                                cr_val = round((c_val / base_p * 100) if base_p else 0.0, 2)
+
+                                now_h = (time.gmtime().tm_hour + 9) % 24
+                                now_m = time.gmtime().tm_min
+                                now_t = now_h * 60 + now_m
+                                if mkt == "US":
+                                    if 18 * 60 <= now_t < 23 * 60 + 30:
+                                        sess = "PRE"
+                                    elif now_t >= 23 * 60 + 30 or now_t < 6 * 60:
+                                        sess = "REG"
+                                    elif 6 * 60 <= now_t < 9 * 60 + 50:
+                                        sess = "POST"
+                                    else:
+                                        sess = "CLOSE"
+                                else:
+                                    sess = "REG" if (9 * 60 <= now_t <= 15 * 60 + 30) else "CLOSE"
+
+                                tick = {
+                                    "code": code,
+                                    "price": p_val,
+                                    "change": c_val,
+                                    "change_rate": cr_val,
+                                    "session": sess,
+                                    "formatted_price": f"{int(p_val):,}원" if mkt == "KR" else f"${p_val:,.2f}"
+                                }
+                                broadcast_tick_update(tick)
                     except Exception as ex:
-                        logger.log_debug("StockService", f"WS tick parse error: {ex}")
+                        logger.log_warn("StockService", f"WS tick parse error: {ex}")
 
                 def on_open(ws):
                     global _backoff_delay
                     _backoff_delay = 1.0
-                    sub_msg = json.dumps({"action": "subscribe", "symbols": symbols})
-                    ws.send(sub_msg)
-                    logger.log_info("StockService", f"Subscribed to stock symbols: {symbols}")
+                    kr_codes = [s for s in symbols if s.isdigit()]
+                    us_codes = [s for s in symbols if not s.isdigit()]
+                    sub_list = []
+                    if us_codes:
+                        sub_list.append({"type": "trade:us", "codes": us_codes})
+                    if kr_codes:
+                        sub_list.append({"type": "trade:kr", "codes": kr_codes})
+                    if sub_list:
+                        ws.send(json.dumps(sub_list))
+                        logger.log_info("StockService", f"Subscribed to Toss trade channels: {sub_list}")
 
                 def on_error(ws, err):
-                    logger.log_debug("StockService", f"WebSocket error: {err}")
+                    logger.log_warn("StockService", f"WebSocket error: {err}")
 
                 ws_app = websocket.WebSocketApp(
                     ws_url,
