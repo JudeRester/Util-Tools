@@ -27,7 +27,7 @@ def get_bundle_dir() -> str:
 
 
 # 1. 애플리케이션 메타데이터
-APP_VERSION = "0.21.4"
+APP_VERSION = "0.22.0"
 
 # 2. 루트 경로 상수
 APP_DIR = get_app_dir()
@@ -48,6 +48,8 @@ CALENDAR_CONFIG_EXAMPLE_PATH = os.path.join(TEMPLATES_DIR, "calendar_config.exam
 APP_SETTINGS_PATH = os.path.join(APP_DIR, "app_settings.json")
 APP_SETTINGS_EXAMPLE_PATH = os.path.join(TEMPLATES_DIR, "app_settings.example.json")
 WIDGET_CONFIG_PATH = os.path.join(DATA_DIR, "widget_config.json")
+STOCK_CONFIG_PATH = os.path.join(DATA_DIR, "stock_config.json")
+STOCK_MASTER_PATH = os.path.join(DATA_DIR, "stock_master.json")
 BROWSER_PROFILE_DIR = os.path.join(DATA_DIR, "browser_profile")
 WHISPER_MODELS_DIR = os.path.join(DATA_DIR, "models", "whisper")
 DIARIZATION_MODELS_DIR = os.path.join(DATA_DIR, "models", "diarization")

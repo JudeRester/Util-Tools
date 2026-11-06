@@ -40,6 +40,7 @@ import services.ocr_service
 import services.diff_service
 import services.qr_service
 import services.imap_service
+import services.stock_service
 
 import socket
 import time
@@ -135,6 +136,10 @@ def main():
     start_options['port'] = assigned_port
 
     edge_manager = EdgeWidgetManager()
+    try:
+        services.stock_service.init_stock_service(edge_manager)
+    except Exception as e:
+        core.logger.log_warn("Lifecycle", f"Stock service initialization notice: {e}")
 
     # 2. 통합 종료 핸들러 정의
     def shutdown_all():

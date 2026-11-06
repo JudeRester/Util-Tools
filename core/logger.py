@@ -81,6 +81,10 @@ def log_info(category: str, message: str, details: str = ''):
     return log_event('info', category, message, details)
 
 
+def log_debug(category: str, message: str, details: str = ''):
+    return log_event('info', category, message, details)
+
+
 def log_warn(category: str, message: str, details: str = ''):
     return log_event('warn', category, message, details)
 
