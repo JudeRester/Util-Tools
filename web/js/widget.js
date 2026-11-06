@@ -844,7 +844,7 @@
                 if (e.key === 'Enter') {
                     const val = inputSearch.value.trim().toUpperCase();
                     if (val && window.eel && window.eel.add_stock_symbol) {
-                        const mkt = val.match(/^\\d{6}$/) ? 'KR' : 'US';
+                        const mkt = /^\d{6}$/.test(val) ? 'KR' : 'US';
                         const r = await window.eel.add_stock_symbol(val, val, mkt)();
                         if (r && r.success) {
                             closeStockSearch();

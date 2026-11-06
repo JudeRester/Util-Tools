@@ -283,6 +283,56 @@ def fetch_exchange_rates(force_refresh: bool = False) -> Dict[str, Any]:
 # REST: Stock Master List & Initial Price Quotes
 # -----------------------------------------------------------------------------
 
+
+def sync_master_stocks_background() -> None:
+    """Background task to fetch and cache all listed stocks from Toss Open API."""
+    def _run():
+        token = get_valid_token()
+        if not token:
+            return
+        logger.log_info("StockService", "Starting stock universe sync from Toss Open API...")
+        all_stocks = []
+        for m in ['KOSPI', 'KOSDAQ', 'NASDAQ', 'NYSE']:
+            time.sleep(1.1)
+            url = f"https://openapi.tossinvest.com/api/v1/stocks/all?market={m}"
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "User-Agent": "UtilTools-EdgeWidget/1.0"
+                }
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=5.0, context=_SSL_CTX) as r:
+                    d = json.loads(r.read().decode('utf-8'))
+                    items = d.get('result', [])
+                    for it in items:
+                        sym = it.get('symbol')
+                        nm = it.get('name')
+                        if sym and nm:
+                            all_stocks.append({
+                                'code': sym,
+                                'name': nm,
+                                'market': 'KR' if m in ('KOSPI', 'KOSDAQ') else 'US'
+                            })
+                    logger.log_debug("StockService", f"Synced {m}: {len(items)} items")
+            except Exception as e:
+                logger.log_warn("StockService", f"Failed to sync {m} stocks: {e}")
+
+        if all_stocks:
+            try:
+                os.makedirs(DATA_DIR, exist_ok=True)
+                with open(STOCK_MASTER_PATH, "w", encoding="utf-8") as f:
+                    json.dump(all_stocks, f, ensure_ascii=False, indent=2)
+                global _master_cache
+                with _cache_lock:
+                    _master_cache = all_stocks
+                logger.log_info("StockService", f"Stock master universe sync complete: {len(all_stocks)} stocks cached")
+            except Exception as e:
+                logger.log_error("StockService", f"Failed to save stock master: {e}")
+
+    threading.Thread(target=_run, name="StockMasterSyncThread", daemon=True).start()
+
 def load_master_stocks() -> List[Dict[str, Any]]:
     global _master_cache
     with _cache_lock:
@@ -520,8 +570,11 @@ def init_stock_service(edge_manager: Any = None) -> None:
     def _preload():
         try:
             load_stock_config()
-            load_master_stocks()
+            master = load_master_stocks()
             fetch_exchange_rates()
+            # If master cache only has default small list, trigger sync
+            if len(master) <= len(DEFAULT_MASTER_STOCKS) and get_valid_token():
+                sync_master_stocks_background()
         except Exception as e:
             logger.log_warn("StockService", f"Stock service preload error: {e}")
 
@@ -586,6 +639,7 @@ def save_stock_api_keys(client_id: str, client_secret: str) -> Dict[str, Any]:
 
     token = _fetch_access_token(cid, csec)
     if token:
+        sync_master_stocks_background()
         resume_streaming()
         return {"success": True, "message": "Toss Open API 인증에 성공하였습니다.", "configured": True}
     else:
@@ -640,22 +694,58 @@ def remove_stock_symbol(code: str) -> Dict[str, Any]:
 
 @eel.expose
 def search_stock_master(query: str) -> List[Dict[str, Any]]:
-    """Searches stock master list by name or ticker and returns up to 10 results."""
+    """Searches stock master list by name or ticker using smart relevance scoring."""
     q = (query or "").strip().lower()
     if not q:
         return []
 
     master = load_master_stocks()
-    matches = []
+    scored = []
     for item in master:
         code = str(item.get("code", "")).lower()
         name = str(item.get("name", "")).lower()
-        if q in code or q in name:
-            matches.append(item)
-            if len(matches) >= 10:
-                break
 
-    return matches
+        if code == q or name == q:
+            score = 1000 - len(name)
+        elif name.startswith(q) or code.startswith(q):
+            score = 500 - len(name)
+        elif q in name or q in code:
+            score = 100 - len(name)
+        else:
+            continue
+
+        scored.append((score, item))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    results = [x[1] for x in scored[:10]]
+
+    # Fallback to direct Toss API lookup if no local match and query resembles a symbol
+    if not results and (q.isalnum() and len(q) <= 10):
+        token = get_valid_token()
+        if token:
+            try:
+                url = f"https://openapi.tossinvest.com/api/v1/stocks?symbols={urllib.parse.quote(query.strip().upper())}"
+                req = urllib.request.Request(
+                    url,
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "User-Agent": "UtilTools-EdgeWidget/1.0"
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=2.0, context=_SSL_CTX) as r:
+                    d = json.loads(r.read().decode('utf-8'))
+                    items = d.get('result', d.get('data', []))
+                    if isinstance(items, list) and items:
+                        it = items[0]
+                        results.append({
+                            'code': it.get('symbol', query.strip().upper()),
+                            'name': it.get('name', query.strip().upper()),
+                            'market': it.get('market', 'KR' if query.isdigit() else 'US')
+                        })
+            except Exception as e:
+                logger.log_debug("StockService", f"Direct stock lookup error: {e}")
+
+    return results
 
 
 @eel.expose
