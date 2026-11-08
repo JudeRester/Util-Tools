@@ -602,9 +602,14 @@
         }
 
         if (changeEl && typeof tick.change === 'number') {
-            const sign = tick.change > 0 ? '+' : '';
-            const chgRateStr = typeof tick.change_rate === 'number' ? ` (${sign}${tick.change_rate.toFixed(2)}%)` : '';
-            changeEl.textContent = `${sign}${tick.change}${chgRateStr}`;
+            const sign = tick.change > 0 ? '+' : (tick.change < 0 ? '-' : '');
+            const isKrw = tick.currency === 'KRW' || (tick.code && /^\d+$/.test(tick.code));
+            const formattedChange = isKrw
+                ? Math.abs(tick.change).toLocaleString()
+                : Math.abs(tick.change).toFixed(2);
+            const rate = typeof tick.change_rate === 'number' ? tick.change_rate : 0.0;
+            const rateFormatted = `${sign}${Math.abs(rate).toFixed(2)}%`;
+            changeEl.textContent = `${sign}${formattedChange} (${rateFormatted})`;
             changeEl.className = `stock-change ${tick.change > 0 ? 'up' : (tick.change < 0 ? 'down' : 'flat')}`;
         }
 
@@ -685,8 +690,14 @@
             const mktClass = item.market === 'US' ? 'market-us' : 'market-kr';
             const sessClass = `badge-${(item.session || 'reg').toLowerCase()}`;
             const chgClass = item.change > 0 ? 'up' : (item.change < 0 ? 'down' : 'flat');
-            const sign = item.change > 0 ? '+' : '';
-            const chgRateStr = typeof item.change_rate === 'number' ? ` (${sign}${item.change_rate.toFixed(2)}%)` : '';
+            const sign = item.change > 0 ? '+' : (item.change < 0 ? '-' : '');
+            const isKrw = item.currency === 'KRW' || item.market === 'KR' || /^\d+$/.test(item.code);
+            const formattedChange = isKrw
+                ? Math.abs(item.change || 0).toLocaleString()
+                : Math.abs(item.change || 0).toFixed(2);
+            const rate = typeof item.change_rate === 'number' ? item.change_rate : 0.0;
+            const rateFormatted = `${sign}${Math.abs(rate).toFixed(2)}%`;
+            const changeDisplay = `${sign}${formattedChange} (${rateFormatted})`;
 
             card.innerHTML = `
                 <div class="stock-card-left">
@@ -702,7 +713,7 @@
                 <div class="stock-card-right">
                     <div class="stock-price-col">
                         <span class="stock-price">${item.formatted_price || '--'}</span>
-                        <span class="stock-change ${chgClass}">${sign}${item.change}${chgRateStr}</span>
+                        <span class="stock-change ${chgClass}">${changeDisplay}</span>
                     </div>
                     <button class="stock-btn-del" title="관심 종목 삭제">✕</button>
                 </div>
