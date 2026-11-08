@@ -17,6 +17,7 @@ import urllib.request
 import urllib.parse
 import urllib.error
 from typing import Any, Dict, List, Optional
+import concurrent.futures
 import eel
 
 from core.paths import DATA_DIR, STOCK_CONFIG_PATH, STOCK_MASTER_PATH
@@ -35,6 +36,7 @@ _token_expires_at: float = 0.0
 _fx_cache: Dict[str, Any] = {"data": None, "expires_at": 0.0}
 _quote_cache: Dict[str, Dict[str, Any]] = {}
 _master_cache: List[Dict[str, Any]] = []
+_prev_close_cache: Dict[str, Dict[str, Any]] = {}
 
 # Streaming State
 _is_streaming_active: bool = False
@@ -343,6 +345,57 @@ def load_master_stocks() -> List[Dict[str, Any]]:
     return _master_cache
 
 
+def fetch_prev_close(symbol: str, token: Optional[str] = None) -> Optional[float]:
+    """Fetch previous regular session close price from Toss Open API daily candles."""
+    if not symbol:
+        return None
+
+    now = time.time()
+    with _cache_lock:
+        cached = _prev_close_cache.get(symbol)
+        if cached and now < cached.get("expires_at", 0.0):
+            return cached.get("price")
+
+    if not token:
+        token = get_valid_token()
+    if not token:
+        return None
+
+    try:
+        url = f"https://openapi.tossinvest.com/api/v1/candles?symbol={urllib.parse.quote(symbol)}&interval=1d"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "User-Agent": "UtilTools-EdgeWidget/1.0"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=3.0, context=_SSL_CTX) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            candles = data.get("result", {}).get("candles", [])
+            prev_close = None
+            if len(candles) >= 2:
+                c_val = candles[1].get("closePrice")
+                if c_val is not None:
+                    prev_close = float(c_val)
+            elif len(candles) == 1:
+                o_val = candles[0].get("openPrice")
+                if o_val is not None:
+                    prev_close = float(o_val)
+
+            if prev_close is not None:
+                with _cache_lock:
+                    _prev_close_cache[symbol] = {
+                        "price": prev_close,
+                        "expires_at": now + 300.0
+                    }
+                return prev_close
+    except Exception as e:
+        logger.log_warn("StockService", f"Failed to fetch prev close for {symbol}: {e}")
+
+    return None
+
+
 def fetch_initial_prices(symbols: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """Fetch initial quotes using batch GET /api/v1/prices?symbols=..."""
     token = get_valid_token()
@@ -392,12 +445,42 @@ def fetch_initial_prices(symbols: List[Dict[str, Any]]) -> Dict[str, Dict[str, A
                         p_val = float(it.get("lastPrice", results[c]["price"]))
                         curr = it.get("currency", results[c]["currency"])
                         results[c]["price"] = p_val
-                        results[c]["base_price"] = p_val
                         results[c]["currency"] = curr
                         results[c]["formatted_price"] = f"{int(p_val):,}원" if curr == "KRW" else f"${p_val:,.2f}"
-                        _quote_cache[c] = results[c]
         except Exception as e:
             logger.log_warn("StockService", f"Batch prices fetch notice: {e}")
+
+    # Concurrently fetch previous regular session close for all symbols
+    prev_closes = {}
+    if token and code_list:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(code_list) or 1)) as executor:
+            future_to_code = {executor.submit(fetch_prev_close, c, token): c for c in code_list}
+            for future in concurrent.futures.as_completed(future_to_code):
+                c = future_to_code[future]
+                try:
+                    res = future.result()
+                    if res is not None:
+                        prev_closes[c] = res
+                except Exception as ex:
+                    logger.log_warn("StockService", f"Error fetching prev close for {c}: {ex}")
+
+    for c in code_list:
+        if c not in results:
+            continue
+        p_val = results[c]["price"]
+        prev_close = prev_closes.get(c)
+        if prev_close is None:
+            with _cache_lock:
+                cached = _prev_close_cache.get(c)
+                if cached:
+                    prev_close = cached.get("price")
+        base_p = prev_close or p_val
+        results[c]["base_price"] = base_p
+        is_us = results[c]["currency"] == "USD" or not c.isdigit()
+        c_val = round(p_val - base_p, 2 if is_us else 0)
+        cr_val = round((c_val / base_p * 100), 2) if base_p else 0.0
+        results[c]["change"] = c_val
+        results[c]["change_rate"] = cr_val
 
     for c, q in results.items():
         _quote_cache[c] = q
@@ -493,9 +576,11 @@ def _streaming_worker():
                                 mkt = "KR" if curr == "KRW" or code.isdigit() else "US"
 
                                 prev = _quote_cache.get(code, {})
-                                base_p = float(prev.get("base_price", prev.get("price", p_val)))
-                                c_val = round(p_val - base_p, 2)
-                                cr_val = round((c_val / base_p * 100) if base_p else 0.0, 2)
+                                base_p = float(prev.get("base_price", 0.0))
+                                if base_p <= 0:
+                                    base_p = float(_prev_close_cache.get(code, {}).get("price", p_val))
+                                c_val = round(p_val - base_p, 2 if mkt == "US" else 0)
+                                cr_val = round((c_val / base_p * 100), 2) if base_p else 0.0
 
                                 now_h = (time.gmtime().tm_hour + 9) % 24
                                 now_m = time.gmtime().tm_min
