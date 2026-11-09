@@ -530,6 +530,58 @@
         });
     }
 
+    function showWidgetPrompt(opts) {
+        return new Promise((resolve) => {
+            const modalInput = document.getElementById('widget-modal-input');
+            if (!modalOverlay || !modalInput) {
+                const val = window.prompt(opts.message || opts.title || '', opts.defaultValue || '');
+                resolve(val);
+                return;
+            }
+
+            isModalOpen = true;
+            if (modalIcon) modalIcon.textContent = opts.icon || '✏️';
+            if (modalTitle) modalTitle.textContent = opts.title || '입력';
+            if (modalMsg) modalMsg.textContent = opts.message || '';
+            modalInput.style.display = 'block';
+            modalInput.value = opts.defaultValue || '';
+            modalInput.placeholder = opts.placeholder || '';
+            if (modalBtnCancel) modalBtnCancel.textContent = opts.cancelText || '취소';
+            if (modalBtnConfirm) {
+                modalBtnConfirm.textContent = opts.confirmText || '확인';
+                modalBtnConfirm.classList.remove('danger');
+            }
+
+            modalOverlay.style.display = 'flex';
+            setTimeout(() => modalInput.focus(), 50);
+
+            const onKeyDown = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    cleanup(modalInput.value.trim());
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cleanup(null);
+                }
+            };
+            const onCancel = (e) => { if (e) e.stopPropagation(); cleanup(null); };
+            const onConfirm = (e) => { if (e) e.stopPropagation(); cleanup(modalInput.value.trim()); };
+
+            const cleanup = (result) => {
+                modalOverlay.style.display = 'none';
+                modalInput.style.display = 'none';
+                isModalOpen = false;
+                modalBtnCancel.removeEventListener('click', onCancel);
+                modalBtnConfirm.removeEventListener('click', onConfirm);
+                modalInput.removeEventListener('keydown', onKeyDown);
+                resolve(result);
+            };
+            modalBtnCancel.addEventListener('click', onCancel);
+            modalBtnConfirm.addEventListener('click', onConfirm);
+            modalInput.addEventListener('keydown', onKeyDown);
+        });
+    }
+
     // =========================================================================
     // 7-2. System Power Controls (Restart & Shutdown)
     // =========================================================================
@@ -587,9 +639,14 @@
     // =========================================================================
 
     let stockSearchDebounce = null;
+    let stockGroups = [];
+    let activeStockGroupId = 'g_default';
+    let stockWatchlistData = [];
 
     window.onStockTickUpdate = function (tick) {
         if (!tick || !tick.code) return;
+        const cached = stockWatchlistData.find(w => w.code === tick.code);
+        if (cached) Object.assign(cached, tick);
         const card = document.querySelector(`.stock-card[data-code="${tick.code}"]`);
         if (!card) return;
 
@@ -639,6 +696,10 @@
     }
 
     function renderStockDashboard(data) {
+        stockGroups = data.groups || [];
+        activeStockGroupId = data.active_group_id || (stockGroups[0] ? stockGroups[0].id : 'g_default');
+        stockWatchlistData = data.watchlist || [];
+
         // FX Ticker Bar
         const fx = data.fx || {};
         if (fx.USD) {
@@ -834,7 +895,7 @@
                                 `;
                                 item.addEventListener('click', async () => {
                                     if (window.eel && window.eel.add_stock_symbol) {
-                                        const r = await window.eel.add_stock_symbol(m.code, m.name, m.market)();
+                                        const r = await window.eel.add_stock_symbol(m.code, m.name, m.market, activeStockGroupId)();
                                         if (r && r.success) {
                                             closeStockSearch();
                                             loadStockDashboard();
@@ -856,7 +917,7 @@
                     const val = inputSearch.value.trim().toUpperCase();
                     if (val && window.eel && window.eel.add_stock_symbol) {
                         const mkt = /^\d{6}$/.test(val) ? 'KR' : 'US';
-                        const r = await window.eel.add_stock_symbol(val, val, mkt)();
+                        const r = await window.eel.add_stock_symbol(val, val, mkt, activeStockGroupId)();
                         if (r && r.success) {
                             closeStockSearch();
                             loadStockDashboard();
