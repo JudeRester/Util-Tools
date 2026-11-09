@@ -44,6 +44,8 @@ _is_paused: bool = False
 _ws_thread: Optional[threading.Thread] = None
 _stop_streaming_event = threading.Event()
 _backoff_delay: float = 1.0
+_active_ws: Any = None
+_last_broadcast_time: Dict[str, float] = {}
 
 # SSL context for outbound HTTPS API calls
 _SSL_CTX = ssl.create_default_context()
@@ -510,6 +512,16 @@ def broadcast_tick_update(tick_data: Dict[str, Any]) -> None:
     if not code:
         return
 
+    now = time.time()
+    if now - _last_broadcast_time.get(code, 0.0) < 0.1:
+        with _cache_lock:
+            if code in _quote_cache:
+                _quote_cache[code].update(tick_data)
+            else:
+                _quote_cache[code] = tick_data
+        return
+    _last_broadcast_time[code] = now
+
     with _cache_lock:
         if code in _quote_cache:
             _quote_cache[code].update(tick_data)
@@ -530,6 +542,34 @@ def broadcast_tick_update(tick_data: Dict[str, Any]) -> None:
             eel.onStockTickUpdate(tick_data)()
     except Exception:
         pass
+
+
+def update_ws_subscriptions() -> bool:
+    """Dynamically sends updated trade subscriptions (KR & US) to active WebSocket."""
+    global _active_ws
+    conf = load_stock_config()
+    symbols = [s.get("code") for s in conf.get("watchlist", []) if s.get("code")]
+    kr_codes = [s for s in symbols if s.isdigit()]
+    us_codes = [s for s in symbols if not s.isdigit()]
+    sub_list = []
+    if us_codes:
+        sub_list.append({"type": "trade:us", "codes": us_codes})
+    if kr_codes:
+        sub_list.append({"type": "trade:kr", "codes": kr_codes})
+
+    if _active_ws:
+        try:
+            _active_ws.send(json.dumps(sub_list))
+            logger.log_info("StockService", f"Dynamic subscription updated: {sub_list}")
+            return True
+        except Exception as e:
+            logger.log_warn("StockService", f"Failed to send dynamic subscription: {e}")
+            _active_ws = None
+            resume_streaming()
+            return False
+    else:
+        resume_streaming()
+        return False
 
 
 def _streaming_worker():
@@ -603,6 +643,7 @@ def _streaming_worker():
                                     "change": c_val,
                                     "change_rate": cr_val,
                                     "session": sess,
+                                    "currency": curr,
                                     "formatted_price": f"{int(p_val):,}원" if mkt == "KR" else f"${p_val:,.2f}"
                                 }
                                 broadcast_tick_update(tick)
@@ -610,20 +651,19 @@ def _streaming_worker():
                         logger.log_warn("StockService", f"WS tick parse error: {ex}")
 
                 def on_open(ws):
-                    global _backoff_delay
+                    global _backoff_delay, _active_ws
                     _backoff_delay = 1.0
-                    kr_codes = [s for s in symbols if s.isdigit()]
-                    us_codes = [s for s in symbols if not s.isdigit()]
-                    sub_list = []
-                    if us_codes:
-                        sub_list.append({"type": "trade:us", "codes": us_codes})
-                    if kr_codes:
-                        sub_list.append({"type": "trade:kr", "codes": kr_codes})
-                    if sub_list:
-                        ws.send(json.dumps(sub_list))
-                        logger.log_info("StockService", f"Subscribed to Toss trade channels: {sub_list}")
+                    _active_ws = ws
+                    update_ws_subscriptions()
+
+                def on_close(ws, status=None, msg=None):
+                    global _active_ws
+                    _active_ws = None
+                    logger.log_info("StockService", f"WebSocket closed: status={status}, msg={msg}")
 
                 def on_error(ws, err):
+                    global _active_ws
+                    _active_ws = None
                     logger.log_warn("StockService", f"WebSocket error: {err}")
 
                 ws_app = websocket.WebSocketApp(
@@ -631,9 +671,11 @@ def _streaming_worker():
                     header=headers,
                     on_open=on_open,
                     on_message=on_message,
-                    on_error=on_error
+                    on_error=on_error,
+                    on_close=on_close
                 )
                 ws_app.run_forever(sslopt={"cert_reqs": ssl.CERT_NONE}, ping_interval=20, ping_timeout=10)
+                _active_ws = None
             except Exception as e:
                 logger.log_debug("StockService", f"WebSocket connection failed: {e}")
         else:
@@ -777,6 +819,7 @@ def add_stock_symbol(code: str, name: str, market: str) -> Dict[str, Any]:
     quotes = fetch_initial_prices([new_item])
     quote_data = quotes.get(clean_code, new_item)
 
+    update_ws_subscriptions()
     return {"success": True, "item": quote_data}
 
 
@@ -796,6 +839,7 @@ def remove_stock_symbol(code: str) -> Dict[str, Any]:
     with _cache_lock:
         _quote_cache.pop(clean_code, None)
 
+    update_ws_subscriptions()
     return {"success": True, "code": clean_code}
 
 
