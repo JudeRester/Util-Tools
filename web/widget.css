@@ -623,6 +623,21 @@ body.state-expanded .widget-panel {
     margin-top: 4px;
 }
 
+.widget-modal-input {
+    width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-main);
+    padding: 7px 10px;
+    font-size: 12px;
+    outline: none;
+    box-sizing: border-box;
+}
+.widget-modal-input:focus {
+    border-color: var(--primary);
+}
+
 .widget-modal-btn {
     padding: 6px 14px;
     border-radius: 6px;
@@ -674,6 +689,112 @@ body.state-expanded .widget-panel {
     border-radius: 8px;
     padding: 8px 12px;
     margin-bottom: 12px;
+}
+
+/* Stock Groups Bar & Tabs */
+.stock-groups-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2px 2px 8px 2px;
+    margin-bottom: 4px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.stock-groups-bar::-webkit-scrollbar {
+    display: none;
+}
+
+.stock-group-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+.stock-group-tab:hover {
+    background: var(--bg-hover);
+    color: var(--text-main);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+.stock-group-tab.active {
+    background: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35);
+}
+.stock-group-tab .tab-name {
+    max-width: 85px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.stock-group-tab .tab-count {
+    font-size: 10px;
+    padding: 0 5px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.15);
+    color: inherit;
+}
+.stock-group-tab.active .tab-count {
+    background: rgba(255, 255, 255, 0.28);
+    color: #ffffff;
+}
+.stock-group-tab-actions {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 2px;
+    gap: 2px;
+}
+.tab-action-btn {
+    background: none;
+    border: none;
+    color: inherit;
+    opacity: 0.65;
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 10px;
+    line-height: 1;
+    border-radius: 3px;
+}
+.tab-action-btn:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.2);
+}
+.stock-group-add-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 24px;
+    padding: 0 8px;
+    background: var(--bg-card);
+    border: 1px dashed var(--border-color);
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+.stock-group-add-btn:hover {
+    background: var(--bg-hover);
+    color: var(--primary);
+    border-color: var(--primary);
 }
 
 .fx-item {

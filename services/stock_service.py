@@ -93,6 +93,10 @@ def load_stock_config() -> Dict[str, Any]:
             default_conf = {
                 "client_id": "",
                 "client_secret": "",
+                "active_group_id": "g_default",
+                "groups": [
+                    {"id": "g_default", "name": "기본", "codes": [s.get("code") for s in DEFAULT_WATCHLIST if s.get("code")]}
+                ],
                 "watchlist": DEFAULT_WATCHLIST,
                 "fx_cache": {}
             }
@@ -105,15 +109,40 @@ def load_stock_config() -> Dict[str, Any]:
 
         try:
             with open(STOCK_CONFIG_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
+                conf = json.load(f)
         except Exception as e:
             logger.log_warn("StockService", f"Failed to read stock config: {e}")
             return {
                 "client_id": "",
                 "client_secret": "",
+                "active_group_id": "g_default",
+                "groups": [
+                    {"id": "g_default", "name": "기본", "codes": [s.get("code") for s in DEFAULT_WATCHLIST if s.get("code")]}
+                ],
                 "watchlist": DEFAULT_WATCHLIST,
                 "fx_cache": {}
             }
+
+        migrated = False
+        if "groups" not in conf or not isinstance(conf.get("groups"), list) or len(conf["groups"]) == 0:
+            existing_codes = [s.get("code") for s in conf.get("watchlist", []) if s.get("code")]
+            conf["groups"] = [
+                {"id": "g_default", "name": "기본", "codes": existing_codes}
+            ]
+            migrated = True
+
+        if "active_group_id" not in conf or not any(g.get("id") == conf.get("active_group_id") for g in conf["groups"]):
+            conf["active_group_id"] = conf["groups"][0]["id"]
+            migrated = True
+
+        if migrated:
+            try:
+                with open(STOCK_CONFIG_PATH, "w", encoding="utf-8") as f:
+                    json.dump(conf, f, indent=2, ensure_ascii=False)
+            except Exception as e:
+                logger.log_warn("StockService", f"Failed to persist migrated stock config: {e}")
+
+        return conf
 
 
 def save_stock_config(data: Dict[str, Any]) -> bool:
@@ -548,7 +577,15 @@ def update_ws_subscriptions() -> bool:
     """Dynamically sends updated trade subscriptions (KR & US) to active WebSocket."""
     global _active_ws
     conf = load_stock_config()
-    symbols = [s.get("code") for s in conf.get("watchlist", []) if s.get("code")]
+    all_codes = set()
+    for g in conf.get("groups", []):
+        for c in g.get("codes", []):
+            if c:
+                all_codes.add(str(c).strip().upper())
+    for w in conf.get("watchlist", []):
+        if w.get("code"):
+            all_codes.add(str(w.get("code")).strip().upper())
+    symbols = sorted(list(all_codes))
     kr_codes = [s for s in symbols if s.isdigit()]
     us_codes = [s for s in symbols if not s.isdigit()]
     sub_list = []
@@ -587,7 +624,15 @@ def _streaming_worker():
             continue
 
         conf = load_stock_config()
-        symbols = [s.get("code") for s in conf.get("watchlist", []) if s.get("code")]
+        all_codes = set()
+        for g in conf.get("groups", []):
+            for c in g.get("codes", []):
+                if c:
+                    all_codes.add(str(c).strip().upper())
+        for w in conf.get("watchlist", []):
+            if w.get("code"):
+                all_codes.add(str(w.get("code")).strip().upper())
+        symbols = sorted(list(all_codes))
         if not symbols:
             time.sleep(2.0)
             continue
@@ -768,7 +813,9 @@ def get_stock_dashboard_data() -> Dict[str, Any]:
         "status": "success",
         "api_configured": api_configured,
         "fx": fx_data,
-        "watchlist": items
+        "watchlist": items,
+        "groups": conf.get("groups", []),
+        "active_group_id": conf.get("active_group_id", "g_default")
     }
 
 
@@ -796,8 +843,110 @@ def save_stock_api_keys(client_id: str, client_secret: str) -> Dict[str, Any]:
 
 
 @eel.expose
-def add_stock_symbol(code: str, name: str, market: str) -> Dict[str, Any]:
-    """Adds a new stock symbol to watchlist and fetches initial price."""
+def add_stock_group(name: str) -> Dict[str, Any]:
+    """Create unique group ID g_<timestamp>, add to groups, set as active, save config."""
+    clean_name = (name or "").strip()
+    conf = load_stock_config()
+    groups = conf.get("groups", [])
+
+    if not clean_name:
+        clean_name = f"그룹 {len(groups) + 1}"
+
+    group_id = f"g_{int(time.time() * 1000)}"
+    new_group = {
+        "id": group_id,
+        "name": clean_name,
+        "codes": []
+    }
+    groups.append(new_group)
+    conf["groups"] = groups
+    conf["active_group_id"] = group_id
+    save_stock_config(conf)
+
+    logger.log_info("StockService", f"Added stock group: {clean_name} ({group_id})")
+    return {
+        "success": True,
+        "groups": conf["groups"],
+        "active_group_id": group_id,
+        "new_group": new_group
+    }
+
+
+@eel.expose
+def rename_stock_group(group_id: str, new_name: str) -> Dict[str, Any]:
+    """Rename specified group, save config, return success."""
+    clean_name = (new_name or "").strip()
+    if not clean_name:
+        return {"success": False, "error": "그룹 이름을 입력해주세요."}
+
+    conf = load_stock_config()
+    groups = conf.get("groups", [])
+    target = next((g for g in groups if g.get("id") == group_id), None)
+    if not target:
+        return {"success": False, "error": "해당 그룹을 찾을 수 없습니다."}
+
+    target["name"] = clean_name
+    save_stock_config(conf)
+    logger.log_info("StockService", f"Renamed stock group {group_id} to {clean_name}")
+    return {
+        "success": True,
+        "groups": conf["groups"],
+        "active_group_id": conf.get("active_group_id")
+    }
+
+
+@eel.expose
+def remove_stock_group(group_id: str) -> Dict[str, Any]:
+    """Prevent deleting the last group. If deleting active group, switch active. Remove group, save config."""
+    conf = load_stock_config()
+    groups = conf.get("groups", [])
+
+    if len(groups) <= 1:
+        return {"success": False, "error": "최소 1개의 그룹은 유지되어야 합니다."}
+
+    target = next((g for g in groups if g.get("id") == group_id), None)
+    if not target:
+        return {"success": False, "error": "해당 그룹을 찾을 수 없습니다."}
+
+    conf["groups"] = [g for g in groups if g.get("id") != group_id]
+
+    if conf.get("active_group_id") == group_id:
+        conf["active_group_id"] = conf["groups"][0]["id"]
+
+    all_active_codes = {c for g in conf["groups"] for c in g.get("codes", [])}
+    removed_codes = set(target.get("codes", [])) - all_active_codes
+    if removed_codes:
+        conf["watchlist"] = [s for s in conf.get("watchlist", []) if s.get("code") not in removed_codes]
+        with _cache_lock:
+            for rc in removed_codes:
+                _quote_cache.pop(rc, None)
+
+    save_stock_config(conf)
+    update_ws_subscriptions()
+    logger.log_info("StockService", f"Removed stock group: {group_id}")
+    return {
+        "success": True,
+        "groups": conf["groups"],
+        "active_group_id": conf["active_group_id"]
+    }
+
+
+@eel.expose
+def set_active_stock_group(group_id: str) -> Dict[str, Any]:
+    """Set active_group_id = group_id, save config, return success."""
+    conf = load_stock_config()
+    groups = conf.get("groups", [])
+    if not any(g.get("id") == group_id for g in groups):
+        return {"success": False, "error": "해당 그룹을 찾을 수 없습니다."}
+
+    conf["active_group_id"] = group_id
+    save_stock_config(conf)
+    return {"success": True, "active_group_id": group_id}
+
+
+@eel.expose
+def add_stock_symbol(code: str, name: str, market: str, group_id: Optional[str] = None) -> Dict[str, Any]:
+    """Adds a new stock symbol to watchlist pool and specific group."""
     clean_code = (code or "").strip().upper()
     clean_name = (name or clean_code).strip()
     clean_market = (market or ("KR" if clean_code.isdigit() else "US")).strip().upper()
@@ -806,13 +955,23 @@ def add_stock_symbol(code: str, name: str, market: str) -> Dict[str, Any]:
         return {"success": False, "error": "종목 코드가 유효하지 않습니다."}
 
     conf = load_stock_config()
+    groups = conf.get("groups", [])
+    if not groups:
+        groups = [{"id": "g_default", "name": "기본", "codes": []}]
+        conf["groups"] = groups
+
+    gid = group_id or conf.get("active_group_id") or groups[0]["id"]
+    target_group = next((g for g in groups if g.get("id") == gid), groups[0])
+
+    if clean_code in target_group.get("codes", []):
+        return {"success": False, "error": "이미 해당 그룹에 등록되어 있습니다."}
+
+    target_group.setdefault("codes", []).append(clean_code)
+
     watchlist = conf.get("watchlist", [])
-
-    if any(item.get("code") == clean_code for item in watchlist):
-        return {"success": False, "error": "이미 관심 종목에 등록되어 있습니다."}
-
     new_item = {"code": clean_code, "name": clean_name, "market": clean_market}
-    watchlist.append(new_item)
+    if not any(item.get("code") == clean_code for item in watchlist):
+        watchlist.append(new_item)
     conf["watchlist"] = watchlist
     save_stock_config(conf)
 
@@ -820,27 +979,52 @@ def add_stock_symbol(code: str, name: str, market: str) -> Dict[str, Any]:
     quote_data = quotes.get(clean_code, new_item)
 
     update_ws_subscriptions()
-    return {"success": True, "item": quote_data}
+    return {
+        "success": True,
+        "item": quote_data,
+        "group_id": target_group.get("id"),
+        "groups": conf["groups"]
+    }
 
 
 @eel.expose
-def remove_stock_symbol(code: str) -> Dict[str, Any]:
-    """Removes a stock symbol from watchlist."""
+def remove_stock_symbol(code: str, group_id: Optional[str] = None) -> Dict[str, Any]:
+    """Removes a stock symbol from group, and from watchlist pool if not in any group."""
     clean_code = (code or "").strip().upper()
     conf = load_stock_config()
-    watchlist = conf.get("watchlist", [])
-    filtered = [item for item in watchlist if item.get("code") != clean_code]
+    groups = conf.get("groups", [])
 
-    if len(filtered) == len(watchlist):
+    gid = group_id or conf.get("active_group_id")
+    target_group = next((g for g in groups if g.get("id") == gid), None) if gid else None
+
+    found_in_group = False
+    if target_group:
+        if clean_code in target_group.get("codes", []):
+            target_group["codes"].remove(clean_code)
+            found_in_group = True
+    else:
+        for g in groups:
+            if clean_code in g.get("codes", []):
+                g["codes"].remove(clean_code)
+                found_in_group = True
+
+    if not found_in_group and not any(item.get("code") == clean_code for item in conf.get("watchlist", [])):
         return {"success": False, "error": "해당 종목을 찾을 수 없습니다."}
 
-    conf["watchlist"] = filtered
-    save_stock_config(conf)
-    with _cache_lock:
-        _quote_cache.pop(clean_code, None)
+    all_codes = {c for g in groups for c in g.get("codes", [])}
+    if clean_code not in all_codes:
+        conf["watchlist"] = [item for item in conf.get("watchlist", []) if item.get("code") != clean_code]
+        with _cache_lock:
+            _quote_cache.pop(clean_code, None)
 
+    save_stock_config(conf)
     update_ws_subscriptions()
-    return {"success": True, "code": clean_code}
+    return {
+        "success": True,
+        "code": clean_code,
+        "group_id": gid,
+        "groups": conf["groups"]
+    }
 
 
 @eel.expose
