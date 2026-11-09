@@ -620,10 +620,10 @@
 
         // Pulse animation
         const flashClass = (tick.change >= 0) ? 'tick-flash-up' : 'tick-flash-down';
-        card.classList.remove('tick-flash-up', 'tick-flash-down');
-        void card.offsetWidth;
-        card.classList.add(flashClass);
-        setTimeout(() => card.classList.remove(flashClass), 600);
+        if (!card.classList.contains('tick-flash-up') && !card.classList.contains('tick-flash-down')) {
+            card.classList.add(flashClass);
+            setTimeout(() => card.classList.remove(flashClass), 600);
+        }
     };
 
     async function loadStockDashboard() {
