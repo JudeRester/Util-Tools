@@ -729,21 +729,130 @@
             noticeEl.style.display = data.api_configured ? 'none' : 'flex';
         }
 
-        // Watchlist cards
+        // Watchlist cards & Custom Group Tabs
+        renderStockGroupTabs();
+        renderStockCards();
+    }
+
+    function renderStockGroupTabs() {
+        const bar = document.getElementById('stock-groups-bar');
+        if (!bar) return;
+        bar.innerHTML = '';
+
+        stockGroups.forEach((grp) => {
+            const tab = document.createElement('div');
+            tab.className = `stock-group-tab ${grp.id === activeStockGroupId ? 'active' : ''}`;
+            tab.setAttribute('data-group-id', grp.id);
+            const count = (grp.codes || []).length;
+            tab.innerHTML = `
+                <span class="tab-name" title="${grp.name}">${grp.name}</span>
+                <span class="tab-count">${count}</span>
+                <div class="stock-group-tab-actions">
+                    <button class="tab-action-btn tab-btn-edit" title="그룹명 변경">✎</button>
+                    ${stockGroups.length > 1 ? '<button class="tab-action-btn tab-btn-del" title="그룹 삭제">✕</button>' : ''}
+                </div>
+            `;
+
+            tab.addEventListener('click', async (e) => {
+                if (e.target.closest('.tab-action-btn')) return;
+                if (activeStockGroupId === grp.id) return;
+                activeStockGroupId = grp.id;
+                renderStockGroupTabs();
+                renderStockCards();
+                if (window.eel && window.eel.set_active_stock_group) {
+                    try { await window.eel.set_active_stock_group(grp.id)(); } catch (err) {}
+                }
+            });
+
+            const editBtn = tab.querySelector('.tab-btn-edit');
+            if (editBtn) {
+                editBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const newName = await showWidgetPrompt({
+                        title: '그룹 이름 변경',
+                        message: `'${grp.name}' 그룹의 새 이름을 입력하세요:`,
+                        defaultValue: grp.name,
+                        confirmText: '변경'
+                    });
+                    if (!newName || newName === grp.name) return;
+                    if (window.eel && window.eel.rename_stock_group) {
+                        const res = await window.eel.rename_stock_group(grp.id, newName)();
+                        if (res && res.success) {
+                            grp.name = newName;
+                            renderStockGroupTabs();
+                        }
+                    }
+                });
+            }
+
+            const delBtn = tab.querySelector('.tab-btn-del');
+            if (delBtn) {
+                delBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const confirmed = await showWidgetConfirm({
+                        title: '그룹 삭제',
+                        message: `'${grp.name}' 그룹을 삭제하시겠습니까?`,
+                        icon: '🗑️',
+                        confirmText: '삭제',
+                        danger: true
+                    });
+                    if (!confirmed) return;
+                    if (window.eel && window.eel.remove_stock_group) {
+                        const res = await window.eel.remove_stock_group(grp.id)();
+                        if (res && res.success) {
+                            stockGroups = res.groups;
+                            activeStockGroupId = res.active_group_id;
+                            await loadStockDashboard();
+                        }
+                    }
+                });
+            }
+            bar.appendChild(tab);
+        });
+
+        const addBtn = document.createElement('button');
+        addBtn.className = 'stock-group-add-btn';
+        addBtn.title = '새 그룹 추가';
+        addBtn.innerHTML = '+';
+        addBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const name = await showWidgetPrompt({
+                title: '새 관심종목 그룹 추가',
+                message: '그룹 이름을 입력하세요:',
+                placeholder: '예: 반도체, 배당주',
+                confirmText: '추가'
+            });
+            if (!name) return;
+            if (window.eel && window.eel.add_stock_group) {
+                const res = await window.eel.add_stock_group(name)();
+                if (res && res.success) {
+                    stockGroups = res.groups;
+                    activeStockGroupId = res.active_group_id;
+                    renderStockGroupTabs();
+                    renderStockCards();
+                }
+            }
+        });
+        bar.appendChild(addBtn);
+    }
+
+    function renderStockCards() {
         const listEl = document.getElementById('stock-card-list');
         const badgeEl = document.getElementById('stock-count-badge');
-        const watchlist = data.watchlist || [];
-
-        if (badgeEl) badgeEl.textContent = watchlist.length;
         if (!listEl) return;
 
+        const curGrp = stockGroups.find(g => g.id === activeStockGroupId) || stockGroups[0];
+        const activeCodes = new Set((curGrp && curGrp.codes) ? curGrp.codes : []);
+        const filteredList = stockWatchlistData.filter(item => activeCodes.has(item.code));
+
+        if (badgeEl) badgeEl.textContent = filteredList.length;
         listEl.innerHTML = '';
-        if (watchlist.length === 0) {
-            listEl.innerHTML = '<div class="stock-empty">등록된 관심 종목이 없습니다. [+ 종목 추가]로 추가하세요.</div>';
+        if (filteredList.length === 0) {
+            listEl.innerHTML = '<div class="stock-empty">현재 그룹에 등록된 관심 종목이 없습니다. [+ 종목 추가]로 추가하세요.</div>';
             return;
         }
 
-        watchlist.forEach((item) => {
+        filteredList.forEach((item) => {
             const card = document.createElement('div');
             card.className = 'stock-card';
             card.setAttribute('data-code', item.code);
@@ -786,11 +895,14 @@
                     e.stopPropagation();
                     if (window.eel && window.eel.remove_stock_symbol) {
                         try {
-                            const r = await window.eel.remove_stock_symbol(item.code)();
+                            const r = await window.eel.remove_stock_symbol(item.code, activeStockGroupId)();
                             if (r && r.success) {
-                                card.remove();
-                                const curCnt = document.querySelectorAll('.stock-card').length;
-                                if (badgeEl) badgeEl.textContent = curCnt;
+                                if (curGrp && curGrp.codes) {
+                                    curGrp.codes = curGrp.codes.filter(c => c !== item.code);
+                                }
+                                if (r.groups) stockGroups = r.groups;
+                                renderStockGroupTabs();
+                                renderStockCards();
                             }
                         } catch (err) {
                             console.error('Failed to remove stock:', err);
@@ -798,7 +910,6 @@
                     }
                 });
             }
-
             listEl.appendChild(card);
         });
     }
