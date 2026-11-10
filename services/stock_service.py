@@ -37,6 +37,7 @@ _fx_cache: Dict[str, Any] = {"data": None, "expires_at": 0.0}
 _quote_cache: Dict[str, Dict[str, Any]] = {}
 _master_cache: List[Dict[str, Any]] = []
 _prev_close_cache: Dict[str, Dict[str, Any]] = {}
+_market_calendar_cache: Dict[str, Dict[str, Any]] = {}
 
 # Streaming State
 _is_streaming_active: bool = False
@@ -376,8 +377,62 @@ def load_master_stocks() -> List[Dict[str, Any]]:
     return _master_cache
 
 
+def fetch_regular_market_close_cut(market: str, token: Optional[str] = None) -> Optional[str]:
+    """Fetch previous business day regular market end time cut for candle querying."""
+    now = time.time()
+    with _cache_lock:
+        cached = _market_calendar_cache.get(market)
+        if cached and now < cached.get("expires_at", 0.0):
+            return cached.get("cut_time")
+
+    if not token:
+        token = get_valid_token()
+    if not token:
+        return None
+
+    try:
+        url = f"https://openapi.tossinvest.com/api/v1/market-calendar/{market}"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "User-Agent": "UtilTools-EdgeWidget/1.0"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=3.0, context=_SSL_CTX) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            prev_biz = data.get("result", {}).get("previousBusinessDay", {})
+            cut_time = None
+            if market == "KR":
+                end_t = prev_biz.get("integrated", {}).get("regularMarket", {}).get("endTime")
+                if end_t:
+                    # Closing auction candle matches at 15:30:xx, recorded as 15:31:00 in 1m candles
+                    if "15:30:00" in end_t:
+                        cut_time = end_t.replace("15:30:00", "15:31:00")
+                    else:
+                        cut_time = end_t
+            else:
+                cut_time = prev_biz.get("regularMarket", {}).get("endTime")
+
+            if cut_time:
+                with _cache_lock:
+                    _market_calendar_cache[market] = {
+                        "cut_time": cut_time,
+                        "expires_at": now + 1800.0  # 30 minutes TTL
+                    }
+                return cut_time
+    except Exception as e:
+        logger.log_debug("StockService", f"Market calendar fetch notice for {market}: {e}")
+
+    return None
+
+
 def fetch_prev_close(symbol: str, token: Optional[str] = None) -> Optional[float]:
-    """Fetch previous regular session close price from Toss Open API daily candles."""
+    """
+    Fetch previous regular session close price (전일 정규장 종가 기준).
+    Uses Toss Open API 1m candle at previous regular close cut time,
+    with Naver Finance fallback for KR stocks and 1d daily candle fallback.
+    """
     if not symbol:
         return None
 
@@ -389,40 +444,87 @@ def fetch_prev_close(symbol: str, token: Optional[str] = None) -> Optional[float
 
     if not token:
         token = get_valid_token()
-    if not token:
-        return None
 
-    try:
-        url = f"https://openapi.tossinvest.com/api/v1/candles?symbol={urllib.parse.quote(symbol)}&interval=1d"
-        req = urllib.request.Request(
-            url,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "User-Agent": "UtilTools-EdgeWidget/1.0"
-            }
-        )
-        with urllib.request.urlopen(req, timeout=3.0, context=_SSL_CTX) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            candles = data.get("result", {}).get("candles", [])
-            prev_close = None
-            if len(candles) >= 2:
-                c_val = candles[1].get("closePrice")
-                if c_val is not None:
-                    prev_close = float(c_val)
-            elif len(candles) == 1:
-                o_val = candles[0].get("openPrice")
-                if o_val is not None:
-                    prev_close = float(o_val)
+    is_kr = symbol.isdigit() or symbol.endswith(".KS") or symbol.endswith(".KQ")
+    market = "KR" if is_kr else "US"
+    prev_close = None
 
-            if prev_close is not None:
-                with _cache_lock:
-                    _prev_close_cache[symbol] = {
-                        "price": prev_close,
-                        "expires_at": now + 300.0
+    # Method 1: Query Toss 1m candle before regular session close cut
+    if token:
+        cut_time = fetch_regular_market_close_cut(market, token)
+        if cut_time:
+            try:
+                url = (
+                    f"https://openapi.tossinvest.com/api/v1/candles"
+                    f"?symbol={urllib.parse.quote(symbol)}&interval=1m&before={urllib.parse.quote(cut_time)}&count=1"
+                )
+                req = urllib.request.Request(
+                    url,
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "User-Agent": "UtilTools-EdgeWidget/1.0"
                     }
-                return prev_close
-    except Exception as e:
-        logger.log_warn("StockService", f"Failed to fetch prev close for {symbol}: {e}")
+                )
+                with urllib.request.urlopen(req, timeout=3.0, context=_SSL_CTX) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    candles = data.get("result", {}).get("candles", [])
+                    if candles and candles[0].get("closePrice") is not None:
+                        prev_close = float(candles[0].get("closePrice"))
+            except Exception as e:
+                logger.log_debug("StockService", f"1m regular close candle fetch failed for {symbol}: {e}")
+
+    # Method 2: Fallback for KR stocks via Naver Finance mobile basic API
+    if prev_close is None and is_kr:
+        try:
+            clean_sym = symbol.replace(".KS", "").replace(".KQ", "")
+            url = f"https://m.stock.naver.com/api/stock/{clean_sym}/basic"
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+            with urllib.request.urlopen(req, timeout=2.5) as resp:
+                ndata = json.loads(resp.read().decode("utf-8"))
+                cur_str = ndata.get("closePrice", "0").replace(",", "")
+                diff_str = ndata.get("compareToPreviousClosePrice", "0").replace(",", "")
+                cur_p = float(cur_str)
+                diff_p = float(diff_str)
+                if cur_p > 0:
+                    prev_close = cur_p - diff_p
+        except Exception as e:
+            logger.log_debug("StockService", f"Naver prev close fallback failed for {symbol}: {e}")
+
+    # Method 3: Fallback via 1d daily candles (last trade price of previous day)
+    if prev_close is None and token:
+        try:
+            url = f"https://openapi.tossinvest.com/api/v1/candles?symbol={urllib.parse.quote(symbol)}&interval=1d"
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "User-Agent": "UtilTools-EdgeWidget/1.0"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=3.0, context=_SSL_CTX) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                candles = data.get("result", {}).get("candles", [])
+                if len(candles) >= 2:
+                    c_val = candles[1].get("closePrice")
+                    if c_val is not None:
+                        prev_close = float(c_val)
+                elif len(candles) == 1:
+                    o_val = candles[0].get("openPrice")
+                    if o_val is not None:
+                        prev_close = float(o_val)
+        except Exception as e:
+            logger.log_warn("StockService", f"Failed to fetch prev close for {symbol}: {e}")
+
+    if prev_close is not None:
+        with _cache_lock:
+            _prev_close_cache[symbol] = {
+                "price": prev_close,
+                "expires_at": now + 300.0
+            }
+        return prev_close
 
     return None
 
