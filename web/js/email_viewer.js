@@ -30,6 +30,31 @@ async function initEmailViewer() {
     initEmailDropZone();
     initEmailScrollListener();
     await loadAllEmails();
+    checkImapAuthHealthOnTabEntry();
+}
+
+function resumeEmailViewer() {
+    checkImapAuthHealthOnTabEntry();
+}
+
+async function checkImapAuthHealthOnTabEntry() {
+    try {
+        if (window.eel && typeof eel.get_imap_config === 'function') {
+            const res = await eel.get_imap_config()();
+            if (res && res.status === 'success' && res.config && res.config.oauth_token_expired) {
+                updateImapOAuthTokenBadge(false);
+                if (typeof showToast === 'function') {
+                    showToast(
+                        'Google OAuth 재로그인 필요',
+                        '인증 토큰이 만료되어 자동 메일 동기화가 중지되었습니다. [IMAP 서버 연동]에서 다시 로그인해 주세요.',
+                        'warn'
+                    );
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('[IMAP] 토큰 상태 확인 실패:', e);
+    }
 }
 
 async function loadAllEmails() {
@@ -1699,6 +1724,12 @@ async function openImapSyncModal() {
                 }
                 setImapAuthType(c.auth_type || "password");
                 updateImapOAuthTokenBadge(Boolean(c.has_oauth_token));
+                if (c.oauth_token_expired) {
+                    setImapModalFeedback(
+                        "warn",
+                        "Google OAuth 2.0 인증 토큰이 만료되어 자동 동기화가 중지되었습니다. [🌐 Google 브라우저 로그인 및 권한 승인] 버튼을 눌러 다시 로그인해 주세요."
+                    );
+                }
                 if (document.getElementById("imap-poll-interval")) {
                     document.getElementById("imap-poll-interval").value = String(c.poll_interval_minutes || 0);
                 }
