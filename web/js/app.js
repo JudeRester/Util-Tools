@@ -147,6 +147,8 @@ function initTabOnDemand(tabName) {
             resumeOcrStudio();
         } else if (tabName === 'calendar' && typeof resumeCalendar === 'function') {
             resumeCalendar();
+        } else if (tabName === 'emails' && typeof resumeEmailViewer === 'function') {
+            resumeEmailViewer();
         }
         return;
     }

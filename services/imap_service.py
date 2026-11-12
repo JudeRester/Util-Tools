@@ -101,6 +101,12 @@ def _format_imap_error(err: Exception, host: str = "", auth_type: str = "passwor
             "인증 실패(Invalid credentials): 아이디/비밀번호가 일치하지 않거나, "
             "웹메일 환경설정에서 'IMAP/SMTP 사용'이 비활성화되어 있거나, 2단계 인증용 앱 비밀번호가 필요합니다."
         )
+    if "INVALID_GRANT" in raw_upper:
+        return (
+            "Google OAuth 2.0 인증 토큰이 만료되었거나 철회되었습니다(invalid_grant). "
+            "[Google 브라우저 로그인 및 권한 승인] 버튼을 눌러 다시 로그인해 주세요. "
+            "(Google Cloud 콘솔의 OAuth 동의 화면이 '테스트' 모드면 7일마다 만료되므로 '프로덕션'으로 게시하면 반영구 유지됩니다.)"
+        )
     return raw
 
 
@@ -597,6 +603,9 @@ def get_imap_config() -> Dict[str, Any]:
             """).fetchone()
 
             if row:
+                has_oauth_token = bool(row["oauth_refresh_token"] or row["oauth_access_token"])
+                is_oauth_google = (row["auth_type"] or "password") == "oauth2_google"
+                has_oauth_client = bool((row["oauth_client_id"] or "").strip() and (row["username"] or "").strip())
                 return {
                     "status": "success",
                     "config": {
@@ -610,7 +619,8 @@ def get_imap_config() -> Dict[str, Any]:
                         "auth_type": row["auth_type"] or "password",
                         "oauth_client_id": row["oauth_client_id"] or "",
                         "oauth_client_secret": row["oauth_client_secret"] or "",
-                        "has_oauth_token": bool(row["oauth_refresh_token"] or row["oauth_access_token"]),
+                        "has_oauth_token": has_oauth_token,
+                        "oauth_token_expired": bool(is_oauth_google and has_oauth_client and not has_oauth_token),
                         "folder": row["folder"] or "INBOX",
                         "poll_interval_minutes": int(row["poll_interval_minutes"] or 0),
                         "last_sync_at": row["last_sync_at"] or ""
@@ -629,6 +639,7 @@ def get_imap_config() -> Dict[str, Any]:
                     "oauth_client_id": "",
                     "oauth_client_secret": "",
                     "has_oauth_token": False,
+                    "oauth_token_expired": False,
                     "folder": "INBOX",
                     "poll_interval_minutes": 0,
                     "last_sync_at": ""
@@ -1044,6 +1055,22 @@ def _run_imap_sync_worker(options: Dict[str, Any]):
         })
 
     except Exception as e:
+        err_str = str(e)
+        if "invalid_grant" in err_str.lower() and auth_type == "oauth2_google":
+            try:
+                conn = get_db_connection()
+                try:
+                    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    conn.execute("""
+                        UPDATE imap_accounts
+                        SET oauth_refresh_token = '', oauth_access_token = '', oauth_token_expiry = 0, updated_at = ?
+                        WHERE username = ?
+                    """, (now_str, username))
+                    conn.commit()
+                finally:
+                    conn.close()
+            except Exception:
+                pass
         friendly_msg = _format_imap_error(e, host, auth_type)
         log_event("error", "IMAP", f"메일 동기화 중 에러: {friendly_msg} (원본: {e})")
         _notify_sync_error(friendly_msg)
@@ -1087,10 +1114,12 @@ def _notify_sync_error(message: str):
 
 _poll_daemon_started = False
 _poll_daemon_lock = threading.Lock()
+_last_poll_attempt_ts: float = 0.0
 
 
 def _imap_poll_daemon_loop():
     """주기적으로 imap_accounts.poll_interval_minutes를 확인하여 백그라운드 동기화 수행"""
+    global _last_poll_attempt_ts
     while True:
         time.sleep(30)
         try:
@@ -1114,6 +1143,11 @@ def _imap_poll_daemon_loop():
                 if not (row.get("password") or "").strip():
                     continue
 
+            now_ts = time.time()
+            # 직전 자동 폴링 시도로부터 최소 poll_min 분이 지나지 않았다면(실패 포함) 30초마다 재시도하지 않음
+            if _last_poll_attempt_ts > 0 and (now_ts - _last_poll_attempt_ts) < poll_min * 60:
+                continue
+
             last_sync_str = (row.get("last_sync_at") or "").strip()
             should_sync = False
             if not last_sync_str:
@@ -1128,6 +1162,7 @@ def _imap_poll_daemon_loop():
                     should_sync = True
 
             if should_sync and not _is_sync_running:
+                _last_poll_attempt_ts = now_ts
                 log_event("info", "IMAP", f"백그라운드 자동 폴링 시작 (주기: {poll_min}분, 계정: {username})")
                 worker = threading.Thread(
                     target=_run_imap_sync_worker,
