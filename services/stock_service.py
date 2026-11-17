@@ -12,6 +12,7 @@ import sys
 import json
 import time
 import ssl
+import random
 import threading
 import urllib.request
 import urllib.parse
@@ -29,6 +30,8 @@ logger = core.logger
 _widget_window = None
 _config_lock = threading.Lock()
 _cache_lock = threading.Lock()
+_token_lock = threading.Lock()
+_stream_lock = threading.Lock()
 
 _access_token: Optional[str] = None
 _token_expires_at: float = 0.0
@@ -44,9 +47,12 @@ _is_streaming_active: bool = False
 _is_paused: bool = False
 _ws_thread: Optional[threading.Thread] = None
 _stop_streaming_event = threading.Event()
+_wake_event = threading.Event()
 _backoff_delay: float = 1.0
 _active_ws: Any = None
 _last_broadcast_time: Dict[str, float] = {}
+_last_rest_quote_sync: float = 0.0
+_consecutive_ws_failures: int = 0
 
 # SSL context for outbound HTTPS API calls
 _SSL_CTX = ssl.create_default_context()
@@ -200,8 +206,9 @@ def _fetch_access_token(client_id: str, client_secret: str) -> Optional[str]:
             token = data.get("access_token")
             expires_in = int(data.get("expires_in", 3600))
             if token:
-                _access_token = token
-                _token_expires_at = time.time() + max(60, expires_in - 60)
+                with _token_lock:
+                    _access_token = token
+                    _token_expires_at = time.time() + max(60, expires_in - 60)
                 logger.log_info("StockService", "Toss Open API OAuth2 access token issued successfully")
                 return token
     except Exception as e:
@@ -209,10 +216,18 @@ def _fetch_access_token(client_id: str, client_secret: str) -> Optional[str]:
     return None
 
 
-def get_valid_token() -> Optional[str]:
+def invalidate_access_token() -> None:
+    """Clear cached OAuth2 token so the next request/socket reconnect issues a fresh one."""
     global _access_token, _token_expires_at
-    if _access_token and time.time() < _token_expires_at:
-        return _access_token
+    with _token_lock:
+        _access_token = None
+        _token_expires_at = 0.0
+
+
+def get_valid_token(min_ttl: float = 0.0) -> Optional[str]:
+    with _token_lock:
+        if _access_token and (time.time() + max(0.0, min_ttl)) < _token_expires_at:
+            return _access_token
 
     conf = load_stock_config()
     cid = conf.get("client_id", "")
@@ -615,8 +630,12 @@ def fetch_initial_prices(symbols: List[Dict[str, Any]]) -> Dict[str, Dict[str, A
         results[c]["change"] = c_val
         results[c]["change_rate"] = cr_val
 
-    for c, q in results.items():
-        _quote_cache[c] = q
+    with _cache_lock:
+        for c, q in results.items():
+            _quote_cache[c] = q
+
+    global _last_rest_quote_sync
+    _last_rest_quote_sync = time.time()
 
     return results
 
@@ -675,77 +694,154 @@ def broadcast_tick_update(tick_data: Dict[str, Any]) -> None:
         pass
 
 
-def update_ws_subscriptions() -> bool:
-    """Dynamically sends updated trade subscriptions (KR & US) to active WebSocket."""
-    global _active_ws
-    conf = load_stock_config()
+def _build_ws_subscription_payload(conf: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Builds Toss WebSocket full-replace subscription payload (max 100 topics)."""
+    if conf is None:
+        conf = load_stock_config()
+
+    market_map: Dict[str, str] = {}
     all_codes = set()
+
+    for w in conf.get("watchlist", []):
+        code = str(w.get("code") or "").strip().upper()
+        if code:
+            all_codes.add(code)
+            mkt = str(w.get("market") or "").strip().upper()
+            if mkt in ("KR", "US"):
+                market_map[code] = mkt
+
     for g in conf.get("groups", []):
         for c in g.get("codes", []):
-            if c:
-                all_codes.add(str(c).strip().upper())
-    for w in conf.get("watchlist", []):
-        if w.get("code"):
-            all_codes.add(str(w.get("code")).strip().upper())
-    symbols = sorted(list(all_codes))
-    kr_codes = [s for s in symbols if s.isdigit()]
-    us_codes = [s for s in symbols if not s.isdigit()]
-    sub_list = []
+            code = str(c or "").strip().upper()
+            if code:
+                all_codes.add(code)
+
+    symbols = sorted(all_codes)
+    if len(symbols) > 100:
+        logger.log_warn("StockService", f"WebSocket subscription capped at 100 symbols (requested {len(symbols)})")
+        symbols = symbols[:100]
+
+    kr_codes = [s for s in symbols if market_map.get(s) == "KR" or (s not in market_map and s.isdigit())]
+    us_codes = [s for s in symbols if s not in kr_codes]
+
+    sub_list: List[Dict[str, Any]] = []
     if us_codes:
         sub_list.append({"type": "trade:us", "codes": us_codes})
     if kr_codes:
         sub_list.append({"type": "trade:kr", "codes": kr_codes})
+    return sub_list
 
-    if _active_ws:
+
+def _ws_ping_worker(ws: Any, ping_stop: threading.Event) -> None:
+    """Sends Toss plain-text PING every 55s to stay well within 180s client idle timeout."""
+    while not ping_stop.wait(55.0):
+        if _stop_streaming_event.is_set() or _is_paused:
+            break
         try:
-            _active_ws.send(json.dumps(sub_list))
+            ws.send("PING")
+        except Exception:
+            break
+
+
+def _resync_quotes_on_reconnect() -> None:
+    """Refreshes REST quote snapshot after WebSocket (re)connect since WS gives no initial snapshot."""
+    try:
+        if time.time() - _last_rest_quote_sync < 2.0:
+            return
+        conf = load_stock_config()
+        watchlist = conf.get("watchlist", [])
+        if not watchlist:
+            return
+        quotes = fetch_initial_prices(watchlist)
+        for q in quotes.values():
+            broadcast_tick_update(q)
+    except Exception as e:
+        logger.log_warn("StockService", f"Reconnect REST resync failed: {e}")
+
+
+def update_ws_subscriptions() -> bool:
+    """Dynamically sends updated trade subscriptions (KR & US) to active WebSocket."""
+    global _active_ws
+    sub_list = _build_ws_subscription_payload()
+
+    with _stream_lock:
+        ws = _active_ws
+        paused = _is_paused
+
+    if ws:
+        try:
+            ws.send(json.dumps(sub_list))
             logger.log_info("StockService", f"Dynamic subscription updated: {sub_list}")
             return True
         except Exception as e:
             logger.log_warn("StockService", f"Failed to send dynamic subscription: {e}")
-            _active_ws = None
-            resume_streaming()
+            with _stream_lock:
+                if _active_ws is ws:
+                    _active_ws = None
+            try:
+                ws.close()
+            except Exception:
+                pass
+            if not paused and sub_list:
+                resume_streaming()
             return False
     else:
-        resume_streaming()
+        if not paused and sub_list:
+            resume_streaming()
         return False
 
 
 def _streaming_worker():
-    global _is_streaming_active, _backoff_delay
+    global _is_streaming_active, _backoff_delay, _active_ws, _consecutive_ws_failures
     logger.log_info("StockService", "Stock streaming background thread started")
 
-    while not _stop_streaming_event.is_set():
-        if _is_paused:
-            time.sleep(0.5)
-            continue
+    try:
+        while not _stop_streaming_event.is_set():
+            if _is_paused:
+                _wake_event.clear()
+                if _is_paused and not _stop_streaming_event.is_set():
+                    _wake_event.wait(timeout=1.0)
+                continue
 
-        token = get_valid_token()
-        if not token:
-            time.sleep(2.0)
-            continue
+            token = get_valid_token(min_ttl=120.0)
+            if not token:
+                _wake_event.clear()
+                _wake_event.wait(timeout=3.0)
+                continue
 
-        conf = load_stock_config()
-        all_codes = set()
-        for g in conf.get("groups", []):
-            for c in g.get("codes", []):
-                if c:
-                    all_codes.add(str(c).strip().upper())
-        for w in conf.get("watchlist", []):
-            if w.get("code"):
-                all_codes.add(str(w.get("code")).strip().upper())
-        symbols = sorted(list(all_codes))
-        if not symbols:
-            time.sleep(2.0)
-            continue
+            conf = load_stock_config()
+            sub_list = _build_ws_subscription_payload(conf)
+            if not sub_list:
+                _wake_event.clear()
+                _wake_event.wait(timeout=3.0)
+                continue
 
-        try:
-            import websocket
-            has_ws = True
-        except ImportError:
-            has_ws = False
+            try:
+                import websocket
+                has_ws = True
+            except ImportError:
+                has_ws = False
 
-        if has_ws:
+            if not has_ws:
+                # REST polling fallback when websocket-client is unavailable (fixed 5s interval, no backoff escalation)
+                try:
+                    quotes = fetch_initial_prices(conf.get("watchlist", []))
+                    for q in quotes.values():
+                        broadcast_tick_update(q)
+                except Exception as e:
+                    logger.log_warn("StockService", f"REST polling fallback error: {e}")
+                _wake_event.clear()
+                if not _is_paused and not _stop_streaming_event.is_set():
+                    _wake_event.wait(timeout=5.0)
+                continue
+
+            conn_state = {
+                "opened": False,
+                "auth_error": False,
+                "server_shutdown": False,
+                "ping_stop": threading.Event()
+            }
+
             try:
                 ws_url = "wss://openapi-ws.tossinvest.com/ws/v1"
                 headers = [f"Authorization: Bearer {token}"]
@@ -753,19 +849,56 @@ def _streaming_worker():
                 def on_message(ws, msg):
                     try:
                         data = json.loads(msg)
-                        if data.get("type") == "message":
+                        msg_type = data.get("type")
+
+                        if msg_type == "pong":
+                            return
+
+                        if msg_type == "subscriptions":
+                            rejected = data.get("rejected") or []
+                            if rejected:
+                                logger.log_warn("StockService", f"WS subscription partial reject: {rejected}")
+                            return
+
+                        if msg_type == "error":
+                            err_obj = data.get("error") or {}
+                            err_code = err_obj.get("code", "")
+                            err_msg = err_obj.get("message", "")
+                            if err_code == "auth-revoked":
+                                logger.log_warn("StockService", f"WS auth revoked ({err_msg}), refreshing token and reconnecting")
+                                conn_state["auth_error"] = True
+                                invalidate_access_token()
+                                try:
+                                    ws.close()
+                                except Exception:
+                                    pass
+                            elif err_code == "server-shutdown":
+                                logger.log_info("StockService", "WS server shutdown notice received, reconnecting")
+                                conn_state["server_shutdown"] = True
+                                try:
+                                    ws.close()
+                                except Exception:
+                                    pass
+                            else:
+                                logger.log_warn("StockService", f"WS error frame [{err_code}]: {err_msg}")
+                            return
+
+                        if msg_type == "message":
                             topic = data.get("topic", "")
                             code = topic.split(":")[-1]
                             trade = data.get("data", {})
                             if code and trade:
                                 p_val = float(trade.get("price", 0.0))
-                                curr = trade.get("currency", "USD" if not code.isdigit() else "KRW")
-                                mkt = "KR" if curr == "KRW" or code.isdigit() else "US"
+                                with _cache_lock:
+                                    prev = dict(_quote_cache.get(code, {}))
+                                    prev_close_cached = _prev_close_cache.get(code, {}).get("price")
 
-                                prev = _quote_cache.get(code, {})
+                                curr = trade.get("currency", prev.get("currency") or ("USD" if not code.isdigit() else "KRW"))
+                                mkt = "KR" if curr == "KRW" or prev.get("market") == "KR" or code.isdigit() else "US"
+
                                 base_p = float(prev.get("base_price", 0.0))
                                 if base_p <= 0:
-                                    base_p = float(_prev_close_cache.get(code, {}).get("price", p_val))
+                                    base_p = float(prev_close_cached or p_val)
                                 c_val = round(p_val - base_p, 2 if mkt == "US" else 0)
                                 cr_val = round((c_val / base_p * 100), 2) if base_p else 0.0
 
@@ -798,20 +931,45 @@ def _streaming_worker():
                         logger.log_warn("StockService", f"WS tick parse error: {ex}")
 
                 def on_open(ws):
-                    global _backoff_delay, _active_ws
+                    global _backoff_delay, _active_ws, _consecutive_ws_failures
+                    conn_state["opened"] = True
                     _backoff_delay = 1.0
-                    _active_ws = ws
+                    _consecutive_ws_failures = 0
+                    with _stream_lock:
+                        _active_ws = ws
                     update_ws_subscriptions()
+                    threading.Thread(
+                        target=_ws_ping_worker,
+                        args=(ws, conn_state["ping_stop"]),
+                        name="StockWSPingThread",
+                        daemon=True
+                    ).start()
+                    threading.Thread(
+                        target=_resync_quotes_on_reconnect,
+                        name="StockReconnectResyncThread",
+                        daemon=True
+                    ).start()
 
                 def on_close(ws, status=None, msg=None):
                     global _active_ws
-                    _active_ws = None
-                    logger.log_info("StockService", f"WebSocket closed: status={status}, msg={msg}")
+                    conn_state["ping_stop"].set()
+                    with _stream_lock:
+                        if _active_ws is ws:
+                            _active_ws = None
+                    if not _is_paused and not _stop_streaming_event.is_set():
+                        logger.log_info("StockService", f"WebSocket closed: status={status}, msg={msg}")
 
                 def on_error(ws, err):
                     global _active_ws
-                    _active_ws = None
-                    logger.log_warn("StockService", f"WebSocket error: {err}")
+                    with _stream_lock:
+                        if _active_ws is ws:
+                            _active_ws = None
+                    err_str = str(err)
+                    if "401" in err_str or "Unauthorized" in err_str:
+                        conn_state["auth_error"] = True
+                        invalidate_access_token()
+                    if not _is_paused and not _stop_streaming_event.is_set():
+                        logger.log_warn("StockService", f"WebSocket error: {err}")
 
                 ws_app = websocket.WebSocketApp(
                     ws_url,
@@ -822,40 +980,89 @@ def _streaming_worker():
                     on_close=on_close
                 )
                 ws_app.run_forever(sslopt={"cert_reqs": ssl.CERT_NONE}, ping_interval=20, ping_timeout=10)
-                _active_ws = None
             except Exception as e:
-                logger.log_debug("StockService", f"WebSocket connection failed: {e}")
-        else:
-            try:
-                quotes = fetch_initial_prices(conf.get("watchlist", []))
-                for q in quotes.values():
-                    broadcast_tick_update(q)
-            except Exception:
-                pass
-            time.sleep(5.0)
+                if not _is_paused and not _stop_streaming_event.is_set():
+                    logger.log_warn("StockService", f"WebSocket connection failed: {e}")
+            finally:
+                conn_state["ping_stop"].set()
+                with _stream_lock:
+                    _active_ws = None
 
-        if not _stop_streaming_event.is_set():
-            time.sleep(_backoff_delay)
+            if _stop_streaming_event.is_set() or _is_paused:
+                continue
+
+            if conn_state["auth_error"]:
+                invalidate_access_token()
+
+            if conn_state["server_shutdown"]:
+                _backoff_delay = 1.0
+
+            if not conn_state["opened"]:
+                _consecutive_ws_failures += 1
+                if _consecutive_ws_failures >= 2:
+                    try:
+                        quotes = fetch_initial_prices(conf.get("watchlist", []))
+                        for q in quotes.values():
+                            broadcast_tick_update(q)
+                    except Exception:
+                        pass
+
+            wait_sec = _backoff_delay + random.uniform(0.0, 0.5)
+            _wake_event.clear()
+            if not _is_paused and not _stop_streaming_event.is_set():
+                _wake_event.wait(timeout=wait_sec)
             _backoff_delay = min(30.0, _backoff_delay * 2.0)
-
-    _is_streaming_active = False
+    finally:
+        with _stream_lock:
+            _is_streaming_active = False
+            _active_ws = None
 
 
 def pause_streaming() -> None:
-    global _is_paused
-    _is_paused = True
+    global _is_paused, _active_ws
+    with _stream_lock:
+        _is_paused = True
+        ws = _active_ws
+        _active_ws = None
+    _wake_event.set()
+    if ws:
+        try:
+            ws.close()
+        except Exception:
+            pass
     logger.log_info("StockService", "Stock streaming paused (widget collapsed)")
 
 
 def resume_streaming() -> None:
-    global _is_paused, _is_streaming_active, _ws_thread
-    _is_paused = False
-    logger.log_info("StockService", "Stock streaming resumed (widget expanded)")
-    if not _is_streaming_active or _ws_thread is None or not _ws_thread.is_alive():
+    global _is_paused, _is_streaming_active, _ws_thread, _backoff_delay, _consecutive_ws_failures
+    with _stream_lock:
+        _is_paused = False
+        _backoff_delay = 1.0
+        _consecutive_ws_failures = 0
         _stop_streaming_event.clear()
-        _ws_thread = threading.Thread(target=_streaming_worker, name="StockStreamingThread", daemon=True)
-        _is_streaming_active = True
-        _ws_thread.start()
+        if not _is_streaming_active or _ws_thread is None or not _ws_thread.is_alive():
+            _ws_thread = threading.Thread(target=_streaming_worker, name="StockStreamingThread", daemon=True)
+            _is_streaming_active = True
+            _ws_thread.start()
+    _wake_event.set()
+    logger.log_info("StockService", "Stock streaming resumed (widget expanded)")
+
+
+def stop_streaming() -> None:
+    """Gracefully shuts down WebSocket streaming thread and socket on application exit."""
+    global _is_paused, _is_streaming_active, _active_ws
+    with _stream_lock:
+        _is_paused = True
+        _is_streaming_active = False
+        _stop_streaming_event.set()
+        ws = _active_ws
+        _active_ws = None
+    _wake_event.set()
+    if ws:
+        try:
+            ws.close()
+        except Exception:
+            pass
 
 
 def init_stock_service(edge_manager: Any = None) -> None:

@@ -73,6 +73,8 @@ hidden_imports = [
     'services.diff_service',
     'services.qr_service',
     'services.imap_service',
+    'services.stock_service',
+    'websocket',
     'winocr',
     'winrt.windows.media.ocr',
     'winrt.windows.globalization',

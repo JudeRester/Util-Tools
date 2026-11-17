@@ -108,7 +108,13 @@ def app_cleanup():
             except Exception:
                 pass
 
-        # 3. 단일 인스턴스 세마포어 해제
+        # 3. 주식 WebSocket 스트리밍 안전 종료
+        try:
+            services.stock_service.stop_streaming()
+        except Exception:
+            pass
+
+        # 4. 단일 인스턴스 세마포어 해제
         try:
             from core.single_instance import get_single_instance
             get_single_instance().release()

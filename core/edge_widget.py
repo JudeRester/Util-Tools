@@ -464,9 +464,11 @@ class EdgeWidgetManager:
         import ctypes
         user32 = ctypes.windll.user32
 
+        was_expanded = False
         with self._lock:
             if suppressed:
                 if self.state == WidgetState.EXPANDED:
+                    was_expanded = True
                     # 확장된 상태면 축소
                     monitor = self._get_current_monitor()
                     if monitor and self.window:
@@ -483,6 +485,13 @@ class EdgeWidgetManager:
                         user32.ShowWindow(self._hwnd, SW_SHOWNOACTIVATE)
                     logger.info("Widget restored with SW_SHOWNOACTIVATE")
 
+        if was_expanded:
+            try:
+                from services.stock_service import pause_streaming
+                threading.Thread(target=pause_streaming, name="StockPauseThread", daemon=True).start()
+            except Exception:
+                pass
+
     def get_state_dict(self) -> Dict[str, Any]:
         with self._lock:
             return {
@@ -496,6 +505,11 @@ class EdgeWidgetManager:
 
     def destroy(self) -> None:
         """리소스 해제 및 감시자 중지."""
+        try:
+            from services.stock_service import stop_streaming
+            stop_streaming()
+        except Exception:
+            pass
         if self._settle_timer:
             self._settle_timer.cancel()
         if self.guard:
