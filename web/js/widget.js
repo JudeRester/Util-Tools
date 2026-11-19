@@ -13,6 +13,7 @@
     // State
     let isPinned = false;
     let isModalOpen = false;
+    let isStockDragging = false;
     let dwellTimer = null;
     let collapseTimer = null;
     let dragOccurred = false;
@@ -203,9 +204,9 @@
     // Auto-collapse on MouseLeave (400ms delay if not pinned and modal not open)
     if (widgetPanel) {
         widgetPanel.addEventListener('mouseleave', () => {
-            if (!isPinned && !isCollapsed() && !isModalOpen) {
+            if (!isPinned && !isCollapsed() && !isModalOpen && !isStockDragging) {
                 collapseTimer = setTimeout(() => {
-                    if (!isModalOpen) {
+                    if (!isModalOpen && !isStockDragging) {
                         collapseWidget();
                     }
                 }, 400);
@@ -948,14 +949,113 @@
         bar.appendChild(addBtn);
     }
 
+    function bindStockCardDragHandle(handleEl, cardEl, listEl, targetGroup) {
+        if (!handleEl || !cardEl || !listEl) return;
+
+        let activePointerId = null;
+        let initialOrderKey = '';
+
+        const getOrderedCodes = () => Array.from(listEl.querySelectorAll('.stock-card'))
+            .map(el => el.getAttribute('data-code'))
+            .filter(Boolean);
+
+        const finishDrag = async (e) => {
+            if (activePointerId === null || e.pointerId !== activePointerId) return;
+            try {
+                if (handleEl.hasPointerCapture(activePointerId)) {
+                    handleEl.releasePointerCapture(activePointerId);
+                }
+            } catch (_) {}
+
+            activePointerId = null;
+            isStockDragging = false;
+            document.body.classList.remove('stock-reordering');
+            cardEl.classList.remove('is-dragging');
+
+            const orderedCodes = getOrderedCodes();
+            if (orderedCodes.join(',') !== initialOrderKey) {
+                const gid = (targetGroup && targetGroup.id) ? targetGroup.id : activeStockGroupId;
+                if (targetGroup) {
+                    targetGroup.codes = orderedCodes;
+                }
+                if (window.eel && window.eel.reorder_stock_group_codes) {
+                    try {
+                        const res = await window.eel.reorder_stock_group_codes(gid, orderedCodes)();
+                        if (res && res.success && Array.isArray(res.groups)) {
+                            stockGroups = res.groups;
+                        }
+                    } catch (err) {
+                        console.error('Failed to persist stock reorder:', err);
+                    }
+                }
+            }
+        };
+
+        handleEl.addEventListener('pointerdown', (e) => {
+            if (e.button !== undefined && e.button !== 0) return;
+            if (listEl.querySelectorAll('.stock-card').length <= 1) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            activePointerId = e.pointerId;
+            initialOrderKey = getOrderedCodes().join(',');
+            isStockDragging = true;
+            document.body.classList.add('stock-reordering');
+            cardEl.classList.add('is-dragging');
+
+            try {
+                handleEl.setPointerCapture(activePointerId);
+            } catch (_) {}
+        });
+
+        handleEl.addEventListener('pointermove', (e) => {
+            if (activePointerId === null || e.pointerId !== activePointerId) return;
+            e.preventDefault();
+
+            const listRect = listEl.getBoundingClientRect();
+            const scrollZone = 24;
+            if (e.clientY < listRect.top + scrollZone) {
+                listEl.scrollTop -= 8;
+            } else if (e.clientY > listRect.bottom - scrollZone) {
+                listEl.scrollTop += 8;
+            }
+
+            const siblings = Array.from(listEl.querySelectorAll('.stock-card')).filter(el => el !== cardEl);
+            let insertBeforeEl = null;
+            for (const sib of siblings) {
+                const rect = sib.getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+                if (e.clientY < midpoint) {
+                    insertBeforeEl = sib;
+                    break;
+                }
+            }
+
+            if (insertBeforeEl === null) {
+                if (listEl.lastElementChild !== cardEl) {
+                    listEl.appendChild(cardEl);
+                }
+            } else if (cardEl.nextElementSibling !== insertBeforeEl) {
+                listEl.insertBefore(cardEl, insertBeforeEl);
+            }
+        });
+
+        handleEl.addEventListener('pointerup', finishDrag);
+        handleEl.addEventListener('pointercancel', finishDrag);
+    }
+
     function renderStockCards() {
         const listEl = document.getElementById('stock-card-list');
         const badgeEl = document.getElementById('stock-count-badge');
         if (!listEl) return;
 
         const curGrp = stockGroups.find(g => g.id === activeStockGroupId) || stockGroups[0];
-        const activeCodes = new Set((curGrp && curGrp.codes) ? curGrp.codes : []);
-        const filteredList = stockWatchlistData.filter(item => activeCodes.has(item.code));
+        const groupCodes = (curGrp && Array.isArray(curGrp.codes)) ? curGrp.codes : [];
+        const watchlistMap = new Map(stockWatchlistData.map(item => [item.code, item]));
+        const filteredList = groupCodes
+            .map(code => watchlistMap.get(code))
+            .filter(Boolean);
 
         if (badgeEl) badgeEl.textContent = filteredList.length;
         listEl.innerHTML = '';
@@ -986,6 +1086,16 @@
             );
 
             card.innerHTML = `
+                <button type="button" class="stock-drag-handle" title="드래그하여 순서 변경" aria-label="종목 순서 변경">
+                    <svg viewBox="0 0 10 16" width="10" height="14" aria-hidden="true">
+                        <circle cx="2.5" cy="3" r="1.2"/>
+                        <circle cx="7.5" cy="3" r="1.2"/>
+                        <circle cx="2.5" cy="8" r="1.2"/>
+                        <circle cx="7.5" cy="8" r="1.2"/>
+                        <circle cx="2.5" cy="13" r="1.2"/>
+                        <circle cx="7.5" cy="13" r="1.2"/>
+                    </svg>
+                </button>
                 <div class="stock-card-left">
                     <div class="stock-name-row">
                         <span class="stock-name" title="${item.name}">${item.name}</span>
@@ -1014,6 +1124,11 @@
                     <button class="stock-btn-del" title="관심 종목 삭제">✕</button>
                 </div>
             `;
+
+            const dragHandle = card.querySelector('.stock-drag-handle');
+            if (dragHandle) {
+                bindStockCardDragHandle(dragHandle, card, listEl, curGrp);
+            }
 
             const delBtn = card.querySelector('.stock-btn-del');
             if (delBtn) {

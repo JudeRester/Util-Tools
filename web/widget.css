@@ -1024,17 +1024,60 @@ body.state-expanded .widget-panel {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 10px 12px;
+    padding: 10px 10px 10px 6px;
     transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
 }
 
 .stock-card:hover {
     background: var(--bg-hover);
     border-color: rgba(255, 255, 255, 0.18);
+}
+
+.stock-card.is-dragging {
+    background: var(--bg-hover);
+    border-color: var(--primary);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+    opacity: 0.94;
+}
+
+.stock-drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    opacity: 0.45;
+    cursor: grab;
+    flex-shrink: 0;
+    touch-action: none;
+    transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.stock-drag-handle svg {
+    fill: currentColor;
+    pointer-events: none;
+}
+
+.stock-card:hover .stock-drag-handle,
+.stock-drag-handle:hover {
+    opacity: 0.9;
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.stock-card.is-dragging .stock-drag-handle,
+body.stock-reordering,
+body.stock-reordering * {
+    cursor: grabbing !important;
 }
 
 .stock-card-left {
