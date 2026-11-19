@@ -13,6 +13,7 @@
     // State
     let isPinned = false;
     let isModalOpen = false;
+    let isStockDragging = false;
     let dwellTimer = null;
     let collapseTimer = null;
     let dragOccurred = false;
@@ -203,9 +204,9 @@
     // Auto-collapse on MouseLeave (400ms delay if not pinned and modal not open)
     if (widgetPanel) {
         widgetPanel.addEventListener('mouseleave', () => {
-            if (!isPinned && !isCollapsed() && !isModalOpen) {
+            if (!isPinned && !isCollapsed() && !isModalOpen && !isStockDragging) {
                 collapseTimer = setTimeout(() => {
-                    if (!isModalOpen) {
+                    if (!isModalOpen && !isStockDragging) {
                         collapseWidget();
                     }
                 }, 400);
@@ -948,14 +949,235 @@
         bar.appendChild(addBtn);
     }
 
+    let activeStockDrag = null;
+
+    function getStockOrderedCodes(listEl) {
+        return Array.from(listEl.querySelectorAll('.stock-card'))
+            .map(el => el.getAttribute('data-code'))
+            .filter(Boolean);
+    }
+
+    function getStockScrollContainer(listEl) {
+        if (!listEl) return null;
+        if (listEl.scrollHeight > listEl.clientHeight + 1) return listEl;
+        const bodyEl = listEl.closest('.widget-body');
+        if (bodyEl && bodyEl.scrollHeight > bodyEl.clientHeight + 1) return bodyEl;
+        return listEl;
+    }
+
+    function updateStockFloatingAndSlot(clientY) {
+        const drag = activeStockDrag;
+        if (!drag) return;
+
+        const { listEl, cardEl, floatingEl, cardRect, grabOffsetY } = drag;
+        const scrollContainer = getStockScrollContainer(listEl);
+        const containerRect = scrollContainer ? scrollContainer.getBoundingClientRect() : listEl.getBoundingClientRect();
+
+        const rawTop = clientY - grabOffsetY;
+        const minTop = containerRect.top - 12;
+        const maxTop = containerRect.bottom - cardRect.height + 12;
+        const clampedTop = Math.max(minTop, Math.min(maxTop, rawTop));
+
+        if (floatingEl) {
+            floatingEl.style.top = `${clampedTop}px`;
+        }
+
+        const refY = clampedTop + cardRect.height / 2;
+        const siblings = Array.from(listEl.querySelectorAll('.stock-card')).filter(el => el !== cardEl);
+        let insertBeforeEl = null;
+        for (const sib of siblings) {
+            const rect = sib.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            if (refY < midpoint) {
+                insertBeforeEl = sib;
+                break;
+            }
+        }
+
+        if (insertBeforeEl === null) {
+            if (listEl.lastElementChild !== cardEl) {
+                listEl.appendChild(cardEl);
+            }
+        } else if (cardEl.nextElementSibling !== insertBeforeEl) {
+            listEl.insertBefore(cardEl, insertBeforeEl);
+        }
+    }
+
+    function runStockAutoScrollStep() {
+        const drag = activeStockDrag;
+        if (!drag) return;
+
+        const { listEl, lastClientY } = drag;
+        const scrollContainer = getStockScrollContainer(listEl);
+        if (scrollContainer) {
+            const rect = scrollContainer.getBoundingClientRect();
+            const edgeZone = 34;
+            const maxScroll = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+            let scrolled = 0;
+
+            if (lastClientY < rect.top + edgeZone && scrollContainer.scrollTop > 0) {
+                const dist = (rect.top + edgeZone) - lastClientY;
+                const speed = Math.min(18, Math.max(2, Math.round(dist / 6)));
+                const prevTop = scrollContainer.scrollTop;
+                scrollContainer.scrollTop = Math.max(0, prevTop - speed);
+                scrolled = prevTop - scrollContainer.scrollTop;
+                listEl.classList.add('auto-scroll-top');
+                listEl.classList.remove('auto-scroll-bottom');
+            } else if (lastClientY > rect.bottom - edgeZone && scrollContainer.scrollTop < maxScroll) {
+                const dist = lastClientY - (rect.bottom - edgeZone);
+                const speed = Math.min(18, Math.max(2, Math.round(dist / 6)));
+                const prevTop = scrollContainer.scrollTop;
+                scrollContainer.scrollTop = Math.min(maxScroll, prevTop + speed);
+                scrolled = scrollContainer.scrollTop - prevTop;
+                listEl.classList.add('auto-scroll-bottom');
+                listEl.classList.remove('auto-scroll-top');
+            } else {
+                listEl.classList.remove('auto-scroll-top', 'auto-scroll-bottom');
+            }
+
+            if (scrolled !== 0) {
+                updateStockFloatingAndSlot(lastClientY);
+            }
+        }
+
+        drag.rafId = requestAnimationFrame(runStockAutoScrollStep);
+    }
+
+    async function finishStockCardDrag(pointerId) {
+        const drag = activeStockDrag;
+        if (!drag) return;
+        if (pointerId !== undefined && drag.pointerId !== pointerId) return;
+
+        activeStockDrag = null;
+        if (drag.rafId) {
+            cancelAnimationFrame(drag.rafId);
+        }
+
+        const { listEl, cardEl, floatingEl, targetGroup, initialOrderKey } = drag;
+        try {
+            if (listEl && listEl.hasPointerCapture(drag.pointerId)) {
+                listEl.releasePointerCapture(drag.pointerId);
+            }
+        } catch (_) {}
+
+        if (floatingEl && floatingEl.parentNode) {
+            floatingEl.parentNode.removeChild(floatingEl);
+        }
+        if (cardEl) {
+            cardEl.classList.remove('is-drag-placeholder');
+        }
+        if (listEl) {
+            listEl.classList.remove('auto-scroll-top', 'auto-scroll-bottom');
+        }
+        isStockDragging = false;
+        document.body.classList.remove('stock-reordering');
+
+        if (!listEl) return;
+        const orderedCodes = getStockOrderedCodes(listEl);
+        if (orderedCodes.join(',') !== initialOrderKey) {
+            const gid = (targetGroup && targetGroup.id) ? targetGroup.id : activeStockGroupId;
+            if (targetGroup) {
+                targetGroup.codes = orderedCodes;
+            }
+            if (window.eel && window.eel.reorder_stock_group_codes) {
+                try {
+                    const res = await window.eel.reorder_stock_group_codes(gid, orderedCodes)();
+                    if (res && res.success && Array.isArray(res.groups)) {
+                        stockGroups = res.groups;
+                    }
+                } catch (err) {
+                    console.error('Failed to persist stock reorder:', err);
+                }
+            }
+        }
+    }
+
+    function ensureStockListDragController(listEl) {
+        if (!listEl || listEl.dataset.dragCtrlBound === '1') return;
+        listEl.dataset.dragCtrlBound = '1';
+
+        listEl.addEventListener('pointermove', (e) => {
+            if (!activeStockDrag || e.pointerId !== activeStockDrag.pointerId) return;
+            e.preventDefault();
+            activeStockDrag.lastClientY = e.clientY;
+            updateStockFloatingAndSlot(e.clientY);
+        });
+
+        listEl.addEventListener('pointerup', (e) => {
+            if (!activeStockDrag || e.pointerId !== activeStockDrag.pointerId) return;
+            finishStockCardDrag(e.pointerId);
+        });
+
+        listEl.addEventListener('pointercancel', (e) => {
+            if (!activeStockDrag || e.pointerId !== activeStockDrag.pointerId) return;
+            finishStockCardDrag(e.pointerId);
+        });
+
+        window.addEventListener('blur', () => {
+            if (activeStockDrag) {
+                finishStockCardDrag();
+            }
+        });
+    }
+
+    function bindStockCardDragHandle(handleEl, cardEl, listEl, targetGroup) {
+        if (!handleEl || !cardEl || !listEl) return;
+        ensureStockListDragController(listEl);
+
+        handleEl.addEventListener('pointerdown', (e) => {
+            if (e.button !== undefined && e.button !== 0) return;
+            if (listEl.querySelectorAll('.stock-card').length <= 1) return;
+            if (activeStockDrag) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            const cardRect = cardEl.getBoundingClientRect();
+            const floatingEl = cardEl.cloneNode(true);
+            floatingEl.removeAttribute('data-code');
+            floatingEl.className = 'stock-card stock-drag-floating';
+            floatingEl.style.left = `${cardRect.left}px`;
+            floatingEl.style.top = `${cardRect.top}px`;
+            floatingEl.style.width = `${cardRect.width}px`;
+            floatingEl.style.height = `${cardRect.height}px`;
+            document.body.appendChild(floatingEl);
+
+            cardEl.classList.add('is-drag-placeholder');
+            isStockDragging = true;
+            document.body.classList.add('stock-reordering');
+
+            activeStockDrag = {
+                pointerId: e.pointerId,
+                listEl,
+                cardEl,
+                floatingEl,
+                targetGroup,
+                initialOrderKey: getStockOrderedCodes(listEl).join(','),
+                cardRect,
+                grabOffsetY: e.clientY - cardRect.top,
+                lastClientY: e.clientY,
+                rafId: null
+            };
+
+            try {
+                listEl.setPointerCapture(e.pointerId);
+            } catch (_) {}
+
+            activeStockDrag.rafId = requestAnimationFrame(runStockAutoScrollStep);
+        });
+    }
+
     function renderStockCards() {
         const listEl = document.getElementById('stock-card-list');
         const badgeEl = document.getElementById('stock-count-badge');
         if (!listEl) return;
 
         const curGrp = stockGroups.find(g => g.id === activeStockGroupId) || stockGroups[0];
-        const activeCodes = new Set((curGrp && curGrp.codes) ? curGrp.codes : []);
-        const filteredList = stockWatchlistData.filter(item => activeCodes.has(item.code));
+        const groupCodes = (curGrp && Array.isArray(curGrp.codes)) ? curGrp.codes : [];
+        const watchlistMap = new Map(stockWatchlistData.map(item => [item.code, item]));
+        const filteredList = groupCodes
+            .map(code => watchlistMap.get(code))
+            .filter(Boolean);
 
         if (badgeEl) badgeEl.textContent = filteredList.length;
         listEl.innerHTML = '';
@@ -986,6 +1208,16 @@
             );
 
             card.innerHTML = `
+                <button type="button" class="stock-drag-handle" title="드래그하여 순서 변경" aria-label="종목 순서 변경">
+                    <svg viewBox="0 0 10 16" width="10" height="14" aria-hidden="true">
+                        <circle cx="2.5" cy="3" r="1.2"/>
+                        <circle cx="7.5" cy="3" r="1.2"/>
+                        <circle cx="2.5" cy="8" r="1.2"/>
+                        <circle cx="7.5" cy="8" r="1.2"/>
+                        <circle cx="2.5" cy="13" r="1.2"/>
+                        <circle cx="7.5" cy="13" r="1.2"/>
+                    </svg>
+                </button>
                 <div class="stock-card-left">
                     <div class="stock-name-row">
                         <span class="stock-name" title="${item.name}">${item.name}</span>
@@ -1014,6 +1246,11 @@
                     <button class="stock-btn-del" title="관심 종목 삭제">✕</button>
                 </div>
             `;
+
+            const dragHandle = card.querySelector('.stock-drag-handle');
+            if (dragHandle) {
+                bindStockCardDragHandle(dragHandle, card, listEl, curGrp);
+            }
 
             const delBtn = card.querySelector('.stock-btn-del');
             if (delBtn) {

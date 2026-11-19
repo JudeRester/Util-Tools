@@ -1652,6 +1652,49 @@ def remove_stock_symbol(code: str, group_id: Optional[str] = None) -> Dict[str, 
 
 
 @eel.expose
+def reorder_stock_group_codes(group_id: str, ordered_codes: List[str]) -> Dict[str, Any]:
+    """Reorders stock symbol codes within the specified group and persists config."""
+    if not isinstance(ordered_codes, list):
+        return {"success": False, "error": "잘못된 순서 데이터입니다."}
+
+    conf = load_stock_config()
+    groups = conf.get("groups", [])
+    if not groups:
+        return {"success": False, "error": "등록된 그룹이 없습니다."}
+
+    gid = group_id or conf.get("active_group_id") or groups[0].get("id")
+    target_group = next((g for g in groups if g.get("id") == gid), None)
+    if not target_group:
+        return {"success": False, "error": "해당 그룹을 찾을 수 없습니다."}
+
+    existing_codes = list(target_group.get("codes", []))
+    existing_set = set(existing_codes)
+
+    new_codes: List[str] = []
+    seen = set()
+    for raw_code in ordered_codes:
+        code = str(raw_code or "").strip().upper()
+        if code in existing_set and code not in seen:
+            new_codes.append(code)
+            seen.add(code)
+
+    for code in existing_codes:
+        if code not in seen:
+            new_codes.append(code)
+            seen.add(code)
+
+    target_group["codes"] = new_codes
+    save_stock_config(conf)
+    logger.log_info("StockService", f"Reordered stock group {gid}: {new_codes}")
+    return {
+        "success": True,
+        "group_id": gid,
+        "codes": new_codes,
+        "groups": conf["groups"]
+    }
+
+
+@eel.expose
 def search_stock_master(query: str) -> List[Dict[str, Any]]:
     """Searches stock master list by name or ticker using smart relevance scoring."""
     q = (query or "").strip().lower()
