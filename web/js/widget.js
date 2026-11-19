@@ -642,30 +642,65 @@
     let stockGroups = [];
     let activeStockGroupId = 'g_default';
     let stockWatchlistData = [];
-    const ROUND_TRIP_FEE_RATE = 0.0020206;
+    const BUY_FEE_RATE = 0.001;       // 매수 수수료 0.1% (매수가 기준)
+    const SELL_FEE_RATE = 0.0010206;  // 매도 수수료 0.1% + 제비용 0.00206% (매도가 기준)
+    const TARGET_PROFIT_STORAGE_KEY = 'util_widget_stock_target_pct';
+    let stockTargetProfitPct = (() => {
+        try {
+            const saved = parseFloat(localStorage.getItem(TARGET_PROFIT_STORAGE_KEY));
+            if (Number.isFinite(saved) && saved >= 0 && saved <= 100) return saved;
+        } catch (e) {}
+        return 1;
+    })();
 
-    function computeBreakevenInfo(price, isKrw) {
+    function formatTargetPctLabel(pct) {
+        const val = Number.isFinite(pct) && pct >= 0 ? pct : 0;
+        return Number(val.toFixed(2)).toString();
+    }
+
+    function computeSellPriceInfo(price, isKrw, targetPct) {
         const num = Number(price);
+        const pct = Number.isFinite(Number(targetPct)) && Number(targetPct) >= 0 ? Number(targetPct) : 0;
+        const pctLabel = formatTargetPctLabel(pct);
+        const isZero = pct === 0;
+
         if (!Number.isFinite(num) || num <= 0) {
             return {
                 formatted: '--',
-                tooltip: '매수+매도 수수료 0.20206% 기준 수익 매도가'
+                tooltip: isZero
+                    ? '매수 0.1%·매도 0.10206% 분리 기준 본전가'
+                    : `매수 0.1%·매도 0.10206% 분리 기준 순수익 +${pctLabel}% 목표가`
             };
         }
-        const exact = num * (1 + ROUND_TRIP_FEE_RATE);
+
+        const targetRate = pct / 100;
+        const exact = num * ((1 + BUY_FEE_RATE) * (1 + targetRate)) / (1 - SELL_FEE_RATE);
         if (isKrw) {
             const ceilVal = Math.ceil(exact - 1e-9);
             const formatted = `${ceilVal.toLocaleString()}원`;
             return {
                 formatted,
-                tooltip: `매수+매도 수수료 0.20206% 기준 수익가: ${exact.toLocaleString(undefined, { maximumFractionDigits: 2 })}원 (${formatted} 이상 매도 시 수익)`
+                tooltip: isZero
+                    ? `매수 0.1%·매도 0.10206% 분리 기준 본전가: ${exact.toLocaleString(undefined, { maximumFractionDigits: 2 })}원 (${formatted} 이상 매도 시 수익)`
+                    : `매수 0.1%·매도 0.10206% 분리 기준 +${pctLabel}% 목표가: ${exact.toLocaleString(undefined, { maximumFractionDigits: 2 })}원 (${formatted} 이상 매도 시 순수익 ≥ ${pctLabel}%)`
             };
         }
+
         const ceilCents = Math.ceil(exact * 100 - 1e-9) / 100;
         const formatted = `$${ceilCents.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         return {
             formatted,
-            tooltip: `매수+매도 수수료 0.20206% 기준 수익가: $${exact.toFixed(4)} (${formatted} 이상 매도 시 수익)`
+            tooltip: isZero
+                ? `매수 0.1%·매도 0.10206% 분리 기준 본전가: $${exact.toFixed(4)} (${formatted} 이상 매도 시 수익)`
+                : `매수 0.1%·매도 0.10206% 분리 기준 +${pctLabel}% 목표가: $${exact.toFixed(4)} (${formatted} 이상 매도 시 순수익 ≥ ${pctLabel}%)`
+        };
+    }
+
+    function computeSellPrices(price, isKrw) {
+        return {
+            breakeven: computeSellPriceInfo(price, isKrw, 0),
+            target: computeSellPriceInfo(price, isKrw, stockTargetProfitPct),
+            targetLabel: formatTargetPctLabel(stockTargetProfitPct)
         };
     }
 
@@ -679,18 +714,24 @@
         const priceEl = card.querySelector('.stock-price');
         const changeEl = card.querySelector('.stock-change');
         const sessEl = card.querySelector('.session-badge');
-        const breakevenCol = card.querySelector('.stock-breakeven-col');
+        const breakevenRow = card.querySelector('.stock-sell-breakeven');
         const breakevenPriceEl = card.querySelector('.stock-breakeven-price');
+        const targetRow = card.querySelector('.stock-sell-target');
+        const targetTagEl = card.querySelector('.stock-target-tag');
+        const targetPriceEl = card.querySelector('.stock-target-price');
         const isKrw = tick.currency === 'KRW' || (tick.code && /^\d+$/.test(tick.code));
 
         if (priceEl && tick.formatted_price) {
             priceEl.textContent = tick.formatted_price;
         }
 
-        if (breakevenPriceEl && typeof tick.price === 'number') {
-            const breakeven = computeBreakevenInfo(tick.price, isKrw);
-            breakevenPriceEl.textContent = breakeven.formatted;
-            if (breakevenCol) breakevenCol.title = breakeven.tooltip;
+        if ((breakevenPriceEl || targetPriceEl) && typeof tick.price === 'number') {
+            const sellInfo = computeSellPrices(tick.price, isKrw);
+            if (breakevenPriceEl) breakevenPriceEl.textContent = sellInfo.breakeven.formatted;
+            if (breakevenRow) breakevenRow.title = sellInfo.breakeven.tooltip;
+            if (targetTagEl) targetTagEl.textContent = `+${sellInfo.targetLabel}%`;
+            if (targetPriceEl) targetPriceEl.textContent = sellInfo.target.formatted;
+            if (targetRow) targetRow.title = sellInfo.target.tooltip;
         }
 
         if (changeEl && typeof tick.change === 'number') {
@@ -902,7 +943,7 @@
             const rate = typeof item.change_rate === 'number' ? item.change_rate : 0.0;
             const rateFormatted = `${sign}${Math.abs(rate).toFixed(2)}%`;
             const changeDisplay = `${sign}${formattedChange} (${rateFormatted})`;
-            const breakeven = computeBreakevenInfo(
+            const sellInfo = computeSellPrices(
                 (item.formatted_price && item.formatted_price !== '--') ? item.price : 0,
                 isKrw
             );
@@ -919,9 +960,15 @@
                     </div>
                 </div>
                 <div class="stock-card-right">
-                    <div class="stock-breakeven-col" title="${breakeven.tooltip}">
-                        <span class="stock-breakeven-label">수익 ≥</span>
-                        <span class="stock-breakeven-price">${breakeven.formatted}</span>
+                    <div class="stock-breakeven-col">
+                        <div class="stock-sell-row stock-sell-breakeven" title="${sellInfo.breakeven.tooltip}">
+                            <span class="stock-sell-tag">본전</span>
+                            <span class="stock-breakeven-price">${sellInfo.breakeven.formatted}</span>
+                        </div>
+                        <div class="stock-sell-row stock-sell-target" title="${sellInfo.target.tooltip}">
+                            <span class="stock-sell-tag stock-target-tag">+${sellInfo.targetLabel}%</span>
+                            <span class="stock-target-price">${sellInfo.target.formatted}</span>
+                        </div>
                     </div>
                     <div class="stock-price-col">
                         <span class="stock-price">${item.formatted_price || '--'}</span>
@@ -956,11 +1003,79 @@
         });
     }
 
+    function refreshTargetPricesInCards() {
+        const cards = document.querySelectorAll('#stock-card-list .stock-card');
+        cards.forEach((card) => {
+            const code = card.getAttribute('data-code');
+            if (!code) return;
+            const item = stockWatchlistData.find(w => w.code === code);
+            if (!item) return;
+            const isKrw = item.currency === 'KRW' || item.market === 'KR' || /^\d+$/.test(item.code);
+            const priceVal = (item.formatted_price && item.formatted_price !== '--') ? item.price : 0;
+            const sellInfo = computeSellPrices(priceVal, isKrw);
+
+            const targetRow = card.querySelector('.stock-sell-target');
+            const targetTagEl = card.querySelector('.stock-target-tag');
+            const targetPriceEl = card.querySelector('.stock-target-price');
+            if (targetRow) targetRow.title = sellInfo.target.tooltip;
+            if (targetTagEl) targetTagEl.textContent = `+${sellInfo.targetLabel}%`;
+            if (targetPriceEl) targetPriceEl.textContent = sellInfo.target.formatted;
+        });
+    }
+
     function initStockUI() {
         const btnStockRefresh = document.getElementById('btn-stock-refresh');
         const btnStockAdd = document.getElementById('btn-stock-add');
         const btnStockApiKey = document.getElementById('btn-stock-api-key');
         const btnNoticeConfig = document.getElementById('btn-stock-notice-config');
+
+        const targetPresetsEl = document.getElementById('stock-target-presets');
+        const inputTargetPct = document.getElementById('input-stock-target-pct');
+
+        function applyTargetProfitPct(nextPct, syncInput = true) {
+            const parsed = Number(nextPct);
+            const clamped = Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 0;
+            stockTargetProfitPct = clamped;
+            try {
+                localStorage.setItem(TARGET_PROFIT_STORAGE_KEY, String(clamped));
+            } catch (e) {}
+
+            if (syncInput && inputTargetPct) {
+                inputTargetPct.value = formatTargetPctLabel(clamped);
+            }
+            if (targetPresetsEl) {
+                targetPresetsEl.querySelectorAll('.target-preset-btn').forEach((btn) => {
+                    const presetVal = parseFloat(btn.getAttribute('data-pct'));
+                    btn.classList.toggle('active', Math.abs(presetVal - clamped) < 1e-6);
+                });
+            }
+            refreshTargetPricesInCards();
+        }
+
+        if (inputTargetPct) {
+            inputTargetPct.value = formatTargetPctLabel(stockTargetProfitPct);
+            inputTargetPct.addEventListener('input', () => {
+                const raw = inputTargetPct.value.trim();
+                if (raw === '') return;
+                const val = parseFloat(raw);
+                if (Number.isFinite(val)) {
+                    applyTargetProfitPct(val, false);
+                }
+            });
+            inputTargetPct.addEventListener('blur', () => {
+                const val = parseFloat(inputTargetPct.value);
+                applyTargetProfitPct(Number.isFinite(val) ? val : 1, true);
+            });
+        }
+        if (targetPresetsEl) {
+            targetPresetsEl.querySelectorAll('.target-preset-btn').forEach((btn) => {
+                const presetVal = parseFloat(btn.getAttribute('data-pct'));
+                btn.classList.toggle('active', Math.abs(presetVal - stockTargetProfitPct) < 1e-6);
+                btn.addEventListener('click', () => {
+                    applyTargetProfitPct(presetVal, true);
+                });
+            });
+        }
 
         const modalSearch = document.getElementById('modal-stock-search');
         const btnCloseSearch = document.getElementById('btn-close-stock-search');

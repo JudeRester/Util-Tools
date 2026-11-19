@@ -880,6 +880,94 @@ body.state-expanded .widget-panel {
     gap: 4px;
 }
 
+.stock-target-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin-bottom: 8px;
+}
+
+.stock-target-bar-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.stock-target-presets {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.target-preset-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.target-preset-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-main);
+}
+
+.target-preset-btn.active {
+    background: rgba(251, 191, 36, 0.16);
+    border-color: rgba(251, 191, 36, 0.55);
+    color: #fbbf24;
+}
+
+.stock-target-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: var(--bg-base);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 1px 5px;
+}
+
+.stock-target-input-wrap:focus-within {
+    border-color: rgba(251, 191, 36, 0.65);
+}
+
+.stock-target-input {
+    width: 34px;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #fbbf24;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    user-select: text;
+    -moz-appearance: textfield;
+}
+
+.stock-target-input::-webkit-outer-spin-button,
+.stock-target-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.stock-target-unit {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
 .stock-key-notice {
     display: flex;
     align-items: center;
@@ -1047,18 +1135,38 @@ body.state-expanded .widget-panel {
     border-right: 1px solid var(--border-color);
 }
 
-.stock-breakeven-label {
+.stock-sell-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 4px;
+    line-height: 1.25;
+}
+
+.stock-sell-tag {
     font-size: 9px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--success);
-    opacity: 0.9;
-    line-height: 1.1;
+    opacity: 0.85;
+    white-space: nowrap;
+}
+
+.stock-target-tag {
+    color: #fbbf24;
 }
 
 .stock-breakeven-price {
-    font-size: 11.5px;
+    font-size: 11px;
     font-weight: 600;
     color: #34d399;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.stock-target-price {
+    font-size: 11px;
+    font-weight: 600;
+    color: #fbbf24;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
