@@ -9,6 +9,7 @@ import sys
 import uuid
 import time
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 # 루트 디렉토리 sys.path 추가
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -16,6 +17,7 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from services.db_service import init_db, get_db_connection
+import services.imap_service as imap_service
 from services.imap_service import (
     get_imap_config,
     save_imap_config,
@@ -27,6 +29,8 @@ from services.imap_service import (
     _quote_imap_folder,
     _build_xoauth2_bytes,
     _get_valid_google_access_token,
+    _has_gmail_imap_scope,
+    _connect_and_auth_imap,
 )
 from services.ai_search_service import embed_new_emails
 
@@ -240,12 +244,164 @@ def test_email_auto_vector_embedding():
     print("  [PASS] test_email_auto_vector_embedding")
 
 
+def test_google_oauth_scope_guard():
+    print("[RUN] test_google_oauth_scope_guard...")
+    init_db()
+
+    # 1. 스코프 판별 유틸 검증
+    assert _has_gmail_imap_scope("email https://mail.google.com/ openid") is True
+    assert _has_gmail_imap_scope(["https://mail.google.com"]) is True
+    assert _has_gmail_imap_scope("email https://www.googleapis.com/auth/userinfo.email openid") is False
+    assert _has_gmail_imap_scope("") is False
+    assert _has_gmail_imap_scope(None) is False
+
+    # 2. MISSING_MAIL_SCOPE 한국어 안내 포매팅 검증
+    scope_err_msg = _format_imap_error(
+        Exception("MISSING_MAIL_SCOPE: Google OAuth 2.0 토큰에 https://mail.google.com/ 권한이 없습니다."),
+        "imap.gmail.com",
+        "oauth2_google",
+    )
+    assert "https://mail.google.com/" in scope_err_msg
+    assert "체크박스" in scope_err_msg
+
+    # 3. DB 백업 후 스코프 누락 토큰 자동 초기화 및 1회 강제 리프레시 복구 검증
+    conn = get_db_connection()
+    backup_rows = []
+    try:
+        rows = conn.execute("SELECT * FROM imap_accounts").fetchall()
+        backup_rows = [dict(r) for r in rows if r["username"] != "scope_tester@gmail.com"]
+        conn.execute("DELETE FROM imap_accounts")
+        conn.commit()
+    finally:
+        conn.close()
+
+    try:
+        future_exp = int(time.time()) + 3600
+        save_imap_config({
+            "account_name": "scope_tester@gmail.com",
+            "host": "imap.gmail.com",
+            "port": 993,
+            "use_ssl": True,
+            "username": "scope_tester@gmail.com",
+            "auth_type": "oauth2_google",
+            "oauth_client_id": "12345-abcde.apps.googleusercontent.com",
+            "oauth_client_secret": "GOCSPX-secret123",
+            "oauth_refresh_token": "1//refresh_no_scope",
+            "oauth_access_token": "ya29.access_no_scope",
+            "oauth_token_expiry": future_exp,
+            "folder": "INBOX",
+            "poll_interval_minutes": 15,
+        })
+        merged_cfg = {
+            "oauth_client_id": "12345-abcde.apps.googleusercontent.com",
+            "oauth_client_secret": "GOCSPX-secret123",
+            "oauth_refresh_token": "1//refresh_no_scope",
+            "oauth_access_token": "ya29.access_no_scope",
+            "oauth_token_expiry": future_exp,
+        }
+
+        # Case A: 토큰 자체는 유효하나 Gmail 스코프 누락 -> DB 토큰 초기화 + MISSING_MAIL_SCOPE 예외
+        fake_client = MagicMock()
+        with patch.object(imap_service, "_connect_imap", return_value=fake_client), \
+             patch.object(imap_service, "_authenticate_imap_client", side_effect=Exception(b"[AUTHENTICATIONFAILED] Invalid credentials (Failure)")), \
+             patch.object(imap_service, "_inspect_google_access_token", return_value={"valid": True, "scopes": {"email", "openid"}}):
+            raised_msg = ""
+            try:
+                _connect_and_auth_imap(
+                    "imap.gmail.com", 993, True, "oauth2_google",
+                    "scope_tester@gmail.com", merged_cfg=merged_cfg, timeout=5
+                )
+            except Exception as ex:
+                raised_msg = str(ex)
+            assert "MISSING_MAIL_SCOPE" in raised_msg
+
+        after_clear = get_imap_config()["config"]
+        assert after_clear["has_oauth_token"] is False
+        assert after_clear["oauth_token_expired"] is True
+
+        # Case B: 기존 Access Token이 만료/무효(valid=False)일 때 1회 강제 리프레시 후 인증 성공
+        save_imap_config({
+            "account_name": "scope_tester@gmail.com",
+            "host": "imap.gmail.com",
+            "port": 993,
+            "use_ssl": True,
+            "username": "scope_tester@gmail.com",
+            "auth_type": "oauth2_google",
+            "oauth_client_id": "12345-abcde.apps.googleusercontent.com",
+            "oauth_client_secret": "GOCSPX-secret123",
+            "oauth_refresh_token": "1//refresh_valid",
+            "oauth_access_token": "ya29.stale_token",
+            "oauth_token_expiry": future_exp,
+            "folder": "INBOX",
+        })
+        merged_cfg_b = {
+            "oauth_client_id": "12345-abcde.apps.googleusercontent.com",
+            "oauth_client_secret": "GOCSPX-secret123",
+            "oauth_refresh_token": "1//refresh_valid",
+            "oauth_access_token": "ya29.stale_token",
+            "oauth_token_expiry": future_exp,
+        }
+        client1 = MagicMock()
+        client2 = MagicMock()
+        auth_calls = []
+
+        def _fake_auth(cli, mode, user, password="", access_token=""):
+            auth_calls.append(access_token)
+            if access_token == "ya29.stale_token":
+                raise Exception(b"[AUTHENTICATIONFAILED] Invalid credentials (Failure)")
+
+        with patch.object(imap_service, "_connect_imap", side_effect=[client1, client2]), \
+             patch.object(imap_service, "_authenticate_imap_client", side_effect=_fake_auth), \
+             patch.object(imap_service, "_inspect_google_access_token", side_effect=[
+                 {"valid": False, "scopes": set()},
+                 {"valid": True, "scopes": {"https://mail.google.com/"}},
+             ]), \
+             patch.object(imap_service, "_refresh_google_access_token", return_value={"access_token": "ya29.fresh_token", "expires_in": 3600}):
+            res_client = _connect_and_auth_imap(
+                "imap.gmail.com", 993, True, "oauth2_google",
+                "scope_tester@gmail.com", merged_cfg=merged_cfg_b, timeout=5
+            )
+            assert res_client is client2
+            assert auth_calls == ["ya29.stale_token", "ya29.fresh_token"]
+    finally:
+        conn = get_db_connection()
+        try:
+            conn.execute("DELETE FROM imap_accounts")
+            for r in backup_rows:
+                conn.execute("""
+                    INSERT INTO imap_accounts (
+                        id, account_name, host, port, use_ssl, username, password,
+                        auth_type, oauth_client_id, oauth_client_secret,
+                        oauth_refresh_token, oauth_access_token, oauth_token_expiry,
+                        folder, poll_interval_minutes, last_sync_at, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    r["id"], r["account_name"], r["host"], r["port"], r["use_ssl"],
+                    r["username"], r.get("password") or "",
+                    r.get("auth_type") or "password",
+                    r.get("oauth_client_id") or "",
+                    r.get("oauth_client_secret") or "",
+                    r.get("oauth_refresh_token") or "",
+                    r.get("oauth_access_token") or "",
+                    int(r.get("oauth_token_expiry") or 0),
+                    r["folder"], int(r.get("poll_interval_minutes") or 0), r["last_sync_at"],
+                    r["created_at"], r["updated_at"]
+                ))
+            conn.commit()
+        finally:
+            conn.close()
+
+    print("  [PASS] test_google_oauth_scope_guard")
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("  Running IMAP Email Archive & Vector Sync Functional Tests")
     print("=" * 60)
     test_imap_config_crud()
     test_imap_connection_validation()
+    test_google_oauth_scope_guard()
     test_email_auto_vector_embedding()
     print("=" * 60)
     print("  All IMAP & Vector Sync Functional Tests Passed Successfully!")
