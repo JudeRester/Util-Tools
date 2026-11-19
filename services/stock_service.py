@@ -32,15 +32,40 @@ _config_lock = threading.Lock()
 _cache_lock = threading.Lock()
 _token_lock = threading.Lock()
 _stream_lock = threading.Lock()
+_market_calendar_lock = threading.Lock()
+_toss_rate_lock = threading.Lock()
+_prev_close_backfill_lock = threading.Lock()
 
 _access_token: Optional[str] = None
 _token_expires_at: float = 0.0
+_last_token_fail_time: float = 0.0
+
+_toss_min_req_interval: float = 1.1
+_last_toss_req_time: float = 0.0
+_toss_next_allowed_time: float = 0.0
+_toss_rate_limited_until: float = 0.0
+_toss_forbidden_until: float = 0.0
+_last_429_log_time: float = 0.0
+_last_403_log_time: float = 0.0
+_last_batch_price_time: float = 0.0
+_prev_close_inflight: set = set()
 
 _fx_cache: Dict[str, Any] = {"data": None, "expires_at": 0.0}
 _quote_cache: Dict[str, Dict[str, Any]] = {}
 _master_cache: List[Dict[str, Any]] = []
 _prev_close_cache: Dict[str, Dict[str, Any]] = {}
 _market_calendar_cache: Dict[str, Dict[str, Any]] = {}
+
+
+class _TossRateLimitError(Exception):
+    """Raised when Toss Open API returns HTTP 429 or cooldown is active."""
+    pass
+
+
+class _TossForbiddenError(Exception):
+    """Raised when Toss Open API returns HTTP 403 Forbidden or forbidden cooldown is active."""
+    pass
+
 
 # Streaming State
 _is_streaming_active: bool = False
@@ -175,66 +200,232 @@ def save_stock_config(data: Dict[str, Any]) -> bool:
 
 
 # -----------------------------------------------------------------------------
-# Toss Open API OAuth2 Authentication
+# Toss Open API OAuth2 Authentication & Rate-Limited REST Client
 # -----------------------------------------------------------------------------
 
-def _fetch_access_token(client_id: str, client_secret: str) -> Optional[str]:
-    global _access_token, _token_expires_at
-    if not client_id or not client_secret:
-        return None
-
-    url = "https://openapi.tossinvest.com/oauth2/token"
-    payload = urllib.parse.urlencode({
-        "grant_type": "client_credentials",
-        "client_id": client_id.strip(),
-        "client_secret": client_secret.strip()
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        url,
-        data=payload,
-        headers={
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "UtilTools-EdgeWidget/1.0"
-        },
-        method="POST"
-    )
-
-    try:
-        with urllib.request.urlopen(req, timeout=5.0, context=_SSL_CTX) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            token = data.get("access_token")
-            expires_in = int(data.get("expires_in", 3600))
-            if token:
-                with _token_lock:
-                    _access_token = token
-                    _token_expires_at = time.time() + max(60, expires_in - 60)
-                logger.log_info("StockService", "Toss Open API OAuth2 access token issued successfully")
-                return token
-    except Exception as e:
-        logger.log_warn("StockService", f"Failed to obtain Toss OAuth token: {e}")
-    return None
-
-
-def invalidate_access_token() -> None:
+def invalidate_access_token(failed_token: Optional[str] = None, reason: str = "") -> None:
     """Clear cached OAuth2 token so the next request/socket reconnect issues a fresh one."""
     global _access_token, _token_expires_at
     with _token_lock:
-        _access_token = None
-        _token_expires_at = 0.0
+        if failed_token is None or _access_token == failed_token:
+            if _access_token is not None:
+                suffix = f" ({reason})" if reason else ""
+                logger.log_info("StockService", f"Invalidating stale Toss OAuth2 access token for refresh{suffix}")
+            _access_token = None
+            _token_expires_at = 0.0
 
 
-def get_valid_token(min_ttl: float = 0.0) -> Optional[str]:
+def _update_toss_rate_from_headers(headers: Any) -> None:
+    """Adapt request spacing dynamically using Toss X-RateLimit-* response headers."""
+    global _toss_min_req_interval, _toss_next_allowed_time
+    if not headers:
+        return
+    try:
+        limit_raw = headers.get("X-RateLimit-Limit")
+        rem_raw = headers.get("X-RateLimit-Remaining")
+        reset_raw = headers.get("X-RateLimit-Reset")
+        with _toss_rate_lock:
+            if limit_raw is not None:
+                limit_val = float(limit_raw)
+                if limit_val <= 1.0:
+                    _toss_min_req_interval = max(_toss_min_req_interval, 1.15)
+                elif limit_val <= 2.0:
+                    _toss_min_req_interval = max(_toss_min_req_interval, 0.7)
+            if rem_raw is not None and float(rem_raw) <= 0.0:
+                reset_sec = float(reset_raw) if reset_raw is not None else _toss_min_req_interval
+                wait_s = max(1.05, min(30.0, reset_sec + 0.15))
+                _toss_next_allowed_time = max(_toss_next_allowed_time, time.time() + wait_s)
+    except Exception:
+        pass
+
+
+def _extract_toss_error_code(err: urllib.error.HTTPError) -> str:
+    """Safely extract Toss API error.code or message from an HTTPError body."""
+    try:
+        raw = err.read().decode("utf-8", errors="ignore").strip()
+        if raw:
+            try:
+                body = json.loads(raw)
+                err_obj = body.get("error") if isinstance(body, dict) else None
+                if isinstance(err_obj, dict) and err_obj.get("code"):
+                    return str(err_obj.get("code"))
+                if isinstance(body, dict) and body.get("error"):
+                    return str(body.get("error"))
+                if isinstance(body, dict) and body.get("message"):
+                    return str(body.get("message"))
+            except Exception:
+                return raw[:120]
+    except Exception:
+        pass
+    return ""
+
+
+def _wait_toss_rate_slot() -> None:
+    """Block until the next safe Toss REST API request slot is available."""
+    global _last_toss_req_time
+    with _toss_rate_lock:
+        now = time.time()
+        if now < _toss_rate_limited_until:
+            raise _TossRateLimitError("Toss REST API cooldown active")
+        if now < _toss_forbidden_until:
+            raise _TossForbiddenError("Toss REST API HTTP 403 cooldown active")
+        target_time = max(_last_toss_req_time + _toss_min_req_interval, _toss_next_allowed_time)
+        if target_time > now:
+            time.sleep(target_time - now)
+        _last_toss_req_time = time.time()
+
+
+def _fetch_access_token(client_id: str, client_secret: str) -> Optional[str]:
+    global _access_token, _token_expires_at, _last_token_fail_time, _last_toss_req_time
+    if not client_id or not client_secret:
+        return None
+
     with _token_lock:
-        if _access_token and (time.time() + max(0.0, min_ttl)) < _token_expires_at:
+        url = "https://openapi.tossinvest.com/oauth2/token"
+        payload = urllib.parse.urlencode({
+            "grant_type": "client_credentials",
+            "client_id": client_id.strip(),
+            "client_secret": client_secret.strip()
+        }).encode("utf-8")
+
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "User-Agent": "UtilTools-EdgeWidget/1.0"
+            },
+            method="POST"
+        )
+
+        # Space out token request so edge rate limiter does not see burst with adjacent REST call
+        with _toss_rate_lock:
+            now = time.time()
+            elapsed = now - _last_toss_req_time
+            if elapsed < _toss_min_req_interval:
+                time.sleep(_toss_min_req_interval - elapsed)
+            _last_toss_req_time = time.time()
+
+        try:
+            with urllib.request.urlopen(req, timeout=5.0, context=_SSL_CTX) as resp:
+                _update_toss_rate_from_headers(resp.headers)
+                data = json.loads(resp.read().decode("utf-8"))
+                token = data.get("access_token")
+                expires_in = int(data.get("expires_in", 3600))
+                if token:
+                    _access_token = token
+                    _token_expires_at = time.time() + max(60, expires_in - 60)
+                    _last_token_fail_time = 0.0
+                    logger.log_info("StockService", "Toss Open API OAuth2 access token issued successfully")
+                    return token
+        except Exception as e:
+            _last_token_fail_time = time.time()
+            logger.log_warn("StockService", f"Failed to obtain Toss OAuth token: {e}")
+        return None
+
+
+def get_valid_token(min_ttl: float = 0.0, force_refresh: bool = False) -> Optional[str]:
+    global _access_token, _token_expires_at, _last_token_fail_time
+    with _token_lock:
+        now = time.time()
+        if not force_refresh and _access_token and (now + max(0.0, min_ttl)) < _token_expires_at:
             return _access_token
+        if not force_refresh and _last_token_fail_time and (now - _last_token_fail_time) < 10.0:
+            return None
 
     conf = load_stock_config()
     cid = conf.get("client_id", "")
     csec = conf.get("client_secret", "")
     if cid and csec:
+        with _token_lock:
+            if not force_refresh and _access_token and (time.time() + max(0.0, min_ttl)) < _token_expires_at:
+                return _access_token
         return _fetch_access_token(cid, csec)
     return None
+
+
+def _toss_api_get_json(url: str, timeout: float = 3.0, retry_on_401: bool = True) -> Optional[Dict[str, Any]]:
+    """
+    Adaptive rate-limited GET helper for Toss Open API REST endpoints.
+    - Respects X-RateLimit-Limit / Remaining / Reset headers (including 1-TPS restricted IP ranges).
+    - Enforces 429 and 403 cooldown windows so cascading calls stop immediately.
+    - Automatically invalidates and refreshes OAuth2 token once on HTTP 401.
+    """
+    global _toss_min_req_interval, _toss_rate_limited_until, _toss_forbidden_until
+    global _last_429_log_time, _last_403_log_time
+
+    token = get_valid_token()
+    if not token:
+        return None
+
+    _wait_toss_rate_slot()
+
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "User-Agent": "UtilTools-EdgeWidget/1.0"
+        }
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CTX) as resp:
+            _update_toss_rate_from_headers(resp.headers)
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        err_code = _extract_toss_error_code(e)
+        if e.code == 401 and retry_on_401:
+            invalidate_access_token(token, reason=err_code or "HTTP 401")
+            new_token = get_valid_token(force_refresh=True)
+            if new_token:
+                return _toss_api_get_json(url, timeout=timeout, retry_on_401=False)
+            raise
+        if e.code == 403:
+            now = time.time()
+            with _toss_rate_lock:
+                _toss_forbidden_until = max(_toss_forbidden_until, now + 15.0)
+                should_log = (now - _last_403_log_time) >= 30.0
+                if should_log:
+                    _last_403_log_time = now
+            if should_log:
+                endpoint = urllib.parse.urlparse(url).path
+                detail = f", code={err_code}" if err_code else ""
+                logger.log_warn(
+                    "StockService",
+                    f"Toss API HTTP 403 Forbidden (endpoint={endpoint}{detail}); 허용 공인 IP(VPN/네트워크 변경) 또는 API 키 권한을 확인하세요."
+                )
+            raise _TossForbiddenError(err_code or str(e))
+        if e.code == 429:
+            retry_after = 5.0
+            limit_hdr = ""
+            try:
+                if e.headers:
+                    limit_hdr = str(e.headers.get("X-RateLimit-Limit") or "")
+                    hdr_val = e.headers.get("Retry-After")
+                    if hdr_val:
+                        retry_after = max(2.0, min(60.0, float(hdr_val) + 1.0))
+            except Exception:
+                pass
+            now = time.time()
+            with _toss_rate_lock:
+                _toss_min_req_interval = max(_toss_min_req_interval, 1.2)
+                _toss_rate_limited_until = max(_toss_rate_limited_until, now + retry_after)
+                should_log = (now - _last_429_log_time) >= 10.0
+                if should_log:
+                    _last_429_log_time = now
+            if should_log:
+                endpoint = urllib.parse.urlparse(url).path
+                detail_parts = [f"endpoint={endpoint}"]
+                if err_code:
+                    detail_parts.append(f"code={err_code}")
+                if limit_hdr:
+                    detail_parts.append(f"limit={limit_hdr}/s")
+                logger.log_warn(
+                    "StockService",
+                    f"Toss API rate limit (HTTP 429, {', '.join(detail_parts)}); pausing REST for {retry_after:.0f}s"
+                )
+            raise _TossRateLimitError(str(e))
+        raise
 
 
 # -----------------------------------------------------------------------------
@@ -254,32 +445,28 @@ def fetch_exchange_rates(force_refresh: bool = False) -> Dict[str, Any]:
     jpy_change = 0.0
 
     # 1. Try Toss Open API for USD/KRW (requires baseCurrency=USD&quoteCurrency=KRW)
-    token = get_valid_token()
     toss_success = False
-    if token:
-        try:
-            req = urllib.request.Request(
-                "https://openapi.tossinvest.com/api/v1/exchange-rate?baseCurrency=USD&quoteCurrency=KRW",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "User-Agent": "UtilTools-EdgeWidget/1.0"
-                }
-            )
-            with urllib.request.urlopen(req, timeout=3.0, context=_SSL_CTX) as resp:
-                tdata = json.loads(resp.read().decode("utf-8"))
-                item = tdata.get("result", {})
-                if item and "rate" in item:
-                    rate_val = float(item.get("rate", 0))
-                    mid_val = float(item.get("midRate", rate_val))
-                    chg_type = item.get("rateChangeType", "FLAT")
-                    chg_val = round(rate_val - mid_val, 2)
-                    if chg_type == "DOWN" and chg_val > 0:
-                        chg_val = -chg_val
-                    usd_krw = rate_val
-                    usd_change = chg_val
-                    toss_success = True
-        except Exception as e:
-            logger.log_warn("StockService", f"Toss FX fetch bypass: {e}")
+    try:
+        tdata = _toss_api_get_json(
+            "https://openapi.tossinvest.com/api/v1/exchange-rate?baseCurrency=USD&quoteCurrency=KRW",
+            timeout=3.0
+        )
+        if tdata:
+            item = tdata.get("result", {})
+            if item and "rate" in item:
+                rate_val = float(item.get("rate", 0))
+                mid_val = float(item.get("midRate", rate_val))
+                chg_type = item.get("rateChangeType", "FLAT")
+                chg_val = round(rate_val - mid_val, 2)
+                if chg_type == "DOWN" and chg_val > 0:
+                    chg_val = -chg_val
+                usd_krw = rate_val
+                usd_change = chg_val
+                toss_success = True
+    except (_TossRateLimitError, _TossForbiddenError):
+        pass
+    except Exception as e:
+        logger.log_warn("StockService", f"Toss FX fetch bypass: {e}")
 
     # 2. Fetch JPY (and USD fallback) from Public Currency API
     try:
@@ -314,7 +501,7 @@ def fetch_exchange_rates(force_refresh: bool = False) -> Dict[str, Any]:
     }
 
     with _cache_lock:
-        _fx_cache = {"data": result, "expires_at": now + 60.0}
+        _fx_cache = {"data": result, "expires_at": now + 120.0}
 
     return result
 
@@ -333,29 +520,26 @@ def sync_master_stocks_background() -> None:
         logger.log_info("StockService", "Starting stock universe sync from Toss Open API...")
         all_stocks = []
         for m in ['KOSPI', 'KOSDAQ', 'NASDAQ', 'NYSE']:
-            time.sleep(1.1)
+            time.sleep(1.2)
             url = f"https://openapi.tossinvest.com/api/v1/stocks/all?market={m}"
-            req = urllib.request.Request(
-                url,
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "User-Agent": "UtilTools-EdgeWidget/1.0"
-                }
-            )
             try:
-                with urllib.request.urlopen(req, timeout=5.0, context=_SSL_CTX) as r:
-                    d = json.loads(r.read().decode('utf-8'))
-                    items = d.get('result', [])
-                    for it in items:
-                        sym = it.get('symbol')
-                        nm = it.get('name')
-                        if sym and nm:
-                            all_stocks.append({
-                                'code': sym,
-                                'name': nm,
-                                'market': 'KR' if m in ('KOSPI', 'KOSDAQ') else 'US'
-                            })
-                    logger.log_debug("StockService", f"Synced {m}: {len(items)} items")
+                d = _toss_api_get_json(url, timeout=5.0)
+                if not d:
+                    continue
+                items = d.get('result', [])
+                for it in items:
+                    sym = it.get('symbol')
+                    nm = it.get('name')
+                    if sym and nm:
+                        all_stocks.append({
+                            'code': sym,
+                            'name': nm,
+                            'market': 'KR' if m in ('KOSPI', 'KOSDAQ') else 'US'
+                        })
+                logger.log_debug("StockService", f"Synced {m}: {len(items)} items")
+            except (_TossRateLimitError, _TossForbiddenError):
+                logger.log_warn("StockService", f"Skipped remaining master sync due to API restriction at {m}")
+                break
             except Exception as e:
                 logger.log_warn("StockService", f"Failed to sync {m} stocks: {e}")
 
@@ -372,6 +556,7 @@ def sync_master_stocks_background() -> None:
                 logger.log_error("StockService", f"Failed to save stock master: {e}")
 
     threading.Thread(target=_run, name="StockMasterSyncThread", daemon=True).start()
+
 
 def load_master_stocks() -> List[Dict[str, Any]]:
     global _master_cache
@@ -393,60 +578,112 @@ def load_master_stocks() -> List[Dict[str, Any]]:
 
 
 def fetch_regular_market_close_cut(market: str, token: Optional[str] = None) -> Optional[str]:
-    """Fetch previous business day regular market end time cut for candle querying."""
+    """Fetch previous business day regular market end time cut with lock to prevent cache stampede."""
     now = time.time()
     with _cache_lock:
         cached = _market_calendar_cache.get(market)
         if cached and now < cached.get("expires_at", 0.0):
             return cached.get("cut_time")
 
-    if not token:
-        token = get_valid_token()
-    if not token:
-        return None
+    with _market_calendar_lock:
+        now = time.time()
+        with _cache_lock:
+            cached = _market_calendar_cache.get(market)
+            if cached and now < cached.get("expires_at", 0.0):
+                return cached.get("cut_time")
 
+        try:
+            url = f"https://openapi.tossinvest.com/api/v1/market-calendar/{market}"
+            data = _toss_api_get_json(url, timeout=3.0)
+            if data:
+                prev_biz = data.get("result", {}).get("previousBusinessDay", {})
+                cut_time = None
+                if market == "KR":
+                    end_t = prev_biz.get("integrated", {}).get("regularMarket", {}).get("endTime")
+                    if end_t:
+                        if "15:30:00" in end_t:
+                            cut_time = end_t.replace("15:30:00", "15:31:00")
+                        else:
+                            cut_time = end_t
+                else:
+                    cut_time = prev_biz.get("regularMarket", {}).get("endTime")
+
+                if cut_time:
+                    with _cache_lock:
+                        _market_calendar_cache[market] = {
+                            "cut_time": cut_time,
+                            "expires_at": time.time() + 1800.0
+                        }
+                    return cut_time
+        except (_TossRateLimitError, _TossForbiddenError):
+            with _cache_lock:
+                _market_calendar_cache[market] = {
+                    "cut_time": None,
+                    "expires_at": time.time() + 60.0
+                }
+            return None
+        except Exception as e:
+            logger.log_debug("StockService", f"Market calendar fetch notice for {market}: {e}")
+            with _cache_lock:
+                _market_calendar_cache[market] = {
+                    "cut_time": None,
+                    "expires_at": time.time() + 30.0
+                }
+
+    return None
+
+
+def _fetch_kr_prev_close_naver(symbol: str) -> Optional[float]:
+    """Fetch KR stock previous close via Naver Finance mobile basic API (uses no Toss quota)."""
     try:
-        url = f"https://openapi.tossinvest.com/api/v1/market-calendar/{market}"
+        clean_sym = symbol.replace(".KS", "").replace(".KQ", "")
+        url = f"https://m.stock.naver.com/api/stock/{clean_sym}/basic"
         req = urllib.request.Request(
             url,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "User-Agent": "UtilTools-EdgeWidget/1.0"
-            }
+            headers={"User-Agent": "Mozilla/5.0"}
         )
-        with urllib.request.urlopen(req, timeout=3.0, context=_SSL_CTX) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            prev_biz = data.get("result", {}).get("previousBusinessDay", {})
-            cut_time = None
-            if market == "KR":
-                end_t = prev_biz.get("integrated", {}).get("regularMarket", {}).get("endTime")
-                if end_t:
-                    # Closing auction candle matches at 15:30:xx, recorded as 15:31:00 in 1m candles
-                    if "15:30:00" in end_t:
-                        cut_time = end_t.replace("15:30:00", "15:31:00")
-                    else:
-                        cut_time = end_t
-            else:
-                cut_time = prev_biz.get("regularMarket", {}).get("endTime")
-
-            if cut_time:
-                with _cache_lock:
-                    _market_calendar_cache[market] = {
-                        "cut_time": cut_time,
-                        "expires_at": now + 1800.0  # 30 minutes TTL
-                    }
-                return cut_time
+        with urllib.request.urlopen(req, timeout=2.5) as resp:
+            ndata = json.loads(resp.read().decode("utf-8"))
+            cur_str = str(ndata.get("closePrice", "0")).replace(",", "")
+            diff_str = str(ndata.get("compareToPreviousClosePrice", "0")).replace(",", "")
+            cur_p = float(cur_str)
+            diff_p = float(diff_str)
+            if cur_p > 0:
+                return cur_p - diff_p
     except Exception as e:
-        logger.log_debug("StockService", f"Market calendar fetch notice for {market}: {e}")
+        logger.log_debug("StockService", f"Naver prev close fallback failed for {symbol}: {e}")
+    return None
 
+
+def _fetch_us_prev_close_yahoo(symbol: str) -> Optional[float]:
+    """Fetch US stock previous regular close via Yahoo Finance chart API (uses no Toss quota)."""
+    try:
+        yahoo_sym = symbol.strip().upper().replace(".", "-")
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(yahoo_sym)}?range=1d&interval=1d"
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        with urllib.request.urlopen(req, timeout=2.5, context=_SSL_CTX) as resp:
+            ydata = json.loads(resp.read().decode("utf-8"))
+            res_list = ydata.get("chart", {}).get("result") or []
+            if res_list:
+                meta = res_list[0].get("meta", {})
+                prev_c = meta.get("previousClose")
+                if prev_c is None:
+                    prev_c = meta.get("chartPreviousClose")
+                if prev_c is not None and float(prev_c) > 0:
+                    return round(float(prev_c), 4)
+    except Exception as e:
+        logger.log_debug("StockService", f"Yahoo prev close fetch notice for {symbol}: {e}")
     return None
 
 
 def fetch_prev_close(symbol: str, token: Optional[str] = None) -> Optional[float]:
     """
     Fetch previous regular session close price (전일 정규장 종가 기준).
-    Uses Toss Open API 1m candle at previous regular close cut time,
-    with Naver Finance fallback for KR stocks and 1d daily candle fallback.
+    - Uses Naver Finance (KR) and Yahoo Finance (US) first to consume zero Toss Open API quota.
+    - Falls back to Toss Open API candles (rate-limited) only if external lookup fails.
     """
     if not symbol:
         return None
@@ -457,70 +694,42 @@ def fetch_prev_close(symbol: str, token: Optional[str] = None) -> Optional[float
         if cached and now < cached.get("expires_at", 0.0):
             return cached.get("price")
 
-    if not token:
-        token = get_valid_token()
-
     is_kr = symbol.isdigit() or symbol.endswith(".KS") or symbol.endswith(".KQ")
     market = "KR" if is_kr else "US"
     prev_close = None
+    blocked_or_limited = False
 
-    # Method 1: Query Toss 1m candle before regular session close cut
-    if token:
-        cut_time = fetch_regular_market_close_cut(market, token)
+    # Primary: Zero-Toss-quota lookups (Naver Finance for KR, Yahoo Finance for US)
+    if is_kr:
+        prev_close = _fetch_kr_prev_close_naver(symbol)
+    else:
+        prev_close = _fetch_us_prev_close_yahoo(symbol)
+
+    # Fallback 1: Query Toss 1m candle before regular session close cut
+    if prev_close is None:
+        cut_time = fetch_regular_market_close_cut(market)
         if cut_time:
             try:
                 url = (
                     f"https://openapi.tossinvest.com/api/v1/candles"
                     f"?symbol={urllib.parse.quote(symbol)}&interval=1m&before={urllib.parse.quote(cut_time)}&count=1"
                 )
-                req = urllib.request.Request(
-                    url,
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "User-Agent": "UtilTools-EdgeWidget/1.0"
-                    }
-                )
-                with urllib.request.urlopen(req, timeout=3.0, context=_SSL_CTX) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
+                data = _toss_api_get_json(url, timeout=3.0)
+                if data:
                     candles = data.get("result", {}).get("candles", [])
                     if candles and candles[0].get("closePrice") is not None:
                         prev_close = float(candles[0].get("closePrice"))
+            except (_TossRateLimitError, _TossForbiddenError):
+                blocked_or_limited = True
             except Exception as e:
                 logger.log_debug("StockService", f"1m regular close candle fetch failed for {symbol}: {e}")
 
-    # Method 2: Fallback for KR stocks via Naver Finance mobile basic API
-    if prev_close is None and is_kr:
-        try:
-            clean_sym = symbol.replace(".KS", "").replace(".KQ", "")
-            url = f"https://m.stock.naver.com/api/stock/{clean_sym}/basic"
-            req = urllib.request.Request(
-                url,
-                headers={"User-Agent": "Mozilla/5.0"}
-            )
-            with urllib.request.urlopen(req, timeout=2.5) as resp:
-                ndata = json.loads(resp.read().decode("utf-8"))
-                cur_str = ndata.get("closePrice", "0").replace(",", "")
-                diff_str = ndata.get("compareToPreviousClosePrice", "0").replace(",", "")
-                cur_p = float(cur_str)
-                diff_p = float(diff_str)
-                if cur_p > 0:
-                    prev_close = cur_p - diff_p
-        except Exception as e:
-            logger.log_debug("StockService", f"Naver prev close fallback failed for {symbol}: {e}")
-
-    # Method 3: Fallback via 1d daily candles (last trade price of previous day)
-    if prev_close is None and token:
+    # Fallback 2: Toss 1d daily candles (skip if already rate-limited or forbidden)
+    if prev_close is None and not blocked_or_limited:
         try:
             url = f"https://openapi.tossinvest.com/api/v1/candles?symbol={urllib.parse.quote(symbol)}&interval=1d"
-            req = urllib.request.Request(
-                url,
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "User-Agent": "UtilTools-EdgeWidget/1.0"
-                }
-            )
-            with urllib.request.urlopen(req, timeout=3.0, context=_SSL_CTX) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+            data = _toss_api_get_json(url, timeout=3.0)
+            if data:
                 candles = data.get("result", {}).get("candles", [])
                 if len(candles) >= 2:
                     c_val = candles[1].get("closePrice")
@@ -530,6 +739,8 @@ def fetch_prev_close(symbol: str, token: Optional[str] = None) -> Optional[float
                     o_val = candles[0].get("openPrice")
                     if o_val is not None:
                         prev_close = float(o_val)
+        except (_TossRateLimitError, _TossForbiddenError):
+            blocked_or_limited = True
         except Exception as e:
             logger.log_warn("StockService", f"Failed to fetch prev close for {symbol}: {e}")
 
@@ -537,55 +748,113 @@ def fetch_prev_close(symbol: str, token: Optional[str] = None) -> Optional[float
         with _cache_lock:
             _prev_close_cache[symbol] = {
                 "price": prev_close,
-                "expires_at": now + 300.0
+                "expires_at": time.time() + 3600.0
             }
         return prev_close
 
     return None
 
 
-def fetch_initial_prices(symbols: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
-    """Fetch initial quotes using batch GET /api/v1/prices?symbols=..."""
-    token = get_valid_token()
+def _schedule_prev_close_backfill(codes: List[str]) -> None:
+    """Sequentially backfill uncached prev_close values in the background without consuming Toss quota."""
+    to_fetch = []
+    with _prev_close_backfill_lock:
+        for c in codes:
+            if c and c not in _prev_close_inflight:
+                _prev_close_inflight.add(c)
+                to_fetch.append(c)
+
+    if not to_fetch:
+        return
+
+    def _worker():
+        try:
+            for c in to_fetch:
+                if _stop_streaming_event.is_set():
+                    break
+                try:
+                    prev_close = fetch_prev_close(c)
+                    if prev_close is None:
+                        continue
+                    with _cache_lock:
+                        q = _quote_cache.get(c)
+                        if not q:
+                            continue
+                        p_val = float(q.get("price", 0.0))
+                        curr = q.get("currency", "KRW" if c.isdigit() else "USD")
+                        is_us = curr == "USD" or not c.isdigit()
+                        c_val = round(p_val - prev_close, 2 if is_us else 0)
+                        cr_val = round((c_val / prev_close * 100), 2) if prev_close else 0.0
+                        q["base_price"] = prev_close
+                        q["change"] = c_val
+                        q["change_rate"] = cr_val
+                        update_payload = {
+                            "code": c,
+                            "price": p_val,
+                            "prev_price": p_val,
+                            "tick_diff": 0.0,
+                            "base_price": prev_close,
+                            "change": c_val,
+                            "change_rate": cr_val,
+                            "session": q.get("session", "REG"),
+                            "currency": curr,
+                            "formatted_price": q.get("formatted_price"),
+                            "silent": True
+                        }
+                    broadcast_tick_update(update_payload)
+                except Exception as ex:
+                    logger.log_debug("StockService", f"Background prev_close backfill notice for {c}: {ex}")
+                time.sleep(0.05)
+        finally:
+            with _prev_close_backfill_lock:
+                for c in to_fetch:
+                    _prev_close_inflight.discard(c)
+
+    threading.Thread(target=_worker, name="StockPrevCloseBackfillThread", daemon=True).start()
+
+
+def fetch_initial_prices(symbols: List[Dict[str, Any]], force_refresh: bool = False) -> Dict[str, Dict[str, Any]]:
+    """Fetch initial quotes using batch GET /api/v1/prices?symbols=... with rate-limit protection."""
+    global _last_batch_price_time, _last_rest_quote_sync
     results = {}
     code_list = [s.get("code") for s in symbols if s.get("code")]
 
-    # 1. Base skeleton
-    for sym in symbols:
-        code = sym.get("code", "")
-        name = sym.get("name", code)
-        market = sym.get("market", "KR" if code.isdigit() else "US")
-        base_p = 72000.0 if market == "KR" else 210.0
-        quote = {
-            "code": code,
-            "name": name,
-            "market": market,
-            "price": base_p,
-            "base_price": base_p,
-            "change": 0.0,
-            "change_rate": 0.0,
-            "session": "REG",
-            "currency": "KRW" if market == "KR" else "USD",
-            "formatted_price": f"{int(base_p):,}원" if market == "KR" else f"${base_p:,.2f}"
-        }
-        if code in _quote_cache:
-            quote.update(_quote_cache[code])
-        results[code] = quote
+    # 1. Base skeleton from cache or defaults
+    with _cache_lock:
+        for sym in symbols:
+            code = sym.get("code", "")
+            name = sym.get("name", code)
+            market = sym.get("market", "KR" if code.isdigit() else "US")
+            base_p = 72000.0 if market == "KR" else 210.0
+            quote = {
+                "code": code,
+                "name": name,
+                "market": market,
+                "price": base_p,
+                "base_price": base_p,
+                "change": 0.0,
+                "change_rate": 0.0,
+                "session": "REG",
+                "currency": "KRW" if market == "KR" else "USD",
+                "formatted_price": f"{int(base_p):,}원" if market == "KR" else f"${base_p:,.2f}"
+            }
+            if code in _quote_cache:
+                quote.update(_quote_cache[code])
+            results[code] = quote
 
-    # 2. Batch fetch live prices from Toss
-    if token and code_list:
+    # 2. Batch fetch live prices from Toss (skip if recently fetched within 5s unless forced or uncached)
+    now = time.time()
+    has_uncached_quote = any(c not in _quote_cache for c in code_list)
+    should_fetch_batch = bool(code_list) and (force_refresh or has_uncached_quote or (now - _last_batch_price_time) >= 5.0)
+    if should_fetch_batch:
         try:
-            symbols_param = urllib.parse.quote(",".join(code_list))
-            url = f"https://openapi.tossinvest.com/api/v1/prices?symbols={symbols_param}"
-            req = urllib.request.Request(
-                url,
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "User-Agent": "UtilTools-EdgeWidget/1.0"
-                }
-            )
-            with urllib.request.urlopen(req, timeout=3.0, context=_SSL_CTX) as resp:
-                pdata = json.loads(resp.read().decode("utf-8"))
+            for i in range(0, len(code_list), 50):
+                chunk = code_list[i:i + 50]
+                symbols_param = urllib.parse.quote(",".join(chunk))
+                url = f"https://openapi.tossinvest.com/api/v1/prices?symbols={symbols_param}"
+                pdata = _toss_api_get_json(url, timeout=3.0)
+                if not pdata:
+                    continue
                 items = pdata.get("result", [])
                 for it in items:
                     c = it.get("symbol")
@@ -595,22 +864,32 @@ def fetch_initial_prices(symbols: List[Dict[str, Any]]) -> Dict[str, Dict[str, A
                         results[c]["price"] = p_val
                         results[c]["currency"] = curr
                         results[c]["formatted_price"] = f"{int(p_val):,}원" if curr == "KRW" else f"${p_val:,.2f}"
+            _last_batch_price_time = time.time()
+        except (_TossRateLimitError, _TossForbiddenError):
+            pass
         except Exception as e:
             logger.log_warn("StockService", f"Batch prices fetch notice: {e}")
 
-    # Concurrently fetch previous regular session close for all symbols
+    # 3. Resolve prev_close from cache first; backfill missing symbols calmly to avoid 429 bursts
     prev_closes = {}
-    if token and code_list:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(code_list) or 1)) as executor:
-            future_to_code = {executor.submit(fetch_prev_close, c, token): c for c in code_list}
-            for future in concurrent.futures.as_completed(future_to_code):
-                c = future_to_code[future]
-                try:
-                    res = future.result()
-                    if res is not None:
-                        prev_closes[c] = res
-                except Exception as ex:
-                    logger.log_warn("StockService", f"Error fetching prev close for {c}: {ex}")
+    missing_codes = []
+    now = time.time()
+    with _cache_lock:
+        for c in code_list:
+            cached = _prev_close_cache.get(c)
+            if cached and now < cached.get("expires_at", 0.0):
+                prev_closes[c] = cached.get("price")
+            else:
+                missing_codes.append(c)
+
+    if missing_codes:
+        if len(missing_codes) <= 2:
+            for c in missing_codes:
+                res = fetch_prev_close(c)
+                if res is not None:
+                    prev_closes[c] = res
+        else:
+            _schedule_prev_close_backfill(missing_codes)
 
     for c in code_list:
         if c not in results:
@@ -618,10 +897,9 @@ def fetch_initial_prices(symbols: List[Dict[str, Any]]) -> Dict[str, Dict[str, A
         p_val = results[c]["price"]
         prev_close = prev_closes.get(c)
         if prev_close is None:
-            with _cache_lock:
-                cached = _prev_close_cache.get(c)
-                if cached:
-                    prev_close = cached.get("price")
+            existing_base = results[c].get("base_price")
+            if existing_base and existing_base > 0 and existing_base != 72000.0 and existing_base != 210.0:
+                prev_close = existing_base
         base_p = prev_close or p_val
         results[c]["base_price"] = base_p
         is_us = results[c]["currency"] == "USD" or not c.isdigit()
@@ -634,7 +912,6 @@ def fetch_initial_prices(symbols: List[Dict[str, Any]]) -> Dict[str, Dict[str, A
         for c, q in results.items():
             _quote_cache[c] = q
 
-    global _last_rest_quote_sync
     _last_rest_quote_sync = time.time()
 
     return results
@@ -662,15 +939,30 @@ def broadcast_tick_update(tick_data: Dict[str, Any]) -> None:
     if not code:
         return
 
+    with _cache_lock:
+        existing = _quote_cache.get(code)
+        old_price = float(existing.get("price", 0.0)) if existing and existing.get("price") is not None else None
+
+    new_price = tick_data.get("price")
+    if new_price is not None:
+        new_p = float(new_price)
+        if "prev_price" not in tick_data and old_price is not None and old_price > 0:
+            tick_data["prev_price"] = old_price
+        if "tick_diff" not in tick_data:
+            ref_p = tick_data.get("prev_price")
+            tick_data["tick_diff"] = round(new_p - float(ref_p), 4) if (ref_p is not None and float(ref_p) > 0) else 0.0
+
     now = time.time()
-    if now - _last_broadcast_time.get(code, 0.0) < 0.1:
+    is_silent = bool(tick_data.get("silent"))
+    if not is_silent and now - _last_broadcast_time.get(code, 0.0) < 0.1:
         with _cache_lock:
             if code in _quote_cache:
                 _quote_cache[code].update(tick_data)
             else:
                 _quote_cache[code] = tick_data
         return
-    _last_broadcast_time[code] = now
+    if not is_silent:
+        _last_broadcast_time[code] = now
 
     with _cache_lock:
         if code in _quote_cache:
@@ -838,13 +1130,15 @@ def _streaming_worker():
             conn_state = {
                 "opened": False,
                 "auth_error": False,
+                "forbidden_error": False,
                 "server_shutdown": False,
                 "ping_stop": threading.Event()
             }
 
             try:
                 ws_url = "wss://openapi-ws.tossinvest.com/ws/v1"
-                headers = [f"Authorization: Bearer {token}"]
+                ws_token = token
+                headers = [f"Authorization: Bearer {ws_token}"]
 
                 def on_message(ws, msg):
                     try:
@@ -862,12 +1156,12 @@ def _streaming_worker():
 
                         if msg_type == "error":
                             err_obj = data.get("error") or {}
-                            err_code = err_obj.get("code", "")
-                            err_msg = err_obj.get("message", "")
+                            err_code = str(data.get("code") or (err_obj.get("code") if isinstance(err_obj, dict) else "") or "")
+                            err_msg = str(data.get("message") or (err_obj.get("message") if isinstance(err_obj, dict) else err_obj) or "")
                             if err_code == "auth-revoked":
                                 logger.log_warn("StockService", f"WS auth revoked ({err_msg}), refreshing token and reconnecting")
                                 conn_state["auth_error"] = True
-                                invalidate_access_token()
+                                invalidate_access_token(ws_token, reason="ws auth-revoked")
                                 try:
                                     ws.close()
                                 except Exception:
@@ -896,6 +1190,9 @@ def _streaming_worker():
                                 curr = trade.get("currency", prev.get("currency") or ("USD" if not code.isdigit() else "KRW"))
                                 mkt = "KR" if curr == "KRW" or prev.get("market") == "KR" or code.isdigit() else "US"
 
+                                prev_p = float(prev.get("price", 0.0)) if prev.get("price") is not None else p_val
+                                tick_diff = round(p_val - prev_p, 4) if prev_p > 0 else 0.0
+
                                 base_p = float(prev.get("base_price", 0.0))
                                 if base_p <= 0:
                                     base_p = float(prev_close_cached or p_val)
@@ -920,6 +1217,8 @@ def _streaming_worker():
                                 tick = {
                                     "code": code,
                                     "price": p_val,
+                                    "prev_price": prev_p if prev_p > 0 else p_val,
+                                    "tick_diff": tick_diff,
                                     "change": c_val,
                                     "change_rate": cr_val,
                                     "session": sess,
@@ -956,6 +1255,10 @@ def _streaming_worker():
                     with _stream_lock:
                         if _active_ws is ws:
                             _active_ws = None
+                    msg_str = str(msg or "")
+                    if status == 401 or "401" in msg_str or "auth-revoked" in msg_str.lower():
+                        conn_state["auth_error"] = True
+                        invalidate_access_token(ws_token, reason=f"ws close {status or msg_str}")
                     if not _is_paused and not _stop_streaming_event.is_set():
                         logger.log_info("StockService", f"WebSocket closed: status={status}, msg={msg}")
 
@@ -964,12 +1267,21 @@ def _streaming_worker():
                     with _stream_lock:
                         if _active_ws is ws:
                             _active_ws = None
-                    err_str = str(err)
-                    if "401" in err_str or "Unauthorized" in err_str:
+                    err_str = str(err or "")
+                    err_lower = err_str.lower()
+                    if any(k in err_lower for k in ("401", "unauthorized", "auth-revoked")):
                         conn_state["auth_error"] = True
-                        invalidate_access_token()
+                        invalidate_access_token(ws_token, reason="ws error 401")
+                    elif "403" in err_str or "forbidden" in err_lower:
+                        conn_state["forbidden_error"] = True
                     if not _is_paused and not _stop_streaming_event.is_set():
-                        logger.log_warn("StockService", f"WebSocket error: {err}")
+                        if conn_state["forbidden_error"]:
+                            logger.log_warn(
+                                "StockService",
+                                f"WebSocket HTTP 403 Forbidden (허용 공인 IP·VPN·네트워크 상태를 확인하세요): {err_str}"
+                            )
+                        else:
+                            logger.log_warn("StockService", f"WebSocket error: {err_str}")
 
                 ws_app = websocket.WebSocketApp(
                     ws_url,
@@ -992,7 +1304,10 @@ def _streaming_worker():
                 continue
 
             if conn_state["auth_error"]:
-                invalidate_access_token()
+                invalidate_access_token(token, reason="ws auth_error")
+
+            if conn_state["forbidden_error"]:
+                _backoff_delay = max(_backoff_delay, 10.0)
 
             if conn_state["server_shutdown"]:
                 _backoff_delay = 1.0
@@ -1365,39 +1680,61 @@ def search_stock_master(query: str) -> List[Dict[str, Any]]:
 
     # Fallback to direct Toss API lookup if no local match and query resembles a symbol
     if not results and (q.isalnum() and len(q) <= 10):
-        token = get_valid_token()
-        if token:
-            try:
-                url = f"https://openapi.tossinvest.com/api/v1/stocks?symbols={urllib.parse.quote(query.strip().upper())}"
-                req = urllib.request.Request(
-                    url,
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "User-Agent": "UtilTools-EdgeWidget/1.0"
-                    }
-                )
-                with urllib.request.urlopen(req, timeout=2.0, context=_SSL_CTX) as r:
-                    d = json.loads(r.read().decode('utf-8'))
-                    items = d.get('result', d.get('data', []))
-                    if isinstance(items, list) and items:
-                        it = items[0]
-                        results.append({
-                            'code': it.get('symbol', query.strip().upper()),
-                            'name': it.get('name', query.strip().upper()),
-                            'market': it.get('market', 'KR' if query.isdigit() else 'US')
-                        })
-            except Exception as e:
-                logger.log_debug("StockService", f"Direct stock lookup error: {e}")
+        try:
+            url = f"https://openapi.tossinvest.com/api/v1/stocks?symbols={urllib.parse.quote(query.strip().upper())}"
+            d = _toss_api_get_json(url, timeout=2.0)
+            if d:
+                items = d.get('result', d.get('data', []))
+                if isinstance(items, list) and items:
+                    it = items[0]
+                    results.append({
+                        'code': it.get('symbol', query.strip().upper()),
+                        'name': it.get('name', query.strip().upper()),
+                        'market': it.get('market', 'KR' if query.isdigit() else 'US')
+                    })
+        except (_TossRateLimitError, _TossForbiddenError):
+            pass
+        except Exception as e:
+            logger.log_debug("StockService", f"Direct stock lookup error: {e}")
 
     return results
 
 
 @eel.expose
 def refresh_stock_data() -> Dict[str, Any]:
-    """Forces immediate FX and price quotes refresh."""
-    fetch_exchange_rates(force_refresh=True)
+    """Forces immediate FX and price quotes refresh without duplicate REST calls."""
     conf = load_stock_config()
-    with _cache_lock:
-        _quote_cache.clear()
-    fetch_initial_prices(conf.get("watchlist", []))
-    return get_stock_dashboard_data()
+    cid = conf.get("client_id", "").strip()
+    csec = conf.get("client_secret", "").strip()
+    api_configured = bool(cid and csec)
+
+    fx_data = fetch_exchange_rates(force_refresh=True)
+    watchlist = conf.get("watchlist", DEFAULT_WATCHLIST)
+    quotes_map = fetch_initial_prices(watchlist, force_refresh=True)
+
+    items = []
+    for w in watchlist:
+        code = w.get("code")
+        if code in quotes_map:
+            items.append(quotes_map[code])
+        else:
+            items.append({
+                "code": code,
+                "name": w.get("name", code),
+                "market": w.get("market", "KR"),
+                "price": 0.0,
+                "change": 0.0,
+                "change_rate": 0.0,
+                "session": "CLOSE",
+                "currency": "KRW" if w.get("market") == "KR" else "USD",
+                "formatted_price": "--"
+            })
+
+    return {
+        "status": "success",
+        "api_configured": api_configured,
+        "fx": fx_data,
+        "watchlist": items,
+        "groups": conf.get("groups", []),
+        "active_group_id": conf.get("active_group_id", "g_default")
+    }
