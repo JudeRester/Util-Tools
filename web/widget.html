@@ -165,6 +165,22 @@
                     </div>
                 </div>
 
+                <!-- 목표 수익률 설정 바 (매수·매도 수수료 분리 계산) -->
+                <div class="stock-target-bar" title="매수 0.1% · 매도 0.10206% 수수료를 매수가·매도가 기준으로 각각 분리 반영합니다">
+                    <span class="stock-target-bar-label">목표 수익</span>
+                    <div class="stock-target-presets" id="stock-target-presets">
+                        <button type="button" class="target-preset-btn" data-pct="0.5">0.5%</button>
+                        <button type="button" class="target-preset-btn active" data-pct="1">1%</button>
+                        <button type="button" class="target-preset-btn" data-pct="2">2%</button>
+                        <button type="button" class="target-preset-btn" data-pct="3">3%</button>
+                        <button type="button" class="target-preset-btn" data-pct="5">5%</button>
+                    </div>
+                    <div class="stock-target-input-wrap">
+                        <input type="number" id="input-stock-target-pct" class="stock-target-input" min="0" max="100" step="0.1" value="1" aria-label="목표 수익률 (%)" />
+                        <span class="stock-target-unit">%</span>
+                    </div>
+                </div>
+
                 <!-- API 키 미등록 안내 배너 -->
                 <div id="stock-key-notice" class="stock-key-notice" style="display: none;">
                     <div class="notice-content">
