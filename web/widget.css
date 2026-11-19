@@ -936,6 +936,7 @@ body.state-expanded .widget-panel {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -952,6 +953,7 @@ body.state-expanded .widget-panel {
     display: flex;
     flex-direction: column;
     gap: 3px;
+    flex: 1;
     min-width: 0;
 }
 
@@ -959,6 +961,7 @@ body.state-expanded .widget-panel {
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
 }
 
 .stock-name {
@@ -968,7 +971,7 @@ body.state-expanded .widget-panel {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 140px;
+    min-width: 0;
 }
 
 .stock-market-tag {
@@ -976,6 +979,7 @@ body.state-expanded .widget-panel {
     font-weight: 700;
     padding: 1px 4px;
     border-radius: 3px;
+    flex-shrink: 0;
 }
 
 .market-us {
@@ -1030,7 +1034,33 @@ body.state-expanded .widget-panel {
 .stock-card-right {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.stock-breakeven-col {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    padding-right: 8px;
+    border-right: 1px solid var(--border-color);
+}
+
+.stock-breakeven-label {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--success);
+    opacity: 0.9;
+    line-height: 1.1;
+}
+
+.stock-breakeven-price {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #34d399;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
 .stock-price-col {
@@ -1045,6 +1075,7 @@ body.state-expanded .widget-panel {
     font-weight: 700;
     color: var(--text-main);
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
 .stock-change {

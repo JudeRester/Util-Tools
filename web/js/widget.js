@@ -642,6 +642,32 @@
     let stockGroups = [];
     let activeStockGroupId = 'g_default';
     let stockWatchlistData = [];
+    const ROUND_TRIP_FEE_RATE = 0.0020206;
+
+    function computeBreakevenInfo(price, isKrw) {
+        const num = Number(price);
+        if (!Number.isFinite(num) || num <= 0) {
+            return {
+                formatted: '--',
+                tooltip: '매수+매도 수수료 0.20206% 기준 수익 매도가'
+            };
+        }
+        const exact = num * (1 + ROUND_TRIP_FEE_RATE);
+        if (isKrw) {
+            const ceilVal = Math.ceil(exact - 1e-9);
+            const formatted = `${ceilVal.toLocaleString()}원`;
+            return {
+                formatted,
+                tooltip: `매수+매도 수수료 0.20206% 기준 수익가: ${exact.toLocaleString(undefined, { maximumFractionDigits: 2 })}원 (${formatted} 이상 매도 시 수익)`
+            };
+        }
+        const ceilCents = Math.ceil(exact * 100 - 1e-9) / 100;
+        const formatted = `$${ceilCents.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        return {
+            formatted,
+            tooltip: `매수+매도 수수료 0.20206% 기준 수익가: $${exact.toFixed(4)} (${formatted} 이상 매도 시 수익)`
+        };
+    }
 
     window.onStockTickUpdate = function (tick) {
         if (!tick || !tick.code) return;
@@ -653,14 +679,22 @@
         const priceEl = card.querySelector('.stock-price');
         const changeEl = card.querySelector('.stock-change');
         const sessEl = card.querySelector('.session-badge');
+        const breakevenCol = card.querySelector('.stock-breakeven-col');
+        const breakevenPriceEl = card.querySelector('.stock-breakeven-price');
+        const isKrw = tick.currency === 'KRW' || (tick.code && /^\d+$/.test(tick.code));
 
         if (priceEl && tick.formatted_price) {
             priceEl.textContent = tick.formatted_price;
         }
 
+        if (breakevenPriceEl && typeof tick.price === 'number') {
+            const breakeven = computeBreakevenInfo(tick.price, isKrw);
+            breakevenPriceEl.textContent = breakeven.formatted;
+            if (breakevenCol) breakevenCol.title = breakeven.tooltip;
+        }
+
         if (changeEl && typeof tick.change === 'number') {
             const sign = tick.change > 0 ? '+' : (tick.change < 0 ? '-' : '');
-            const isKrw = tick.currency === 'KRW' || (tick.code && /^\d+$/.test(tick.code));
             const formattedChange = isKrw
                 ? Math.abs(tick.change).toLocaleString()
                 : Math.abs(tick.change).toFixed(2);
@@ -868,6 +902,10 @@
             const rate = typeof item.change_rate === 'number' ? item.change_rate : 0.0;
             const rateFormatted = `${sign}${Math.abs(rate).toFixed(2)}%`;
             const changeDisplay = `${sign}${formattedChange} (${rateFormatted})`;
+            const breakeven = computeBreakevenInfo(
+                (item.formatted_price && item.formatted_price !== '--') ? item.price : 0,
+                isKrw
+            );
 
             card.innerHTML = `
                 <div class="stock-card-left">
@@ -881,6 +919,10 @@
                     </div>
                 </div>
                 <div class="stock-card-right">
+                    <div class="stock-breakeven-col" title="${breakeven.tooltip}">
+                        <span class="stock-breakeven-label">수익 ≥</span>
+                        <span class="stock-breakeven-price">${breakeven.formatted}</span>
+                    </div>
                     <div class="stock-price-col">
                         <span class="stock-price">${item.formatted_price || '--'}</span>
                         <span class="stock-change ${chgClass}">${changeDisplay}</span>
