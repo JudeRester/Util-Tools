@@ -82,6 +82,11 @@ def _format_imap_error(err: Exception, host: str = "", auth_type: str = "passwor
             raw = str(first_arg)
 
     raw_upper = raw.upper()
+    if "MISSING_MAIL_SCOPE" in raw_upper or "MAIL.GOOGLE.COM" in raw_upper:
+        return (
+            "Google OAuth 2.0 토큰에 Gmail(IMAP) 접근 권한(https://mail.google.com/)이 누락되었습니다. "
+            "[Google 브라우저 로그인 및 권한 승인] 버튼을 눌러 동의 화면의 Gmail 권한 체크박스를 반드시 선택한 뒤 다시 로그인해 주세요."
+        )
     if "APPLICATION-SPECIFIC PASSWORD REQUIRED" in raw_upper or "185833" in raw_upper:
         return (
             "Google 계정은 일반 비밀번호 대신 16자리 '앱 비밀번호' 또는 'Google OAuth 2.0' 인증이 필요합니다."
@@ -244,13 +249,76 @@ def _get_latest_imap_account_row() -> Optional[Dict[str, Any]]:
         conn.close()
 
 
-def _get_valid_google_access_token(account_cfg: Dict[str, Any]) -> str:
-    """유효한 Google Access Token 반환 (만료 60초 전이면 자동 갱신 및 DB 업데이트)"""
+_GOOGLE_GMAIL_IMAP_SCOPE = "https://mail.google.com/"
+
+
+def _has_gmail_imap_scope(scopes: Any) -> bool:
+    """Google OAuth 토큰 스코프 목록에 Gmail 전체 메일함 접근 권한 포함 여부 확인"""
+    if isinstance(scopes, str):
+        scope_set = set(scopes.split())
+    elif scopes:
+        scope_set = set(scopes)
+    else:
+        return False
+    return "https://mail.google.com/" in scope_set or "https://mail.google.com" in scope_set
+
+
+def _inspect_google_access_token(access_token: str) -> Dict[str, Any]:
+    """Google tokeninfo API로 Access Token의 유효성 및 부여된 스코프 조회"""
+    tok = (access_token or "").strip()
+    if not tok:
+        return {"valid": False, "reason": "empty_token", "scopes": set()}
+    url = "https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=" + urllib.parse.quote(tok)
+    req = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            scopes = set((data.get("scope") or "").split())
+            return {
+                "valid": True,
+                "scopes": scopes,
+                "email": (data.get("email") or "").strip(),
+            }
+    except urllib.error.HTTPError as http_err:
+        if http_err.code in (400, 401):
+            return {"valid": False, "reason": f"http_{http_err.code}", "scopes": set()}
+        return {"valid": None, "reason": f"http_{http_err.code}", "scopes": set()}
+    except Exception as ex:
+        return {"valid": None, "reason": str(ex), "scopes": set()}
+
+
+def _clear_google_oauth_tokens(username: str = "") -> None:
+    """만료·철회·권한 누락된 Google OAuth 토큰을 DB에서 초기화하여 반복 백그라운드 실패 차단"""
+    try:
+        conn = get_db_connection()
+        try:
+            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if (username or "").strip():
+                conn.execute("""
+                    UPDATE imap_accounts
+                    SET oauth_refresh_token = '', oauth_access_token = '', oauth_token_expiry = 0, updated_at = ?
+                    WHERE username = ?
+                """, (now_str, username.strip()))
+            else:
+                conn.execute("""
+                    UPDATE imap_accounts
+                    SET oauth_refresh_token = '', oauth_access_token = '', oauth_token_expiry = 0, updated_at = ?
+                    WHERE id = (SELECT id FROM imap_accounts ORDER BY id DESC LIMIT 1)
+                """, (now_str,))
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
+
+def _get_valid_google_access_token(account_cfg: Dict[str, Any], force_refresh: bool = False) -> str:
+    """유효한 Google Access Token 반환 (만료 60초 전이거나 force_refresh=True면 자동 갱신 및 DB 업데이트)"""
     access_token = (account_cfg.get("oauth_access_token") or "").strip()
     expiry = int(account_cfg.get("oauth_token_expiry") or 0)
     now_ts = int(time.time())
 
-    if access_token and expiry > now_ts + 60:
+    if not force_refresh and access_token and expiry > now_ts + 60:
         return access_token
 
     client_id = (account_cfg.get("oauth_client_id") or "").strip()
@@ -449,9 +517,27 @@ def start_google_oauth_flow(client_id: str, client_secret: str, username: str = 
     refresh_token = (token_data.get("refresh_token") or "").strip()
     expires_in = int(token_data.get("expires_in") or 3600)
     token_expiry = int(time.time()) + expires_in
+    granted_scope = (token_data.get("scope") or "").strip()
 
     if not access_token:
         return {"status": "error", "message": "Google OAuth 토큰 응답에 access_token이 없습니다."}
+
+    # Gmail IMAP(XOAUTH2) 필수 스코프(https://mail.google.com/) 승인 여부 사전 검증
+    if granted_scope:
+        has_mail_scope = _has_gmail_imap_scope(granted_scope)
+    else:
+        t_info = _inspect_google_access_token(access_token)
+        has_mail_scope = True if t_info.get("valid") is None else _has_gmail_imap_scope(t_info.get("scopes"))
+
+    if not has_mail_scope:
+        log_event("warn", "IMAP", "Google OAuth 2.0 승인 거부: Gmail(IMAP) 접근 스코프(https://mail.google.com/)가 선택되지 않았습니다.")
+        return {
+            "status": "error",
+            "message": (
+                "Google 로그인 동의 화면에서 Gmail 메일함 접근 권한(https://mail.google.com/)이 선택되지 않았습니다. "
+                "브라우저 동의 화면의 Gmail 권한 체크박스를 반드시 체크한 뒤 다시 승인해 주세요."
+            )
+        }
 
     # 브라우저에서 실제 인증된 Google 계정 이메일 주소를 userinfo API로 조회하여 오타 자동 보정
     try:
@@ -478,23 +564,7 @@ def start_google_oauth_flow(client_id: str, client_secret: str, username: str = 
     if not refresh_token and prev_row and prev_row.get("oauth_refresh_token"):
         refresh_token = prev_row["oauth_refresh_token"]
 
-    save_imap_config({
-        "account_name": user_clean,
-        "host": "imap.gmail.com",
-        "port": 993,
-        "use_ssl": True,
-        "username": user_clean,
-        "password": (prev_row.get("password") if prev_row else "") or "",
-        "auth_type": "oauth2_google",
-        "oauth_client_id": client_id_clean,
-        "oauth_client_secret": client_secret_clean,
-        "oauth_refresh_token": refresh_token,
-        "oauth_access_token": access_token,
-        "oauth_token_expiry": token_expiry,
-        "folder": (prev_row.get("folder") if prev_row else "INBOX") or "INBOX",
-    })
-
-    # 발급된 토큰으로 즉시 Gmail IMAP 연결 및 폴더 목록 조회
+    # 발급된 토큰으로 Gmail IMAP 연결 및 폴더 목록 조회를 먼저 검증한 뒤 DB 저장 (실패 토큰 선저장 방지)
     folders = [{"name": "INBOX", "label": "INBOX (받은편지함)"}]
     try:
         client = _connect_imap("imap.gmail.com", 993, True, timeout=15)
@@ -517,6 +587,22 @@ def start_google_oauth_flow(client_id: str, client_secret: str, username: str = 
             "message": f"Gmail IMAP 서버 연결 실패: {conn_err}"
         }
 
+    save_imap_config({
+        "account_name": user_clean,
+        "host": "imap.gmail.com",
+        "port": 993,
+        "use_ssl": True,
+        "username": user_clean,
+        "password": (prev_row.get("password") if prev_row else "") or "",
+        "auth_type": "oauth2_google",
+        "oauth_client_id": client_id_clean,
+        "oauth_client_secret": client_secret_clean,
+        "oauth_refresh_token": refresh_token,
+        "oauth_access_token": access_token,
+        "oauth_token_expiry": token_expiry,
+        "folder": (prev_row.get("folder") if prev_row else "INBOX") or "INBOX",
+    })
+
     log_event("info", "IMAP", f"Google OAuth 2.0 (XOAUTH2) 인증 및 사서함 조회 성공: {user_clean} (폴더 {len(folders)}개)")
     return {
         "status": "success",
@@ -525,6 +611,67 @@ def start_google_oauth_flow(client_id: str, client_secret: str, username: str = 
         "has_token": True,
         "folders": folders,
     }
+
+
+def _connect_and_auth_imap(
+    host: str,
+    port: int,
+    use_ssl: bool,
+    auth_mode: str,
+    username: str,
+    password: str = "",
+    merged_cfg: Optional[Dict[str, Any]] = None,
+    timeout: int = 15,
+):
+    """IMAP 연결 및 인증 수행 (Google OAuth 2.0 토큰 만료/스코프 누락 시 1회 복구·진단)"""
+    access_token = ""
+    if auth_mode == "oauth2_google":
+        access_token = _get_valid_google_access_token(merged_cfg or {})
+
+    client = _connect_imap(host, port, use_ssl, timeout=timeout)
+    try:
+        _authenticate_imap_client(client, auth_mode, username, password=password, access_token=access_token)
+        return client
+    except Exception as auth_err:
+        try:
+            client.logout()
+        except Exception:
+            pass
+
+        if auth_mode != "oauth2_google":
+            raise
+
+        err_upper = str(auth_err).upper()
+        if "AUTHENTICATIONFAILED" not in err_upper and "INVALID CREDENTIALS" not in err_upper:
+            raise
+
+        t_info = _inspect_google_access_token(access_token)
+        if t_info.get("valid") is True and not _has_gmail_imap_scope(t_info.get("scopes")):
+            _clear_google_oauth_tokens(username)
+            raise Exception(
+                "MISSING_MAIL_SCOPE: Google OAuth 2.0 토큰에 https://mail.google.com/ 권한이 없습니다."
+            )
+
+        if t_info.get("valid") is False and merged_cfg is not None:
+            new_token = _get_valid_google_access_token(merged_cfg, force_refresh=True)
+            new_info = _inspect_google_access_token(new_token)
+            if new_info.get("valid") is True and not _has_gmail_imap_scope(new_info.get("scopes")):
+                _clear_google_oauth_tokens(username)
+                raise Exception(
+                    "MISSING_MAIL_SCOPE: Google OAuth 2.0 토큰에 https://mail.google.com/ 권한이 없습니다."
+                )
+            retry_client = _connect_imap(host, port, use_ssl, timeout=timeout)
+            try:
+                _authenticate_imap_client(retry_client, auth_mode, username, access_token=new_token)
+                return retry_client
+            except Exception:
+                try:
+                    retry_client.logout()
+                except Exception:
+                    pass
+                raise
+
+        raise
 
 
 @eel.expose
@@ -544,7 +691,7 @@ def test_imap_connection(
         host, username, password = _normalize_imap_credentials(host, username, password)
         port = int(port or 993)
 
-        access_token = ""
+        merged_cfg = None
         if auth_mode == "oauth2_google":
             saved_row = _get_latest_imap_account_row() or {}
             host = host or saved_row.get("host") or "imap.gmail.com"
@@ -559,26 +706,28 @@ def test_imap_connection(
                 merged_cfg["oauth_client_id"] = oauth_client_id.strip()
             if oauth_client_secret:
                 merged_cfg["oauth_client_secret"] = oauth_client_secret.strip()
-            access_token = _get_valid_google_access_token(merged_cfg)
         else:
             if not host or not username or not password:
                 return {"status": "error", "message": "호스트 주소, 계정 및 비밀번호를 모두 입력해 주세요."}
 
-        client = _connect_imap(host, port, use_ssl, timeout=12)
         try:
-            _authenticate_imap_client(client, auth_mode, username, password=password, access_token=access_token)
-            folders = _list_imap_folders(client)
-            client.logout()
+            client = _connect_and_auth_imap(
+                host, port, use_ssl, auth_mode, username,
+                password=password, merged_cfg=merged_cfg, timeout=12
+            )
+            try:
+                folders = _list_imap_folders(client)
+            finally:
+                try:
+                    client.logout()
+                except Exception:
+                    pass
             return {
                 "status": "success",
                 "message": "IMAP 서버 연결 및 인증에 성공했습니다.",
                 "folders": folders
             }
         except Exception as auth_err:
-            try:
-                client.logout()
-            except Exception:
-                pass
             friendly_msg = _format_imap_error(auth_err, host, auth_mode)
             log_event("warn", "IMAP", f"로그인 실패: {friendly_msg} (원본: {auth_err})")
             return {"status": "error", "message": friendly_msg}
@@ -835,17 +984,18 @@ def _run_imap_sync_worker(options: Dict[str, Any]):
     client = None
     try:
         _notify_sync_progress(0, 1, "IMAP 서버에 연결 중...", 0)
-        access_token = ""
+        merged_cfg = None
         if auth_type == "oauth2_google":
             merged_cfg = dict(saved_row)
             if options.get("oauth_client_id"):
                 merged_cfg["oauth_client_id"] = options["oauth_client_id"].strip()
             if options.get("oauth_client_secret"):
                 merged_cfg["oauth_client_secret"] = options["oauth_client_secret"].strip()
-            access_token = _get_valid_google_access_token(merged_cfg)
 
-        client = _connect_imap(host, port, use_ssl, timeout=20)
-        _authenticate_imap_client(client, auth_type, username, password=password, access_token=access_token)
+        client = _connect_and_auth_imap(
+            host, port, use_ssl, auth_type, username,
+            password=password, merged_cfg=merged_cfg, timeout=20
+        )
 
         # 1. 단방향 보존 원칙: readonly=True로 열어 서버 메일 상태(플래그/삭제)를 절대 건드리지 않음
         quoted_folder = _quote_imap_folder(folder)
@@ -1055,22 +1205,9 @@ def _run_imap_sync_worker(options: Dict[str, Any]):
         })
 
     except Exception as e:
-        err_str = str(e)
-        if "invalid_grant" in err_str.lower() and auth_type == "oauth2_google":
-            try:
-                conn = get_db_connection()
-                try:
-                    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    conn.execute("""
-                        UPDATE imap_accounts
-                        SET oauth_refresh_token = '', oauth_access_token = '', oauth_token_expiry = 0, updated_at = ?
-                        WHERE username = ?
-                    """, (now_str, username))
-                    conn.commit()
-                finally:
-                    conn.close()
-            except Exception:
-                pass
+        err_lower = str(e).lower()
+        if auth_type == "oauth2_google" and ("invalid_grant" in err_lower or "missing_mail_scope" in err_lower):
+            _clear_google_oauth_tokens(username)
         friendly_msg = _format_imap_error(e, host, auth_type)
         log_event("error", "IMAP", f"메일 동기화 중 에러: {friendly_msg} (원본: {e})")
         _notify_sync_error(friendly_msg)
