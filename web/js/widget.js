@@ -642,11 +642,31 @@
     let stockGroups = [];
     let activeStockGroupId = 'g_default';
     let stockWatchlistData = [];
+    const lastTickPrices = {};
+    const cardFlashTimers = {};
 
     window.onStockTickUpdate = function (tick) {
         if (!tick || !tick.code) return;
         const cached = stockWatchlistData.find(w => w.code === tick.code);
+        const prevPrice = (typeof lastTickPrices[tick.code] === 'number' && lastTickPrices[tick.code] > 0)
+            ? lastTickPrices[tick.code]
+            : ((cached && typeof cached.price === 'number' && cached.price > 0)
+                ? cached.price
+                : (typeof tick.prev_price === 'number' ? tick.prev_price : null));
+
+        const newPrice = typeof tick.price === 'number' ? tick.price : null;
+        let tickDiff = 0;
+        if (newPrice !== null && prevPrice !== null && prevPrice > 0) {
+            tickDiff = newPrice - prevPrice;
+        } else if (typeof tick.tick_diff === 'number') {
+            tickDiff = tick.tick_diff;
+        }
+
+        if (newPrice !== null && newPrice > 0) {
+            lastTickPrices[tick.code] = newPrice;
+        }
         if (cached) Object.assign(cached, tick);
+
         const card = document.querySelector(`.stock-card[data-code="${tick.code}"]`);
         if (!card) return;
 
@@ -675,12 +695,24 @@
             sessEl.className = `session-badge badge-${tick.session.toLowerCase()}`;
         }
 
-        // Pulse animation
-        const flashClass = (tick.change >= 0) ? 'tick-flash-up' : 'tick-flash-down';
-        if (!card.classList.contains('tick-flash-up') && !card.classList.contains('tick-flash-down')) {
-            card.classList.add(flashClass);
-            setTimeout(() => card.classList.remove(flashClass), 600);
+        if (tick.silent) return;
+
+        // Pulse animation based on movement relative to the immediately preceding tick
+        const flashClass = tickDiff > 0
+            ? 'tick-flash-up'
+            : (tickDiff < 0 ? 'tick-flash-down' : 'tick-flash-flat');
+
+        card.classList.remove('tick-flash-up', 'tick-flash-down', 'tick-flash-flat');
+        void card.offsetWidth; // Force reflow so rapid consecutive ticks re-trigger animation
+        card.classList.add(flashClass);
+
+        if (cardFlashTimers[tick.code]) {
+            clearTimeout(cardFlashTimers[tick.code]);
         }
+        cardFlashTimers[tick.code] = setTimeout(() => {
+            card.classList.remove('tick-flash-up', 'tick-flash-down', 'tick-flash-flat');
+            delete cardFlashTimers[tick.code];
+        }, 600);
     };
 
     async function loadStockDashboard() {
@@ -699,6 +731,11 @@
         stockGroups = data.groups || [];
         activeStockGroupId = data.active_group_id || (stockGroups[0] ? stockGroups[0].id : 'g_default');
         stockWatchlistData = data.watchlist || [];
+        stockWatchlistData.forEach((item) => {
+            if (item && item.code && typeof item.price === 'number' && item.price > 0) {
+                lastTickPrices[item.code] = item.price;
+            }
+        });
 
         // FX Ticker Bar
         const fx = data.fx || {};

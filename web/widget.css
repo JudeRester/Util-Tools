@@ -1086,21 +1086,48 @@ body.state-expanded .widget-panel {
 }
 
 .tick-flash-up {
-    animation: flashUp 0.5s ease-out;
+    animation: flashUp 0.55s ease-out;
 }
 
 .tick-flash-down {
-    animation: flashDown 0.5s ease-out;
+    animation: flashDown 0.55s ease-out;
+}
+
+.tick-flash-flat {
+    animation: flashFlat 0.45s ease-out;
 }
 
 @keyframes flashUp {
-    0% { background: rgba(244, 63, 94, 0.35); }
-    100% { background: var(--bg-card); }
+    0% {
+        background: rgba(244, 63, 94, 0.35);
+        border-color: rgba(244, 63, 94, 0.55);
+    }
+    100% {
+        background: var(--bg-card);
+        border-color: var(--border-color);
+    }
 }
 
 @keyframes flashDown {
-    0% { background: rgba(59, 130, 246, 0.35); }
-    100% { background: var(--bg-card); }
+    0% {
+        background: rgba(59, 130, 246, 0.35);
+        border-color: rgba(59, 130, 246, 0.55);
+    }
+    100% {
+        background: var(--bg-card);
+        border-color: var(--border-color);
+    }
+}
+
+@keyframes flashFlat {
+    0% {
+        background: rgba(148, 163, 184, 0.22);
+        border-color: rgba(148, 163, 184, 0.35);
+    }
+    100% {
+        background: var(--bg-card);
+        border-color: var(--border-color);
+    }
 }
 
 .stock-empty {
