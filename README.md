@@ -91,7 +91,7 @@ Util-Tools/
 │
 ├── core/                       # [코어 시스템]
 │   ├── __init__.py
-│   ├── paths.py                # 개발 모드 & 배포본(.exe) 중앙 표준 경로 관리자 (APP_VERSION: 0.22.9)
+│   ├── paths.py                # 개발 모드 & 배포본(.exe) 중앙 표준 경로 관리자 (APP_VERSION: 0.22.10)
 │   ├── single_instance.py      # Windows Named Semaphore 기반 단일 인스턴스 중복 방지 매니저
 │   ├── edge_widget.py          # pywebview 단일 창 엣지 핸들 ↔ 380x620 퀵 위젯 생명주기 관리자
 │   ├── fullscreen_guard.py     # Win32 SetWinEventHook 기반 전체화면 감지 및 No-activate 복원

@@ -107,7 +107,7 @@ pip install -r requirements.txt
 ### 2) 중앙 경로 관리 원칙 (`core/paths.py`)
 - 모든 파일 및 디렉토리 참조는 반드시 [`core/paths.py`](../core/paths.py)에 정의된 표준 상수를 사용해야 합니다.
 - **절대 개별 모듈에서 `os.path.dirname(__file__)`이나 상대 경로를 하드코딩해서는 안 됩니다.**
-  - `APP_DIR`: 프로젝트 루트 디렉토리 (`APP_VERSION = "0.22.9"`)
+  - `APP_DIR`: 프로젝트 루트 디렉토리 (`APP_VERSION = "0.22.10"`)
   - `DATA_DIR`: 영속 데이터 보관 디렉토리 (`data`)
   - `DB_PATH`: 중앙 SQLite 데이터베이스 파일 (`data/app.db`)
   - `STOCK_CONFIG_PATH` / `STOCK_MASTER_PATH`: 주식/환율 설정 및 상장 종목 마스터 캐시 (`data/stock_*.json`)
@@ -168,7 +168,7 @@ Util-Tools/
 ├── GEMINI.md                   # AI 에이전트 및 개발자 작업 규정 가이드
 │
 ├── core/                       # [코어 시스템]
-│   ├── paths.py                # 🌟 경로 참조의 단일 진실 공급원 (SSOT, APP_VERSION=0.22.9)
+│   ├── paths.py                # 🌟 경로 참조의 단일 진실 공급원 (SSOT, APP_VERSION=0.22.10)
 │   ├── single_instance.py      # Windows Named Semaphore 기반 단일 인스턴스 락
 │   ├── edge_widget.py          # pywebview 단일 창 엣지 핸들 ↔ 380x620 퀵 위젯 생명주기 관리자
 │   ├── fullscreen_guard.py     # Win32 SetWinEventHook 기반 전체화면 감지 및 No-activate 복원
