@@ -26,16 +26,19 @@ flowchart TD
     Tray["Windows 시스템 트레이 (pystray)"] <--> Core["코어 런타임 (main.py / run.pyw)"]
     Core <--> Eel["Python Eel (WebSocket 브리지)"]
     Eel <--> WebUI["프론트엔드 UI (Vanilla JS, CSS3 Dark)"]
+    Core <--> EdgeWidget["엣지 퀵 위젯 (pywebview + FullscreenGuard)"]
     
-    subgraph BackendServices ["백엔드 서비스 레이어 (services/)"]
-        DB["SQLite 중앙 DB (data/app.db - 16개 테이블, WAL Mode)"]
+    subgraph BackendServices ["백엔드 서비스 레이어 (services/ - 26종)"]
+        DB["SQLite 중앙 DB (data/app.db - 21개 사용자 테이블, WAL Mode)"]
         AI["로컬 AI 시맨틱 검색 (ONNX Transformer)"]
         Whisper["Whisper 음성전사 & 화자분리 (faster-whisper, sherpa-onnx)"]
         OCR["Windows Media OCR Studio (winocr, Lanczos ROI)"]
         Diff["Text Diff Checker (Myers 인라인 diff)"]
         SessionHub["통합 AI 코딩 세션 허브 (Antigravity & OpenCodex)"]
+        Stock["실시간 주식 & 환율 스트리밍 (Toss Open API / Relay)"]
+        EmailImap["이메일 아카이브 & IMAP 단방향 동기화 (OAuth2 / App PW)"]
         Redmine["Redmine 2-Way 동기화 & 위키 뷰어"]
-        Viewers["이메일 / CSV / Markdown / Mermaid 뷰어"]
+        Viewers["CSV / Markdown / Mermaid 3-Pane / QR 도구"]
         Logging["전역 로깅 & 크래시 가드 (core/logger.py)"]
     end
     
@@ -43,15 +46,17 @@ flowchart TD
 ```
 
 ### 주요 기술 스택 & 라이선스
-- **License**: [MIT License](LICENSE) (상업적 이용, 수정, 배포 완전 자유)
-- **Backend**: Python 3.10+, [Eel](https://github.com/python-eel/Eel) (Python-JS 브리지), `pystray` (시스템 트레이), `Pillow` (이미지 처리)
-- **Database**: SQLite 3 (WAL 모드, `data/app.db`, 16개 사용자 정의 테이블), `services/db_service.py`를 통한 원자적 트랜잭션 관리
+- **License**: [MIT License](../LICENSE) (상업적 이용, 수정, 배포 자유)
+- **Backend**: Python 3.10+, [Eel](https://github.com/python-eel/Eel) (Python-JS 브리지), `pystray` (시스템 트레이), `pywebview` / `pythonnet` (엣지 퀵 위젯), `websocket-client` (Toss/Relay 실시간 스트리밍), `Pillow` (이미지 처리)
+- **Database**: SQLite 3 (WAL 모드, `data/app.db`, 21개 사용자 정의 테이블 / `sqlite_sequence` 포함 22개 테이블), `services/db_service.py`를 통한 원자적 트랜잭션 관리
+- **Stock & FX Streaming**: `services/stock_service.py`, Toss Open API OAuth2 + WebSocket/REST Fail-Safe, Naver/Yahoo 전일 정규장 종가 병합, 5단계 단타(EMA5/20)·스윙(MA5/20) 추세 연산 및 개인 Relay 서버 모드(`local`/`relay`)
+- **Email & IMAP**: `services/imap_service.py` (`imaplib` IMAP4_SSL), 앱 비밀번호 / Google OAuth 2.0 (`XOAUTH2`) 루프백 인증, 백그라운드 폴링, HTML 외부 이미지/트래킹 픽셀 차단 가드
 - **Audio / STT**: `faster-whisper` (CUDA/CPU int8 양자화), `sherpa-onnx` (pyannote 3.0 + 3D-Speaker 화자 분리), Active Interval Sweep 정렬, HTTP Range 206 스트리밍
 - **OCR Engine**: Windows Media OCR (`winocr`, `winrt`), 적응형 Lanczos 업스케일링 전처리, HTML5 인터랙티브 캔버스 ROI
-- **Text Diff Engine**: Python `difflib` (Myers 알고리즘 확장), 토큰/단어 단위 인라인 diff, Side-by-Side 및 Unified 스트림 뷰
+- **Text Diff & QR**: Python `difflib` (Myers 알고리즘 확장, 토큰 단위 인라인 diff), 클라이언트 사이드 QR 스캔(`jsqr.min.js`) 및 생성(`qrcode.min.js`)
 - **AI/ML**: `intfloat/multilingual-e5-small` 양자화(Quantized) ONNX 신경망 모델 (로컬 의미론적 문맥 검색)
 - **Logging & Crash Defense**: `core/logger.py` 전역 `LogStreamRedirector` (stdout/stderr 가로채기), 순환 링 버퍼, `threading.excepthook` 기반 백그라운드 스레드 크래시 방어
-- **Frontend**: Vanilla JavaScript (ES6+), HTML5, CSS3 모던 다크 테마 (No-Framework, 제로 빌드 스텝)
+- **Frontend**: Vanilla JavaScript (ES6+, 29개 모듈), HTML5, CSS3 다크 테마 (No-Framework, 제로 빌드 스텝)
 - **Tooling**: Node.js (`node -c` 구문 검증용)
 
 ---
@@ -78,6 +83,7 @@ pip install -r requirements.txt
 저장소의 기본 템플릿(`.example.json`)을 복사하여 로컬 설정 파일을 생성합니다 (자동으로 초기화되나 수동 확인 가능):
 - `app_settings.json`: AI 세션 연동 토글, 알림 옵션 등
 - `calendar_config.json`: 구글 캘린더 iCal 비공개 URL 연동 설정
+- `data/stock_config.json`: Toss Open API 자격증명 또는 개인 Relay 서버 URL/토큰, 그룹별 관심종목
 
 ### 4) 애플리케이션 실행 모드
 - **[개발/디버깅 모드]** (콘솔 로그 실시간 확인):
@@ -99,11 +105,13 @@ pip install -r requirements.txt
 - 프로그램이 이미 실행 중인 상태에서 사용자가 다시 `run.pyw`를 실행하면, 새 프로세스는 즉시 종료되고 **기존 실행 중인 창이 화면 맨 앞으로 자동 활성화**됩니다.
 
 ### 2) 중앙 경로 관리 원칙 (`core/paths.py`)
-- 모든 파일 및 디렉토리 참조는 반드시 [`core.paths`](core/paths.py)에 정의된 표준 상수를 사용해야 합니다.
+- 모든 파일 및 디렉토리 참조는 반드시 [`core/paths.py`](../core/paths.py)에 정의된 표준 상수를 사용해야 합니다.
 - **절대 개별 모듈에서 `os.path.dirname(__file__)`이나 상대 경로를 하드코딩해서는 안 됩니다.**
-  - `APP_DIR`: 프로젝트 루트 디렉토리
+  - `APP_DIR`: 프로젝트 루트 디렉토리 (`APP_VERSION = "0.22.10"`)
   - `DATA_DIR`: 영속 데이터 보관 디렉토리 (`data`)
   - `DB_PATH`: 중앙 SQLite 데이터베이스 파일 (`data/app.db`)
+  - `STOCK_CONFIG_PATH` / `STOCK_MASTER_PATH`: 주식/환율 설정 및 상장 종목 마스터 캐시 (`data/stock_*.json`)
+  - `WIDGET_CONFIG_PATH`: 엣지 퀵 위젯 위치 및 핸들 크기 설정 (`data/widget_config.json`)
   - `WEB_DIR`: 프론트엔드 정적 웹 리소스 (`web`)
   - `MODELS_DIR`: AI 임베딩 및 음성 모델 보관소 (`models`)
   - `EMAILS_DIR`: EML 원본 파일 보관소 (`emails`)
@@ -113,34 +121,36 @@ pip install -r requirements.txt
 
 ### 4) 웹 UI 기반 백엔드 전원 제어 (Hot Reload & Shutdown)
 - 파이썬 코드 수정 시 트레이 우클릭을 거치지 않고 웹 화면 상단의 **`[🔄 재시작]`** 버튼을 누르면 0.5초 내에 현재 프로세스를 정상 종료하고 신규 프로세스를 띄웁니다.
-- **`[🚪 종료]`** 버튼 클릭 시 트레이 아이콘 및 백엔드 프로세스가 완전히 종료됩니다.
+- **`[🚪 종료]`** 버튼 클릭 시 트레이 아이콘 및 백엔드 프로세스가 종료됩니다.
 
-### 5) 데스크톱 엣지 퀵 위젯 & FullscreenGuard (pywebview 하이브리드)
-- **Eel-pywebview 병렬 브리지**: Eel 메인 창과 pywebview 위젯 창(`core/edge_widget.py`)이 동일한 백엔드 포트를 공유하여 23개 기존 서비스의 RPC를 그대로 재사용합니다.
-- **플러시 엣지 도크 탭 (Flush Edge Tab)**: 윈도우 사각 캔버스를 100% 채우는 밀착형 직각 탭(`border-radius: 0`)과 `background_color="#1e1e2d"` 동기화로 모서리 잔여물 없이 깔끔하게 렌더링됩니다.
+### 5) 데스크톱 엣지 퀵 위젯, 주식/환율 스트리밍 & FullscreenGuard (pywebview 하이브리드)
+- **Eel-pywebview 병렬 브리지**: Eel 메인 창과 pywebview 위젯 창(`core/edge_widget.py`)이 동일한 백엔드 포트를 공유하여 26개 서비스의 RPC를 그대로 재사용합니다.
+- **플러시 엣지 도크 탭 (Flush Edge Tab)**: 윈도우 사각 캔버스를 100% 채우는 밀착형 직각 탭(`border-radius: 0`)과 `background_color="#1e1e2d"` 동기화로 모서리 잔여물 없이 렌더링됩니다.
 - **3단계 크기 프리셋**: `slim`(12×70, 기본값), `default`(20×120), `compact`(8×50) 지원 및 헤더 📏 메뉴 / 트레이 메뉴를 통한 런타임 실시간 리사이징.
+- **실시간 주식 & 환율 탭 (`services/stock_service.py`)**:
+  - `local` 모드(Toss Open API OAuth2 + WS/REST Fail-Safe + Naver/Yahoo 전일 정규장 종가 병합)와 `relay` 모드(개인 Relay 서버 `/api/snapshot`, `/api/watchlist`, `WSS /ws/stream`) 전환 지원.
+  - 커스텀 그룹 멀티 탭, 드래그 앤 드롭 카드 정렬, 매수/매도 수수료 분리 손익분기·목표 매도가 계산, 단타(1분봉 EMA5/20)·스윙(일봉 MA5/20) 5단계 추세 아이콘 제공 (`_cache_lock` `threading.RLock` 기반 재진입 데드락 방어).
 - **FullscreenGuard**: Win32 `SetWinEventHook` 전용 스레드로 게임/동영상 전체화면 시 위젯을 자동 숨김 처리하고, 전체화면 종료 시 `SW_SHOWNOACTIVATE`로 포커스 탈취 없이 복원합니다.
 - **시스템 탭 전원 제어 & 비차단 모달**: 위젯 `[📊 시스템]` 탭 내 `btn-widget-restart`, `btn-widget-shutdown` 버튼을 제공하며, `showWidgetConfirm` 인레이어 확인 모달 실행 중에는 `isModalOpen` 가드를 통해 마우스 아웃 시 위젯이 접히지 않도록 보호합니다.
 
-### 6) 음성 전사 & 화자 분리 파이프라인 (`services/whisper_service.py`)
-- **faster-whisper + sherpa-onnx 듀얼 파이프라인**: `faster-whisper`(CUDA/CPU int8)를 통한 고속 음성 전사와 `sherpa-onnx`(pyannote 3.0 VAD + 3D-Speaker 임베딩)를 통한 오프라인 화자 분리(Diarization)를 결합합니다.
-- **Active Interval Sweep 정렬**: 전사 세그먼트와 화자 발화 구간 사이의 시간적 오버랩을 수학적으로 스위핑하여 각 단어/문장에 화자 ID(예: `Speaker 01`)를 정확하게 맵핑합니다.
+### 6) IMAP 단방향 아카이브 & 캘린더 알림 데몬
+- **IMAP 단방향 누적 동기화 (`services/imap_service.py`)**: 앱 비밀번호(공백 자동 정규화) 및 Google OAuth 2.0 (`XOAUTH2` 브라우저 루프백 인증, Gmail 스코프 검증, `invalid_grant` 무한 폴링 차단)을 지원하며, 다운로드된 RFC 822 원본을 `emails/*.eml` + SQLite에 저장하고 즉시 Multilingual-E5 벡터 DB에 자동 임베딩합니다.
+- **캘린더 캐싱 및 알림 데몬 (`services/calendar_service.py`)**: `calendar_events_cache` + `localStorage` 선 캐시 렌더링을 제공하며, 30초 주기의 백그라운드 데몬(`CalendarReminderDaemon`)이 `calendar_reminders`를 감시하여 OS 트레이 알림 및 인앱 차임벨을 전송합니다.
+
+### 7) 음성 전사 & 화자 분리 파이프라인 (`services/whisper_service.py`)
+- **faster-whisper + sherpa-onnx 듀얼 파이프라인**: `faster-whisper`(CUDA/CPU int8)를 통한 로컬 음성 전사와 `sherpa-onnx`(pyannote 3.0 VAD + 3D-Speaker 임베딩)를 통한 오프라인 화자 분리(Diarization)를 결합합니다.
+- **Active Interval Sweep 정렬**: 전사 세그먼트와 화자 발화 구간 사이의 시간적 오버랩을 스위핑하여 각 구간에 화자 ID(예: `Speaker 01`)를 매핑합니다.
 - **HTTP Range 206 스트리밍 & OOM 방어**: 대용량 오디오(100MB+)의 부분 버퍼링을 위한 HTTP Range 206 스트리밍을 제공하며, GPU CUDA OOM 감지 시 CPU 백오프로 자동 전환합니다.
 
-### 7) Windows Media OCR 파이프라인 (`services/ocr_service.py`)
-- **네이티브 Windows Media OCR 통합**: 외부 대용량 가중치 없이 Windows 10/11 OS 내장 `winocr`(`winrt`) 엔진을 직접 호출하여 0.05초~0.1초 내 초고속 텍스트 인식을 수행합니다.
-- **적응형 Lanczos 리스케일링**: 저해상도 또는 특정 종횡비 이미지의 글자 인식률을 극대화하기 위해 Pillow Lanczos 필터를 거쳐 인식 엔진으로 전달합니다.
-- **대화형 HTML5 캔버스 ROI**: 마우스 드래그를 통한 관심 영역(ROI) 지정 인식, 다국어(한국어, 영어, 일본어, 중국어) 지원, SQLite 히스토리(`ocr_history`) 영구 보관을 지원합니다.
-
-### 8) Text Diff Checker 파이프라인 (`services/diff_service.py`)
-- **Myers 알고리즘 확장 토큰 단위 Diff**: Python `difflib.SequenceMatcher`를 기반으로 행 단위(Line-level) 차이뿐 아니라 행 내부 단어/토큰 단위(Word-level) 변경 사항을 `+`, `-`, `~` 인라인 하이라이트로 산출합니다.
-- **Side-by-Side & Unified 듀얼 뷰**: 좌우 분할 나란히 보기와 단일 통합 스트림 보기를 지원하며, 공백 무시(`ignore_whitespace`) 및 대소문자 무시(`ignore_case`) 옵션을 제공합니다.
-- **동기화 스크롤 엔진**: 좌우 에디터 및 Diff 결과 창 간의 비례 스크롤(`syncScroll`)을 지원합니다.
+### 8) Windows Media OCR, Text Diff & QR 도구
+- **Windows Media OCR (`services/ocr_service.py`)**: Windows 10/11 내장 `winocr`(`winrt`) 엔진을 직접 호출하며 Pillow Lanczos 업스케일링, HTML5 ROI 캔버스, `ocr_history` 저장을 지원합니다.
+- **Text Diff Checker (`services/diff_service.py`, `web/js/diff_checker.js`)**: Python `difflib.SequenceMatcher` 기반 행/단어 단위 인라인 diff, Side-by-Side/Unified 뷰, 공백/대소문자 무시 옵션, 비례 동기화 스크롤을 제공합니다.
+- **QR 코드 도구 (`services/qr_service.py`, `web/js/qr_toolkit.js`)**: `jsQR` 스캔 및 `qrcode.min.js` 생성, 포맷 자동 판별(`url`, `wifi`, `email`, `tel`, `vcard`, `text`), PNG 로컬 저장 및 `qr_history` 이력 관리를 제공합니다.
 
 ### 9) 전역 시스템 로깅 및 백그라운드 예외 크래시 가드 (`core/logger.py`)
 - **표준 입출력 가로채기 (`LogStreamRedirector`)**: `sys.stdout` 및 `sys.stderr`를 실시간 가로채어 타임스탬프와 태그(`[INFO]`, `[ERROR]`, `[WARN]`, `[DEBUG]`)를 자동 분석하고 파일(`logs/app.log`) 및 콘솔로 동시 라우팅합니다.
-- **순환 링 버퍼 (Ring Buffer)**: 최근 1,000건의 로그를 메모리 내에 보관하여 프론트엔드 콘솔 및 퀵 위젯에 즉시 제공합니다.
-- **스레드 크래시 방어 (`threading.excepthook`)**: 백그라운드 워커 스레드에서 예외가 발생하더라도 프로세스가 비정상 종료(Crash)되지 않도록 예외를 포착하여 안전하게 기록합니다.
+- **순환 링 버퍼 (Ring Buffer)**: 최근 1,000건의 로그를 메모리 내에 보관하여 프론트엔드 콘솔 및 퀵 위젯에 제공합니다.
+- **스레드 크래시 방어 (`threading.excepthook`)**: 백그라운드 워커 스레드에서 예외가 발생하더라도 프로세스가 비정상 종료(Crash)되지 않도록 예외를 포착하여 기록합니다.
 
 ---
 
@@ -151,70 +161,88 @@ Util-Tools/
 │
 ├── main.py                     # [진입점] 단일 인스턴스 검증, Eel 초기화 및 서비스 등록
 ├── run.pyw                     # [런처] Windows 무창(Windowless) 백그라운드 실행기
-├── requirements.txt            # 필수 Python 패키지 목록
+├── requirements.txt            # 필수 Python 패키지 목록 (13종)
 ├── UtilTools.spec              # [패키징] PyInstaller 배포 빌드 정의서
 ├── build.bat                   # [빌드] PyInstaller 실행 파일 일괄 빌드 배치파일
 ├── utiltools.ico               # 시스템 트레이 및 윈도우 창 아이콘
 ├── GEMINI.md                   # AI 에이전트 및 개발자 작업 규정 가이드
 │
 ├── core/                       # [코어 시스템]
-│   ├── paths.py                # 🌟 경로 참조의 단일 진실 공급원 (SSOT)
+│   ├── paths.py                # 🌟 경로 참조의 단일 진실 공급원 (SSOT, APP_VERSION=0.22.10)
 │   ├── single_instance.py      # Windows Named Semaphore 기반 단일 인스턴스 락
 │   ├── edge_widget.py          # pywebview 단일 창 엣지 핸들 ↔ 380x620 퀵 위젯 생명주기 관리자
 │   ├── fullscreen_guard.py     # Win32 SetWinEventHook 기반 전체화면 감지 및 No-activate 복원
-│   ├── tray.py                 # pystray 시스템 트레이, 알림 및 브라우저 창 생명주기 관리
+│   ├── tray.py                 # pystray 시스템 트레이, 핸들 크기 서브메뉴, 알림 및 창 생명주기 관리
 │   └── logger.py               # 전역 로거, stdout/stderr 가로채기, 스레드 크래시 방어 및 링 버퍼
 │
 ├── data/                       # [사용자 영속 데이터]
-│   ├── app.db                  # 중앙 SQLite DB (16개 테이블, WAL 모드)
+│   ├── app.db                  # 중앙 SQLite DB (21개 사용자 테이블, WAL 모드)
 │   ├── browser_profile/        # 독립 브라우저 프로파일 디렉토리
-│   └── widget_config.json      # 엣지 위젯 위치(edge, offset_ratio) 및 크기(handle_size) 설정
+│   ├── widget_config.json      # 엣지 위젯 위치(edge, offset_ratio) 및 크기(handle_size) 설정
+│   ├── stock_config.json       # Toss API / Relay 연결 설정, 그룹별 관심종목 및 환율 캐시
+│   └── stock_master.json       # 동기화된 국내/미국 상장 종목 유니버스 검색 캐시
 │
-├── services/                   # [백엔드 서비스 레이어] (@eel.expose 바인딩 모듈 23종)
-│   ├── db_service.py           # 중앙 SQLite 커넥션 풀, WAL 모드, 테이블 초기화 (16개 테이블)
+├── services/                   # [백엔드 서비스 레이어] (@eel.expose 바인딩 모듈 26종)
+│   ├── db_service.py           # 중앙 SQLite 커넥션 풀, WAL 모드, 테이블 초기화 (21개 사용자 테이블)
 │   ├── agy_service.py          # Google Antigravity CLI 세션 파싱, 감시 및 터미널 런처
 │   ├── opencodex_service.py    # OpenAI OpenCodex 세션, 5ms 파일 락, Live Tail 파서
+│   ├── stock_service.py        # Toss Open API/Relay 주가·환율 스트리밍, 전일 종가 보정, 5단계 추세
+│   ├── imap_service.py         # IMAP4_SSL 단방향 아카이브, Google OAuth 2.0(XOAUTH2), 폴링 데몬
+│   ├── qr_service.py           # QR 포맷 자동 판별, 외부 URL 오픈, PNG 저장 및 이력 CRUD
 │   ├── whisper_service.py      # faster-whisper 음성 전사, sherpa-onnx 화자 분리, Range 206 스트리밍
 │   ├── diff_service.py         # Myers 알고리즘 단어 단위 인라인 diff 엔진
 │   ├── ocr_service.py          # Windows Media OCR 네이티브 래퍼, Lanczos 리스케일링 및 히스토리
+│   ├── image_service.py        # Pillow 이미지 슬라이서, 다중 절단선, 여백 감지 및 ZIP 패킹
 │   ├── ai_search_service.py    # Multilingual-E5 ONNX 시맨틱 검색 & 증분 벡터 캐시
 │   ├── redmine_service.py      # Redmine API 2-Way 연동, 일감/위키 캐시, 백그라운드 감시
 │   ├── email_service.py        # 3,100+건 대용량 EML 아카이브, 비파괴 스레딩 파서
 │   ├── mock_data_service.py    # 3-Pass 복합 가상 데이터 생성기 & 엑셀/CSV 스트리밍
 │   ├── csv_service.py          # CSV/TSV 자동 감지 파서 & 포맷 변환기
 │   ├── markdown_service.py     # Markdown 파서 및 파일 저장/로드
-│   ├── diagram_service.py      # Mermaid 다이어그램 스키마 CRUD
+│   ├── diagram_service.py      # Mermaid 다이어그램 스키마 CRUD (생성/수정/삭제)
 │   ├── backup_service.py       # Zero-Memory Python 디스크 직접 백업/복원 엔진
-│   ├── calendar_service.py     # Google Calendar / iCal (ICS) 실시간 파서
+│   ├── calendar_service.py     # Google Calendar / iCal 파서, 로컬 캐시 및 30초 알림 데몬
 │   ├── system_service.py       # HW 사양, 네트워크 IP, 프로세스 재기동/종료 제어
 │   ├── shortcuts_service.py    # 폴더 바로가기 & 터미널 분기 실행
 │   ├── quick_launch_service.py # 앱/명령어/SSH 빠른 실행
-│   ├── generator_service.py    # 커스텀 JS 데이터 생성기 템플릿
-│   ├── notes_service.py        # 빠른 메모장 CRUD
-│   └── settings_service.py     # 사용자 설정 파일 입출력
+│   ├── generator_service.py    # 커스텀 JS 데이터 생성기 & 실행 파라미터 스키마 CRUD
+│   ├── notes_service.py        # 빠른 메모장 & 보관함 카테고리 CRUD
+│   ├── settings_service.py     # 사용자 설정 파일 입출력
+│   └── dialog_service.py       # Tkinter 파일/폴더 선택 다이얼로그
 │
 ├── web/                        # [프론트엔드 정적 리소스]
 │   ├── index.html              # 단일 페이지 애플리케이션 (SPA) 메인 레이아웃
 │   ├── style.css               # 전역 다크 테마 디자인 시스템 및 컴포넌트 스타일
-│   ├── widget.html             # 엣지 핸들 및 확장 퀵 위젯 전용 마크업 (시스템 탭 전원 제어)
-│   ├── widget.css              # 플러시 엣지 탭 및 다크 프레임리스 위젯 전용 스타일
-│   └── js/                     # 기능별 프론트엔드 모듈 (26개 파일)
+│   ├── widget.html             # 엣지 핸들 및 확장 퀵 위젯 전용 마크업 (주식/환율·시스템 제어 탭)
+│   ├── widget.css              # 플러시 엣지 탭, 주식 추세 뱃지 및 다크 프레임리스 위젯 스타일
+│   └── js/                     # 기능별 프론트엔드 모듈 (29개 파일)
 │       ├── app.js              # 탭 전환, 토스트, 공통 인레이어 모달 엔진
-│       ├── widget.js           # 엣지 위젯 클라이언트 로직 (호버 Dwell, 드래그 쿨다운, 크기 메뉴, 시스템 제어)
+│       ├── widget.js           # 엣지 위젯 클라이언트 로직 (호버 Dwell, 주식/환율, 드래그, 시스템 제어)
 │       ├── whisper.js          # 오디오 드래그앤드롭 업로드, Range 206 플레이어, 세그먼트 재생, SRT/VTT/TXT
-│       ├── diff.js             # 텍스트 비교 UI, 좌우 분할/단일 뷰, 공백/대소문자 토글, 동기화 스크롤
+│       ├── diff_checker.js     # 텍스트 비교 UI, 좌우 분할/단일 뷰, 공백/대소문자 토글, 동기화 스크롤
 │       ├── ocr.js              # 대화형 캔버스 ROI 영역 선택, 다국어 OCR, 텍스트 복사 및 히스토리
+│       ├── qr_toolkit.js       # QR 스캔/생성, jsqr.min.js / qrcode.min.js 연동 및 이력 관리
 │       ├── agy_sessions.js     # AI 세션 허브 대시보드, 필터, Live Tail 모달
 │       ├── redmine.js          # Redmine 일감/위키 대시보드 및 인라인 편집기
-│       ├── email_viewer.js     # 이메일 스레드 타임라인 뷰어 & 첨부파일 추출기
+│       ├── email_viewer.js     # 이메일 스레드 타임라인, IMAP OAuth/폴링 모달 & 외부 리소스 차단 가드
 │       ├── ai_search.js        # Ctrl+K 시맨틱 검색 팝업 & 문장 유사도 측정기
 │       ├── mock_data_studio.js # 가상 데이터 스튜디오 인터랙티브 UI
-│       ├── mermaid_diagram.js  # Mermaid 렌더링, 줌/팬 뷰포트
-│       └── ...
+│       ├── mermaid_diagram.js  # Mermaid 3-Pane 스튜디오, 편집/수정, 줌/팬 뷰포트
+│       ├── notes.js            # 빠른 메모, 카테고리 관리, 4종 정렬, Tab/Shift+Tab 들여쓰기
+│       ├── calendar.js         # 월간 캘린더, 선 캐시 렌더링, 일정 알림 설정 & 차임벨
+│       └── ...                 # (총 29개 JS 모듈)
 │
-├── scripts/                    # [검증 및 자동화 하네스]
+├── scripts/                    # [검증 및 자동화 하네스 (14종)]
 │   ├── verify_integrity.py     # 🌟 5단계 동적 무결성 검증 하네스 (Zero-Maintenance)
-│   └── test_logging_crash_guard_functional.py # 로깅 및 스레드 크래시 가드 기능 테스트
+│   ├── test_logging_crash_guard_functional.py # 로깅 및 스레드 크래시 가드 기능 테스트
+│   ├── test_calendar_reminder_functional.py   # 캘린더 일정 알림 기능 테스트
+│   ├── test_notes_category_functional.py      # 빠른 메모 카테고리 기능 테스트
+│   ├── test_imap_functional.py                # IMAP 단방향 아카이브 기능 테스트
+│   ├── test_qr_functional.py                  # QR 도구 기능 테스트
+│   ├── test_diff_functional.py                # 텍스트 Diff 기능 테스트
+│   ├── test_generator_service.py              # 커스텀 생성기 파라미터 기능 테스트
+│   ├── test_whisper_upload_functional.py      # Whisper 업로드 기능 테스트
+│   └── test_ocr_release_gate.py / benchmark_ocr_*.py # OCR 릴리즈 게이트 및 벤치마크 5종
 │
 ├── .agents/                    # [AI 에이전트 스킬 및 규칙]
 │   ├── rules/
@@ -238,7 +266,7 @@ Util-Tools/
 
 ### 규정 2: 중앙 경로 참조 표준화 원칙 (`core.paths`)
 - **금지**: `base_dir = os.path.dirname(__file__)` 또는 하드코딩된 절대/상대 경로 선언을 엄격히 금지합니다.
-- **준수**: 반드시 [`core.paths`](core/paths.py)에 정의된 표준 상수(`APP_DIR`, `DATA_DIR`, `DB_PATH`, `WEB_DIR`, `MODELS_DIR`, `EMAILS_DIR`)를 임포트하여 사용합니다.
+- **준수**: 반드시 [`core/paths.py`](../core/paths.py)에 정의된 표준 상수(`APP_DIR`, `DATA_DIR`, `DB_PATH`, `WEB_DIR`, `MODELS_DIR`, `EMAILS_DIR`, `STOCK_CONFIG_PATH` 등)를 임포트하여 사용합니다.
 
 ### 규정 3: 전역 변수 / 함수 변경 시 영향도 전수 조사
 - 전역 변수, 상수, 함수 파라미터가 수정되면 `main.py`, `run.pyw`, `core/*.py`, `services/*.py`, `web/js/*.js`, `web/style.css` 전체에서 해당 참조를 검색하여 일괄 갱신합니다.
@@ -284,10 +312,10 @@ git status --short
 python scripts/verify_integrity.py
 ```
 - **검증 항목**:
-  1. `Step 1`: Python 전수 동적 컴파일 (`py_compile` - 42+개 파일 바이트코드 검증)
-  2. `Step 2`: 백엔드 서비스 전수 동적 임포트 & SQLite DB 무결성 검증 (`services/*.py`, `init_db` - 16개 테이블)
-  3. `Step 3`: 프론트엔드 JavaScript 전수 문법 검사 (`node -c` - 26+개 모듈 AST 검증)
-  4. `Step 4`: 스타일시트 중괄호(`{ == }`) 짝 일치 검증 (`web/style.css`)
+  1. `Step 1`: Python 전수 동적 컴파일 (`py_compile` - 52개 `.py`/`.pyw` 파일 바이트코드 검증)
+  2. `Step 2`: 백엔드 서비스 전수 동적 임포트 & SQLite DB 무결성 검증 (`services/*.py` 26종, `init_db` - 21개 사용자 테이블 / `sqlite_sequence` 포함 22개 테이블)
+  3. `Step 3`: 프론트엔드 JavaScript 전수 문법 검사 (`node -c` - 29개 모듈 AST 검증)
+  4. `Step 4`: 스타일시트 중괄호(`{ == }`) 짝 일치 검증 (`web/style.css`, `web/widget.css`)
   5. `Step 5`: 코어 진입점 및 시스템 트레이 아이콘 인스턴스화 검증 (`TrayManager`)
 - **성공 기준**: `ALL VERIFICATION CHECKS PASSED (5/5)` 및 `Exit Code 0`.
 
@@ -295,6 +323,7 @@ python scripts/verify_integrity.py
 ```powershell
 # 예시: 로깅 및 크래시 가드 기능 테스트
 python scripts/test_logging_crash_guard_functional.py
+# 기타 도메인별 기능 테스트 (test_imap_functional.py, test_qr_functional.py 등)
 ```
 
 ### 📋 3단계: 매 작업 단위 즉각적 원자적 단위 커밋
@@ -310,19 +339,19 @@ git commit -m "feat(module): 작업 내용 기술 (#이슈번호)"
 
 ## 7. 상세 기술 문서 색인 (Documentation Index)
 
-더 깊이 있는 아키텍처 원리나 도메인별 세부 구현 방식은 [`docs/`](docs/) 내의 개별 전문 문서를 참고하십시오:
+더 깊이 있는 아키텍처 원리나 도메인별 세부 구현 방식은 [`docs/`](.) 내의 개별 전문 문서를 참고하십시오:
 
 | 도메인 | 문서 경로 | 핵심 내용 |
 | :--- | :--- | :--- |
-| **통합 AI 세션 허브** | [`docs/AI_CODING_SESSIONS.md`](docs/AI_CODING_SESSIONS.md) | Antigravity & OpenCodex 듀얼 세션 파싱, 5ms 파일 락, Live Tail, 터미널 전환 |
-| **중앙 데이터베이스** | [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) | SQLite 16개 테이블 ERD, WAL 모드, 인덱스 커버리지, 백업 복원 규격 |
-| **OCR 엔진 아키텍처** | [`docs/OCR_ENGINE_ARCHITECTURE.md`](docs/OCR_ENGINE_ARCHITECTURE.md) | Windows Media OCR vs RapidOCR 벤치마크, Lanczos 스케일링, ROI 대화형 인식 |
-| **Redmine 협업** | [`docs/REDMINE_INTEGRATION.md`](docs/REDMINE_INTEGRATION.md) | Redmine REST API 2-Way 동기화, 일감/위키 캐싱, 관심 프로젝트 필터 |
-| **이메일 아카이브** | [`docs/EMAIL_ARCHIVE.md`](docs/EMAIL_ARCHIVE.md) | 3,100+건 EML 아카이브, 대화별 비파괴 스레딩 타임라인, 첨부파일 추출 |
-| **AI 시맨틱 검색** | [`docs/AI_SEMANTIC_SEARCH.md`](docs/AI_SEMANTIC_SEARCH.md) | Multilingual-E5 ONNX 로컬 신경망, 384차원 벡터 캐시, 유사도 비교 |
-| **가상 데이터 생성** | [`docs/MOCK_DATA_STUDIO.md`](docs/MOCK_DATA_STUDIO.md) | 3-Pass 복합 데이터 생성 파이프라인, 로마자 변환, 엑셀/CSV 스트리밍 |
-| **이미지 슬라이서** | [`docs/IMAGE_SLICER.md`](docs/IMAGE_SLICER.md) | Pillow 이미지 분할 알고리즘, 다중 절단선, HTML5 인터랙티브 캔버스 |
-| **데이터/문서 뷰어** | [`docs/DATA_VIEWERS.md`](docs/DATA_VIEWERS.md) | CSV/TSV 테이블 변환기, Markdown Studio (GFM), Mermaid 16종 다이어그램 |
-| **백업 및 복원** | [`docs/BACKUP_AND_RESTORE.md`](docs/BACKUP_AND_RESTORE.md) | Zero-Memory 디스크 스트리밍 백업, 90% 압축 ZIP 포맷, 원자적 복원 |
-| **코어 및 런타임** | [`docs/CORE_AND_UTILITIES.md`](docs/CORE_AND_UTILITIES.md) | 서버 핫 리로드, 퀵 위젯 시스템 제어, 전역 로깅 & 스레드 크래시 방어, 트레이 제어 |
+| **통합 AI 세션 허브** | [`docs/AI_CODING_SESSIONS.md`](AI_CODING_SESSIONS.md) | Antigravity & OpenCodex 듀얼 세션 파싱, 5ms 파일 락, Live Tail, 터미널 전환 |
+| **중앙 데이터베이스** | [`docs/DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) | SQLite 21개 사용자 테이블 ERD, WAL 모드, JSON 설정 파일, 외부 CLI DB 규격 |
+| **OCR 엔진 아키텍처** | [`docs/OCR_ENGINE_ARCHITECTURE.md`](OCR_ENGINE_ARCHITECTURE.md) | Windows Media OCR vs RapidOCR 벤치마크, Lanczos 스케일링, ROI 대화형 인식 |
+| **Redmine 협업** | [`docs/REDMINE_INTEGRATION.md`](REDMINE_INTEGRATION.md) | Redmine REST API 2-Way 동기화, 일감/위키 캐싱, 관심 프로젝트 필터 |
+| **이메일 아카이브** | [`docs/EMAIL_ARCHIVE.md`](EMAIL_ARCHIVE.md) | 3,100+건 EML 아카이브, IMAP 단방향 동기화(OAuth2/App PW), 스레딩, 트래킹 차단 가드 |
+| **AI 시맨틱 검색** | [`docs/AI_SEMANTIC_SEARCH.md`](AI_SEMANTIC_SEARCH.md) | Multilingual-E5 ONNX 로컬 신경망, 384차원 벡터 캐시, IMAP 자동 임베딩, 유사도 비교 |
+| **가상 데이터 생성** | [`docs/MOCK_DATA_STUDIO.md`](MOCK_DATA_STUDIO.md) | 3-Pass 복합 데이터 생성 파이프라인, 로마자 변환, 엑셀/CSV 스트리밍 |
+| **이미지 슬라이서** | [`docs/IMAGE_SLICER.md`](IMAGE_SLICER.md) | Pillow 이미지 분할 알고리즘, 다중 절단선, HTML5 인터랙티브 캔버스 |
+| **데이터/문서 뷰어** | [`docs/DATA_VIEWERS.md`](DATA_VIEWERS.md) | CSV/TSV 테이블 변환기, Markdown Studio (GFM), Mermaid 3-Pane 스튜디오 |
+| **백업 및 복원** | [`docs/BACKUP_AND_RESTORE.md`](BACKUP_AND_RESTORE.md) | Zero-Memory 디스크 스트리밍 백업, 90% 압축 ZIP 포맷, 원자적 복원 |
+| **코어 및 런타임** | [`docs/CORE_AND_UTILITIES.md`](CORE_AND_UTILITIES.md) | 서버 핫 리로드, 엣지 퀵 위젯(주식/환율·시스템 제어), 캘린더 캐싱/알림, 전역 로깅 & 크래시 방어 |
 

@@ -284,14 +284,15 @@ rstrtmgr.RmRegisterResources(session_handle, 1, file_paths, 0, None, 0, None)
 rstrtmgr.RmGetList(session_handle, ctypes.byref(needed), ctypes.byref(n_proc), proc_info, ctypes.byref(reboot))
 ```
 
-#### 2) Toolhelp32 스냅샷 기반 ConPTY 호스트 역추적
+#### 2) Toolhelp32 스냅샷 기반 ConPTY 호스트 역추적 및 자체 창 오인 방지
 CLI 프로세스(`agy.exe`, `codex.exe`)는 단독으로 윈도우 창을 소유하지 않고 자식 가상 터미널(ConPTY) 형태로 실행되는 경우가 많습니다.
-1. `CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)`으로 전체 프로세스 트리(`PID` ➔ `ParentPID`, `ProcessName`)를 생성합니다([`_get_process_map`](file:///D:/python/services/agy_service.py#L723)).
+1. `CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)`으로 전체 프로세스 트리(`PID` ➔ `ParentPID`, `ProcessName`)를 생성합니다([`_get_process_map`](../services/agy_service.py)).
 2. 락을 쥔 PID로부터 부모 프로세스를 최대 6단계까지 거슬러 올라가며 `powershell.exe`, `pwsh.exe`, `cmd.exe`, `code.exe`를 수집합니다.
-3. 해당 쉘 프로세스의 자식 중 `conhost.exe`가 존재하면 Windows Terminal(ConPTY)에 의해 호스팅되는 환경으로 판정하고, 상위 `windowsterminal.exe` 프로세스를 대상 타겟 PID 목록에 편입합니다([`activate_session_terminal_window`](file:///D:/python/services/agy_service.py#L765)).
+3. 해당 쉘 프로세스의 자식 중 `conhost.exe`가 존재하거나 Windows Terminal(`windowsterminal.exe`)이 호스팅하는 경우 ConPTY 호스트 트리를 추적하여 대상 타겟 PID 목록에 편입합니다([`activate_session_terminal_window`](../services/agy_service.py)).
+4. **자체 위젯/앱 창 오인 포커스 방어 (#6)**: `EnumDesktopWindows` 후보 선별 시 현재 Util-Tools 자체 프로세스 PID(`os.getpid()`) 및 엣지 퀵 위젯 창을 타겟에서 명시적으로 제외하여, 세션 실행/전환 시 터미널 대신 자체 위젯 창이 포커스되는 결함을 방지합니다.
 
-#### 3) Alt 키 시뮬레이션 기반 전면 윈도우 포커스 전환 ([`_bring_window_to_front`](file:///D:/python/services/agy_service.py#L611))
-Windows 10/11은 백그라운드 프로세스가 임의로 `SetForegroundWindow()`를 호출하여 다른 창 위로 치고 올라오는 것을 운영체제 차원에서 차단(Focus Lock)합니다. Util-Tools는 다음 절차로 이를 우회하여 창을 확실하게 전면 복원합니다:
+#### 3) Alt 키 시뮬레이션 기반 전면 윈도우 포커스 전환 ([`_bring_window_to_front`](../services/agy_service.py))
+Windows 10/11은 백그라운드 프로세스가 임의로 `SetForegroundWindow()`를 호출하여 다른 창 위로 치고 올라오는 것을 운영체제 차원에서 차단(Focus Lock)합니다. Util-Tools는 다음 절차로 이를 우회하여 창을 전면 복원합니다:
 1. `ShowWindow(target_hwnd, SW_RESTORE)` (최소화 상태 해제)
 2. `keybd_event(VK_MENU, 0, 0, 0)` 및 `keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)`을 전송하여 Alt 키 해제 시뮬레이션으로 시스템 포커스 락 해제.
 3. `user32.AttachThreadInput`을 통해 현재 스레드와 현재 포그라운드 윈도우 소유 스레드의 입력 큐를 일시 결합.

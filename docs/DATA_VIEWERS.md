@@ -44,12 +44,16 @@ Util-Tools는 대용량 테이블, 기술 문서, 다이어그램을 별도의 �
 
 ## 3. 📊 Mermaid 다이어그램 비주얼 스튜디오
 
-### 3-1. 16종 다이어그램 프리셋 템플릿 내장
+### 3-1. 3-Pane 분할 레이아웃 및 수정(Update) 워크플로우 (`web/js/mermaid_diagram.js`, `services/diagram_service.py`)
+- **3-Pane 분할 구조**: 좌측 저장된 다이어그램 목록(카테고리/검색 필터) — 중앙 Mermaid 코드 에디터(제목/카테고리/설명 메타데이터 포함) — 우측 실시간 렌더링 뷰포트의 3단 분할 화면을 제공합니다.
+- **기존 다이어그램 수정(Update)**: 저장된 항목을 선택하여 코드 및 메타데이터를 편집한 뒤 신규 복제 없이 기존 SQLite 레코드(`diagrams` 테이블)에 직접 덮어쓰기(Update)할 수 있습니다.
+
+### 3-2. 16종 다이어그램 프리셋 템플릿 내장
 Flowchart, Sequence, Class, State, ERD, User Journey, Gantt, Pie Chart, Requirement, GitGraph, Mindmap, Timeline, Quadrant, C4, Architecture, Sankey 등 16종의 표준 템플릿 제공.
 
-### 3-2. 인터랙티브 조작 및 고해상도 내보내기
+### 3-3. 인터랙티브 조작 및 고해상도 내보내기
 - **줌 & 팬 컨트롤**: 마우스 휠 줌(Zoom) 및 드래그 패닝(Pan) 지원.
 - **고해상도 내보내기**:
   - **SVG 벡터 다운로드**: 웹 및 문서 삽입용 무손실 벡터 파일.
   - **PNG 고화질 다운로드 & 클립보드 복사**: 2배수 렌더링으로 선명한 래스터 이미지 생성.
-- **중앙 SQLite 영구 보관**: 작성한 다이어그램은 `diagrams` 테이블에 자동 저장되어 카테고리별로 관리됩니다.
+- **중앙 SQLite 영구 보관**: 작성 및 수정한 다이어그램은 `diagrams` 테이블에 저장되어 카테고리별로 관리됩니다.

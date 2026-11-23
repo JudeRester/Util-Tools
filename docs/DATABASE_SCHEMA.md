@@ -1,13 +1,13 @@
 # 🗄️ 중앙 SQLite 데이터베이스 구조 및 ERD 명세 (Database Architecture & Schema)
 
-Util-Tools는 모든 사용자 데이터와 로컬 오프라인 캐시를 단일 중앙 SQLite 데이터베이스([`data/app.db`](file:///D:/python/data/app.db))에서 통합 관리합니다.
+Util-Tools는 모든 사용자 데이터와 로컬 오프라인 캐시를 단일 중앙 SQLite 데이터베이스(`data/app.db`, 21개 사용자 정의 테이블 / `sqlite_sequence` 포함 22개 테이블)에서 통합 관리합니다.
 
 ---
 
 ## 1. ⚙️ 데이터베이스 엔진 및 성능 PRAGMA 설정
 
-- **파일 경로**: `D:\python\data\app.db` (Git 추적 제외)
-- **커넥션 매니저**: [`services/db_service.py`](file:///D:/python/services/db_service.py)
+- **파일 경로**: `data/app.db` (`core.paths.DB_PATH`, Git 추적 제외)
+- **커넥션 매니저**: [`services/db_service.py`](../services/db_service.py)
 - **핵심 PRAGMA 최적화**:
   - `PRAGMA journal_mode=WAL;`: 동시 다중 읽기/쓰기를 지원하여 UI 멈춤 방지
   - `PRAGMA synchronous=NORMAL;`: 디스크 쓰기 I/O를 최적화하면서 크래시 안전성 보장
@@ -210,11 +210,69 @@ erDiagram
     }
 
     AUDIO_FILES ||--o{ TRANSCRIPTION_RUNS : executes
+
+    %% Extended Productivity & Sync Tables
+    CALENDAR_REMINDERS {
+        text event_uid PK
+        text calendar_name
+        text title
+        text start_datetime
+        integer reminder_minutes
+        integer is_enabled
+        integer is_notified
+        text created_at
+        text updated_at
+    }
+
+    NOTE_CATEGORIES {
+        text id PK
+        text name
+        text icon
+        integer sort_order
+        integer is_system
+        text created_at
+        text updated_at
+    }
+
+    QR_HISTORY {
+        integer id PK
+        text action_type
+        text content
+        text title
+        text format_type
+        text created_at
+    }
+
+    CALENDAR_EVENTS_CACHE {
+        text calendar_id PK
+        text calendar_name
+        text calendar_url
+        text events_json
+        text updated_at
+    }
+
+    IMAP_ACCOUNTS {
+        integer id PK
+        text account_name
+        text host
+        integer port
+        integer use_ssl
+        text username
+        text auth_type
+        text folder
+        integer poll_interval_minutes
+        text last_sync_at
+        text created_at
+        text updated_at
+    }
+
+    NOTE_CATEGORIES ||--o{ NOTES : classifies
+    IMAP_ACCOUNTS ||--o{ EMAILS : archives
 ```
 
 ---
 
-## 3. 📋 16개 테이블별 상세 스키마 명세 (Schema Specifications)
+## 3. 📋 21개 사용자 테이블별 상세 스키마 명세 (Schema Specifications)
 
 ### ① `emails` (대용량 이메일 아카이브)
 | 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
@@ -494,12 +552,97 @@ erDiagram
 
 ---
 
+### ⑰ `calendar_reminders` (캘린더 개별 일정 알림)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `event_uid` | `TEXT` | `PRIMARY KEY` | 일정 고유 식별자 (`UID`) |
+| `calendar_name` | `TEXT` | `''` | 소속 캘린더 명칭 |
+| `title` | `TEXT` | `NOT NULL` | 일정 제목 |
+| `start_datetime` | `TEXT` | `NOT NULL` | 일정 시작 일시 (`YYYY-MM-DD HH:MM`) |
+| `reminder_minutes` | `INTEGER` | `10` | 시작 몇 분 전 알림 여부 (분) |
+| `is_enabled` | `INTEGER` | `1` | 알림 활성화 여부 (1: 활성, 0: 비활성) |
+| `is_notified` | `INTEGER` | `0` | 알림 발송 완료 플래그 (중복 발송 방지) |
+| `created_at` | `TEXT` | `datetime('now', 'localtime')` | 생성 일시 |
+| `updated_at` | `TEXT` | `datetime('now', 'localtime')` | 수정 일시 |
+
+> **인덱스**: `idx_calendar_reminders_active (is_enabled, is_notified, start_datetime)`
+
+---
+
+### ⑱ `note_categories` (빠른 메모 보관함/카테고리)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `TEXT` | `PRIMARY KEY` | 카테고리 식별자 (기본 시딩: `all`, `scratch`, `work`, `personal`) |
+| `name` | `TEXT` | `NOT NULL` | 표시 카테고리 명칭 |
+| `icon` | `TEXT` | `'📁'` | 카테고리 이모지 아이콘 |
+| `sort_order` | `INTEGER` | `0` | 정렬 순서 |
+| `is_system` | `INTEGER` | `0` | 시스템 기본 카테고리 여부 (1: 삭제 불가) |
+| `created_at` | `TEXT` | `datetime('now', 'localtime')` | 생성 일시 |
+| `updated_at` | `TEXT` | `datetime('now', 'localtime')` | 수정 일시 |
+
+> **인덱스**: `idx_note_categories_order (sort_order ASC)`
+
+---
+
+### ⑲ `qr_history` (QR 코드 스캔 및 생성 이력)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `INTEGER` | `PRIMARY KEY AUTOINCREMENT` | 이력 고유 식별자 |
+| `action_type` | `TEXT` | `NOT NULL` | 작업 구분 (`'scan'`, `'generate'`) |
+| `content` | `TEXT` | `NOT NULL` | QR 코드 원문 데이터 |
+| `title` | `TEXT` | `''` | 사용자 지정 메모/제목 |
+| `format_type` | `TEXT` | `'text'` | 자동 판별된 포맷 (`'url'`, `'wifi'`, `'email'`, `'tel'`, `'vcard'`, `'text'`) |
+| `created_at` | `TEXT` | `datetime('now', 'localtime')` | 기록 일시 |
+
+> **인덱스**: `idx_qr_history_created (created_at DESC)`
+
+---
+
+### ⑳ `calendar_events_cache` (캘린더 구독별 일정 스냅샷 로컬 캐시)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `calendar_id` | `TEXT` | `PRIMARY KEY` | 캘린더 구독 식별자 |
+| `calendar_name` | `TEXT` | `''` | 캘린더 표시 이름 |
+| `calendar_url` | `TEXT` | `''` | 정규화된 ICS 구독 URL |
+| `events_json` | `TEXT` | `'[]'` | 파싱된 일정 이벤트 JSON 배열 (선 캐시 렌더링용) |
+| `updated_at` | `TEXT` | `datetime('now', 'localtime')` | 최종 캐시 갱신 일시 |
+
+---
+
+### ㉑ `imap_accounts` (IMAP 계정 설정 및 OAuth 2.0 동기화 상태)
+| 컬럼명 | 데이터 타입 | 기본값 / 제약조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | `INTEGER` | `PRIMARY KEY AUTOINCREMENT` | IMAP 계정 고유 식별자 |
+| `account_name` | `TEXT` | `NOT NULL` | 표시용 계정 별칭 |
+| `host` | `TEXT` | `NOT NULL` | IMAP 서버 호스트명 (예: `imap.gmail.com`) |
+| `port` | `INTEGER` | `993` | IMAP 포트 번호 |
+| `use_ssl` | `INTEGER` | `1` | SSL/TLS 사용 여부 (1: IMAP4_SSL) |
+| `username` | `TEXT` | `NOT NULL` | 로그인 계정(이메일 주소) |
+| `password` | `TEXT` | `''` | 일반/앱 비밀번호 (`password` 인증 시) |
+| `auth_type` | `TEXT` | `'password'` | 인증 방식 (`'password'`, `'oauth2_google'`) |
+| `oauth_client_id` | `TEXT` | `''` | Google OAuth 2.0 Client ID |
+| `oauth_client_secret` | `TEXT` | `''` | Google OAuth 2.0 Client Secret |
+| `oauth_refresh_token` | `TEXT` | `''` | Google OAuth 2.0 Refresh Token |
+| `oauth_access_token` | `TEXT` | `''` | 발급된 Access Token 캐시 |
+| `oauth_token_expiry` | `INTEGER` | `0` | Access Token 만료 Epoch 타임스탬프 (초) |
+| `folder` | `TEXT` | `'INBOX'` | 동기화 대상 사서함 폴더명 |
+| `poll_interval_minutes` | `INTEGER` | `0` | 백그라운드 자동 폴링 주기 (분, 0: 수동 전용) |
+| `last_sync_at` | `TEXT` | `NULL` | 마지막 동기화 완료 일시 |
+| `created_at` | `TEXT` | `datetime('now', 'localtime')` | 등록 일시 |
+| `updated_at` | `TEXT` | `datetime('now', 'localtime')` | 수정 일시 |
+
+> **참고**: `AUTOINCREMENT` 테이블이 존재하므로 SQLite 내부 메타 테이블 `sqlite_sequence`를 포함해 `sqlite_master`에는 총 22개 테이블이 생성됩니다.
+
+---
+
 ## 4. 📁 파일 기반 설정 파일 (File-based JSON Configurations)
 
 데이터베이스 외에 다음 설정 파일들은 독립된 JSON 파일로 관리되어 외부 연동 및 설정을 지원합니다:
-- **`calendar_config.json`**: 구글 캘린더 비공개 주소 및 iCal(ICS) 웹 구독 목록
-- **`app_settings.json`**: 윈도우 창 크기, 콘솔 높이, 분할창 크기 등 사용자 인터페이스 영구 설정
-- **`widget_config.json`**: 엣지 핸들 위치(`edge`, `offset_ratio`), 핸들 크기(`handle_size`), 대상 모니터(`device_name`) 영속 설정
+- **`calendar_config.json`**: 구글 캘린더 비공개 주소 및 iCal(ICS) 웹 구독 목록, 자동 갱신 주기
+- **`app_settings.json`**: 윈도우 창 크기, 콘솔 높이, 분할창 크기, AI 세션 연동 토글 등 사용자 인터페이스 영구 설정
+- **`data/widget_config.json`**: 엣지 핸들 위치(`edge`, `offset_ratio`), 핸들 크기(`handle_size`), 대상 모니터(`device_name`) 영속 설정
+- **`data/stock_config.json`**: Toss Open API 자격증명(`client_id`, `client_secret`), 연결 모드(`connection_mode`: `local` / `relay`), 개인 Relay 서버 접속 정보(`relay_url`, `relay_token`), 커스텀 그룹별 관심종목(`groups`, `active_group_id`, `watchlist`) 및 환율 캐시(`fx_cache`)
+- **`data/stock_master.json`**: Toss Open API에서 동기화한 국내/미국 상장 종목 유니버스 검색 캐시
 
 ---
 

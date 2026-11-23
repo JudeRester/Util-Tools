@@ -13,16 +13,16 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 | **🎙️ Whisper 음성 전사 & 화자 분리<br>(Whisper STT Studio)** | • **faster-whisper + sherpa-onnx 듀얼 엔진**: `faster-whisper`(CUDA/CPU int8) 고속 로컬 음성 전사와 `sherpa-onnx`(pyannote 3.0 VAD + 3D-Speaker 임베딩) 오프라인 화자 분리(Diarization)<br>• **Active Interval Sweep 정렬**: 전사 세그먼트와 화자 발화 구간 사이의 시간 오버랩을 수학적으로 정밀 스위핑하여 발화자 ID(예: `Speaker 01`) 자동 매핑<br>• **대용량 미디어 스트리밍**: HTTP Range 206 지원으로 100MB+ 음성/동영상 파일의 즉시 탐색 및 부분 버퍼링 재생<br>• **안전한 파일 업로드 & OOM 방어**: 오디오 드래그 앤 드롭 바이너리 업로드 감시견 및 GPU VRAM 부족 시 CPU 백오프 자동 전환<br>• **다양한 자막 내보내기**: 타임스탬프 및 화자 태그가 포함된 SRT, VTT, TXT 형식 내보내기 지원 |
 | **🔍 텍스트 비교 (Diff Checker)** | • **Myers 알고리즘 토큰 단위 Diff**: Python `difflib.SequenceMatcher` 기반 행 단위 및 단어/토큰 단위 인라인 변경(`+`, `-`, `~`) 정밀 하이라이트<br>• **Side-by-Side & Unified 뷰**: 좌우 분할 나란히 보기와 단일 통합 스트림 보기를 원클릭으로 전환<br>• **유연한 전처리 필터**: 공백 무시(`ignore_whitespace`) 및 대소문자 무시(`ignore_case`) 옵션 지원<br>• **동기화 스크롤**: 좌우 텍스트 에디터 및 결과 뷰포트 간의 비례 동기화 스크롤 엔진 내장 |
 | **📷 Windows Media OCR Studio** | • **네이티브 Windows Media OCR**: 외부 대용량 가중치 없이 Windows 10/11 내장 `winocr`(`winrt`) 엔진을 직접 호출하여 0.05~0.1초 초고속 텍스트 인식<br>• **적응형 Lanczos 리스케일링**: Pillow Lanczos 보간 필터 전처리를 통해 저해상도 및 비표준 종횡비 텍스트 인식률 극대화<br>• **대화형 HTML5 캔버스 ROI**: 마우스 드래그를 통한 관심 영역(ROI) 지정 인식, 다국어(한국어, 영어, 일본어, 중국어) 지원, SQLite 영구 히스토리 보관 |
-| **💼 업무 & 협업<br>(Redmine·달력·이메일)** | • **🦊 Redmine**: 내 일감(Issues) 실시간 대시보드, 상태/진척도 인라인 즉시 변경, 프로젝트 위키(Wiki) 뷰어/에디터, 백그라운드 트레이 알림, 관심 프로젝트(⭐ 즐겨찾기) 우선 필터<br>• **📅 달력 & 일정**: Google Calendar 및 iCal(ICS) 실시간 구독, 다크 테마 월간 캘린더 & 오늘의 아젠다<br>• **📧 이메일 아카이브**: 3,100+건 EML 로컬 보관소, 대화별 스레드 묶기(Thread View), 시간순 아코디언 타임라인, 첨부파일 추출 |
-| **📊 뷰어 / 다이어그램<br>(CSV·MD·Mermaid·슬라이서)** | • **📋 CSV / TSV 뷰어**: 인코딩/구분자 자동 감지, 전역 검색/정렬, Markdown/JSON/SQL/CSV 변환<br>• **📝 Markdown 뷰어**: GFM 실시간 에디터, GitHub Alerts 콜아웃, 태스크 체크박스 동기화, 목차(TOC)<br>• **📊 Mermaid 다이어그램**: 16종 프리셋 시각화, 마우스 휠 줌/팬, SVG/PNG 고해상도 이미지 내보내기<br>• **✂️ 이미지 슬라이서**: Pillow 기반 다중 절단선, 고정 px 간격, 균등 N등분, 여백 자동 감지 & ZIP/폴더 저장 |
-| **🧠 AI 시맨틱 검색** | • **로컬 딥러닝 신경망(`intfloat/multilingual-e5-small` ONNX)** 기반 의미론적 문맥 검색<br>• 키워드가 정확히 일치하지 않아도 의미와 문맥으로 전체 데이터(이메일, 메모, 다이어그램 등)를 탐색<br>• 문장 간 유사도 정밀 비교 및 증분 벡터 캐싱 지원 |
+| **💼 업무 & 협업<br>(Redmine·달력·이메일)** | • **🦊 Redmine**: 내 일감(Issues) 실시간 대시보드, 상태/진척도 인라인 즉시 변경, 프로젝트 위키(Wiki) 뷰어/에디터, 백그라운드 트레이 알림, 관심 프로젝트(⭐ 즐겨찾기) 우선 필터<br>• **📅 달력 & 일정**: Google Calendar 및 iCal(ICS) 실시간 구독, 로컬 캐싱(`localStorage` + SQLite `calendar_events_cache`) 기반 선 캐시 렌더링, 개별 일정 알림 및 30초 주기 백그라운드 알림 데몬(트레이 + 차임벨)<br>• **📧 이메일 아카이브**: 3,100+건 EML 로컬 보관소, 대화별 스레드 묶기(Thread View), 시간순 아코디언 타임라인, 첨부파일 추출, **IMAP 단방향 누적 아카이브(앱 비밀번호 & Google OAuth 2.0 `XOAUTH2`, 백그라운드 주기 폴링, 자동 AI 벡터 DB 임베딩)**, **HTML 외부 이미지/트래킹 픽셀 기본 차단 가드** |
+| **📊 뷰어 / 다이어그램<br>(CSV·MD·Mermaid·슬라이서·QR)** | • **📋 CSV / TSV 뷰어**: 인코딩/구분자 자동 감지, 전역 검색/정렬, Markdown/JSON/SQL/CSV 변환<br>• **📝 Markdown 뷰어**: GFM 실시간 에디터, GitHub Alerts 콜아웃, 태스크 체크박스 동기화, 목차(TOC)<br>• **📊 Mermaid 다이어그램**: 16종 프리셋 시각화, **3-Pane 분할 레이아웃(목록/에디터/뷰포트)**, 기존 다이어그램 수정(Update), 마우스 휠 줌/팬, SVG/PNG 고해상도 이미지 내보내기<br>• **✂️ 이미지 슬라이서**: Pillow 기반 다중 절단선, 고정 px 간격, 균등 N등분, 여백 자동 감지 & ZIP/폴더 저장<br>• **📱 QR 코드 도구**: `jsQR` 기반 카메라/클립보드/이미지 파일 QR 스캔, `qrcode.min.js` QR 생성 및 PNG 저장, 포맷 자동 판별(`url`/`wifi`/`email`/`tel`/`vcard`/`text`), SQLite 이력(`qr_history`) 보관 |
+| **🧠 AI 시맨틱 검색** | • **로컬 딥러닝 신경망(`intfloat/multilingual-e5-small` ONNX)** 기반 의미론적 문맥 검색<br>• 키워드가 정확히 일치하지 않아도 의미와 문맥으로 전체 데이터(이메일, 메모, 다이어그램 등)를 탐색<br>• 문장 간 유사도 정밀 비교, 증분 벡터 캐싱 및 IMAP 메일 수신 시 자동 벡터 임베딩 지원 |
 | **🎲 모의 데이터 스튜디오** | • **3-Pass 복합 가상 데이터 생성기 & 엑셀(.xlsx) / CSV 내보내기 엔진**<br>• 순번(Sequence), 한국인 이름/이메일 영문 로마자 표기법 변환, 선택(Choice) 및 키-값(Key-Value) 연계 매핑<br>• 커스텀 컬럼 양식 생성, 수정, 삭제 및 SQLite 영구 동기화 |
 | **⚡ 빠른 실행 & 바로가기** | • **📁 폴더 바로가기**: 프로젝트 작업 디렉토리 바로가기 카드 및 **원하는 폴더 위치에서 PowerShell / CMD 즉시 실행 바**<br>• **⚡ 프로그램 & 툴 빠른 실행**: 자주 쓰는 앱/실행 파일(`.exe`, `.bat`), **SSH 터미널 접속**, **웹 URL**, **PowerShell 명령** 바로 실행<br>• 각각 전용 **[⚙️ 편집]** 팝업을 통한 항목 추가, 인라인 수정(`✏️`), 삭제, 파일/폴더 선택 대화상자 및 드래그 앤 드롭 순서 변경 |
-| **🔢 커스텀 생성기** | • 사용자가 직접 JavaScript 스크립트로 **새로운 생성기 추가/수정/순서 변경** 가능<br>• 기본 내장: 국세청 사업자번호, UUID v4, 16자리 난수 비밀번호, 한국인 가상 더미, 타임스탬프 등 |
+| **🔢 커스텀 생성기** | • 사용자가 직접 JavaScript 스크립트로 **새로운 생성기 추가/수정/순서 변경** 가능<br>• **동적 실행 파라미터(`variables_json`)**: 텍스트/숫자/선택/여러 줄(`textarea`, 줄바꿈 보존) 입력 모달 자동 생성<br>• 기본 내장: 국세청 사업자번호, UUID v4, 16자리 난수 비밀번호, 한국인 가상 더미, 타임스탬프 등 |
 | **🧪 JS 실행기** | • JSFiddle / RunJS 스타일의 **JavaScript 코드 샌드박스** (비동기 `async/await` 지원)<br>• `console.log/warn/error` 출력 캡처, 실행 시간 측정, `Ctrl + Enter` 실행, 코드 자동 영구 보존 |
-| **📝 빠른 메모** | • **경량 스크래치패드 / 메모장**<br>• 다중 메모 생성, 실시간 자동 저장(Autosave), 고정(Pin) 기능, 마우스 드래그블 스플리터 제공 |
+| **📝 빠른 메모** | • **경량 스크래치패드 / 메모장**<br>• **카테고리/보관함 관리(`note_categories`)**, 4종 정렬, 상단 고정(Pin), `localStorage` 동기화, 실시간 자동 저장(Autosave)<br>• 에디터 내 **`Tab` / `Shift+Tab` 다중 행 들여쓰기/내어쓰기** 및 드래그블 스플리터 제공 |
 | **💾 통합 백업 / 복원** | • **Zero-Memory Python 백엔드 스트리밍 아키텍처** (브라우저 메모리 소모 최소화)<br>• 중앙 SQLite DB 및 설정을 **단일 JSON 및 90% 압축 ZIP 포맷으로 일괄/선택적 내보내기 & 복원(Merge/Replace)** |
-| **📌 데스크톱 엣지 퀵 위젯<br>(Edge Handle & FullscreenGuard)** | • **초경량 화면 모서리 플로팅 도크 탭 (Edge Handle)**: 화면 가장자리 밀착형 플러시 사각 도크 탭, 3단계 규격(슬림 12×70, 기본 20×120, 컴팩트 8×50), 250ms Hover Dwell 자동 확장, 네이티브 드래그 및 반대편 가장자리 자동 스냅<br>• **380×620 프레임리스 퀵 위젯 패널**: 빠른 실행, 퀵 메모, 시스템 모니터링 탭 통합 제공, 상단 헤더 📏 크기 조절 메뉴 및 상시 고정(📌 Pin)<br>• **시스템 탭 전원 제어 & 비차단 모달**: 위젯 내 즉시 재시작 및 완전 종료 버튼 제공, `showWidgetConfirm` 인레이어 확인 모달 및 마우스 아웃 자동 접힘 방어(`isModalOpen`)<br>• **전체화면 애플리케이션 자동 억제 및 복원 (FullscreenGuard)**: Win32 `SetWinEventHook` 기반 전용 메시지 루프 스레드로 게임/동영상 전체화면 자동 감지(Hide), 전체화면 종료 시 `SW_SHOWNOACTIVATE` 비탈취 조용한 복원<br>• **트레이 및 웹 UI 2중 제어**: 트레이 메뉴 `📏 핸들 크기` 서브메뉴 및 위젯 헤더 팝오버 메뉴를 통한 런타임 실시간 크기 변경 및 영속화(`data/widget_config.json`) |
+| **📌 데스크톱 엣지 퀵 위젯<br>(Edge Handle & 주식/환율)** | • **화면 모서리 플로팅 도크 탭 (Edge Handle)**: 화면 가장자리 밀착형 플러시 사각 도크 탭, 3단계 규격(슬림 12×70, 기본 20×120, 컴팩트 8×50), 250ms Hover Dwell 자동 확장, 네이티브 드래그 및 반대편 가장자리 자동 스냅<br>• **380×620 프레임리스 퀵 위젯 패널**: 빠른 실행, 퀵 메모, **실시간 주식 & 환율**, 시스템 모니터링 4개 탭 통합 제공, 상단 헤더 📏 크기 조절 메뉴 및 상시 고정(📌 Pin)<br>• **📈 실시간 주식 & 환율 탭 (`services/stock_service.py`)**: Toss Open API OAuth2 + WebSocket/REST Fail-Safe 스트리밍, USD/KRW·JPY(100)/KRW 환율 바, 커스텀 그룹 멀티 탭 및 드래그 카드 순서 변경, 매수/매도 수수료 분리 손익분기·목표 수익 매도가 표시, **단타(1분봉 EMA5/20)·스윙(일봉 MA5/20) 5단계 추세 아이콘**, **개인 Relay Server 모드(`local`/`relay`)** 지원<br>• **시스템 탭 전원 제어 & 비차단 모달**: 위젯 내 즉시 재시작 및 완전 종료 버튼 제공, `showWidgetConfirm` 인레이어 확인 모달 및 마우스 아웃 자동 접힘 방어(`isModalOpen`)<br>• **전체화면 애플리케이션 자동 억제 및 복원 (FullscreenGuard)**: Win32 `SetWinEventHook` 기반 전용 메시지 루프 스레드로 게임/동영상 전체화면 자동 감지(Hide), 전체화면 종료 시 `SW_SHOWNOACTIVATE` 비탈취 조용한 복원<br>• **트레이 및 웹 UI 2중 제어**: 트레이 메뉴 `📏 핸들 크기` 서브메뉴 및 위젯 헤더 팝오버 메뉴를 통한 런타임 실시간 크기 변경 및 영속화(`data/widget_config.json`) |
 | **🛡️ 시스템 트레이, 로깅 & 런타임 제어** | • **웹 UI 기반 백엔드 전원 제어**: 상단 헤더 및 시스템 탭에서 서버 완전 종료 및 즉시 재시작(Hot Reload) 지원<br>• **전역 시스템 로깅 파이프라인**: stdout/stderr 가로채기(`LogStreamRedirector`), 태그 파싱, 순환 링 버퍼(최근 1,000건), `threading.excepthook` 기반 스레드 크래시 방어<br>• **독립 브라우저 프로파일 격리**: `data/browser_profile` 분리로 Chrome 기본 프로파일 점유 및 확장프로그램 인증키 간섭 방지<br>• **Windows Named Semaphore** 기반 단일 인스턴스 락(중복 실행 방지 및 기존 창 자동 활성화)<br>• 검은색 콘솔 창 없는 GUI 구동(`run.pyw`), Windows 시스템 트레이 상주 (`utiltools.ico`), V8 힙 128MB 제한 및 Windows WorkingSet 유휴 RAM 자동 회수 |
 
 ---
@@ -35,16 +35,16 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 | :--- | :--- | :--- |
 | **🤝 Handover Guide (인수인계서)** | • **개발 환경 셋업, 핵심 수명주기 아키텍처, 6대 개발 규정, 작업 완료 전 무결성 검증 체크리스트**<br>• 경로 참조 원칙, 비차단 UI 규정, GitFlow 브랜치 보호 및 무결성 검증 파이프라인 | [📖 `docs/HANDOVER_GUIDE.md`](docs/HANDOVER_GUIDE.md) |
 | **🤖 AI Coding Sessions Hub** | • **통합 AI 세션 허브: Antigravity CLI(`agy`) & OpenCodex(`ocx`) 듀얼 엔진 아키텍처**<br>• **5ms 논블로킹 활성 락 검사**, `mode=ro` SQLite 카탈로그 조회, 실시간 Live Tail 파서, 창 전환 | [📖 `docs/AI_CODING_SESSIONS.md`](docs/AI_CODING_SESSIONS.md) |
-| **🗄️ Database Architecture & Schema** | • **중앙 SQLite DB(`data/app.db`) 16개 테이블 전체 ERD & 스키마 명세**<br>• WAL 모드 및 고성능 PRAGMA 최적화, 인덱스 커버리지, 외부 AI CLI DB 연동 규격 | [📖 `docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) |
+| **🗄️ Database Architecture & Schema** | • **중앙 SQLite DB(`data/app.db`) 21개 사용자 테이블(총 22개 SQLite 테이블) 전체 ERD & 스키마 명세**<br>• WAL 모드 및 성능 PRAGMA 최적화, 인덱스 커버리지, JSON 설정 파일 및 외부 AI CLI DB 연동 규격 | [📖 `docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) |
 | **📷 OCR Engine Architecture** | • **Windows Media OCR 네이티브 파이프라인 vs RapidOCR 정밀 벤치마크**<br>• Pillow Lanczos 적응형 리스케일링, 대화형 HTML5 ROI 캔버스, 다국어 텍스트 인식 | [📖 `docs/OCR_ENGINE_ARCHITECTURE.md`](docs/OCR_ENGINE_ARCHITECTURE.md) |
 | **🦊 Redmine Integration** | • **Redmine REST API 연동, 일감/위키 대시보드, SQLite 오프라인 캐시**<br>• **주요 관심 프로젝트(⭐ 즐겨찾기) 우선순위 필터링**, 백그라운드 폴링 & 트레이 알림 | [📖 `docs/REDMINE_INTEGRATION.md`](docs/REDMINE_INTEGRATION.md) |
-| **📧 Email Archive System** | • **3,100+건 대용량 이메일 아카이브 & 대화별 스레드 타임라인 뷰어**<br>• 비파괴적 제목 정규화 알고리즘, 청크 페이징 & 지연 로딩 아키텍처 | [📖 `docs/EMAIL_ARCHIVE.md`](docs/EMAIL_ARCHIVE.md) |
+| **📧 Email Archive System** | • **3,100+건 대용량 이메일 아카이브, IMAP 단방향 누적 동기화(앱 비밀번호 / Google OAuth 2.0 `XOAUTH2`)**<br>• 비파괴적 제목 정규화 스레딩, 자동 AI 벡터 임베딩, HTML 외부 이미지/트래킹 픽셀 차단 가드 | [📖 `docs/EMAIL_ARCHIVE.md`](docs/EMAIL_ARCHIVE.md) |
 | **🧠 AI Semantic Search Engine** | • **로컬 딥러닝 임베딩 신경망(`intfloat/multilingual-e5-small` ONNX)**<br>• 코사인 유사도 연산, 크로스 도메인 증분 벡터 캐시, `Ctrl+K` 검색 & 문장 비교 도구 | [📖 `docs/AI_SEMANTIC_SEARCH.md`](docs/AI_SEMANTIC_SEARCH.md) |
 | **🎲 Mock Data Studio** | • **3-Pass 복합 가상 데이터 생성 파이프라인 (독립 ➔ 로마자/이메일 ➔ 종속 매핑)**<br>• 한국어 로마자 표기법 변환, 커스텀 서식 스키마 관리 및 엑셀(.xlsx)/CSV 스트리밍 | [📖 `docs/MOCK_DATA_STUDIO.md`](docs/MOCK_DATA_STUDIO.md) |
 | **✂️ Image Slicer Studio** | • **Pillow 이미지 분할 파이프라인 & 인터랙티브 HTML5 캔버스**<br>• 다중 절단선, 자유 경계 박스, 고정 px, 균등 N등분, 여백 자동 감지 & ZIP 패킹 | [📖 `docs/IMAGE_SLICER.md`](docs/IMAGE_SLICER.md) |
-| **📊 Data & Document Viewers** | • **CSV/TSV 테이블 뷰어** (인코딩/구분자 자동 감지, MD/JSON/SQL 변환)<br>• **Markdown Studio** (GitHub Alerts, 양방향 태스크 동기화, TOC) & **Mermaid 다이어그램** | [📖 `docs/DATA_VIEWERS.md`](docs/DATA_VIEWERS.md) |
+| **📊 Data & Document Viewers** | • **CSV/TSV 테이블 뷰어** (인코딩/구분자 자동 감지, MD/JSON/SQL 변환)<br>• **Markdown Studio** (GitHub Alerts, 양방향 태스크 동기화, TOC) & **Mermaid 3-Pane 스튜디오** | [📖 `docs/DATA_VIEWERS.md`](docs/DATA_VIEWERS.md) |
 | **💾 Zero-Memory Backup & Restore** | • **Zero-Memory Python 디스크 직접 스트리밍 아키텍처** (브라우저 메모리 소모 최소화)<br>• 90% 압축 ZIP 포맷, 2대 복원 모드(Merge vs Replace) & SQLite 원자적 일괄 복원 | [📖 `docs/BACKUP_AND_RESTORE.md`](docs/BACKUP_AND_RESTORE.md) |
-| **🛠️ Core System & Utilities** | • **웹 UI 서버 전원 제어 & 재시작**, 퀵 위젯 시스템 제어, 전역 로깅 & 스레드 크래시 방어, 트레이 제어<br>• Google Calendar/iCal 동기화, JS 샌드박스 런너, 빠른 실행 & 데스크톱 UI 런타임 현대화 로드맵 | [📖 `docs/CORE_AND_UTILITIES.md`](docs/CORE_AND_UTILITIES.md) |
+| **🛠️ Core System & Utilities** | • **웹 UI 서버 전원 제어 & 재시작**, 엣지 퀵 위젯(주식/환율·시스템 제어), 전역 로깅 & 스레드 크래시 방어<br>• 캘린더 캐싱/알림 데몬, QR 도구, 커스텀 생성기 파라미터, JS 샌드박스 런너 & 트레이 제어 | [📖 `docs/CORE_AND_UTILITIES.md`](docs/CORE_AND_UTILITIES.md) |
 
 ---
 
@@ -60,27 +60,29 @@ Util-Tools/
 ├── requirements.txt            # 필수 Python 패키지 목록
 ├── utiltools.ico               # 애플리케이션 & 시스템 트레이 아이콘
 │
-├── docs/                       # [기술 문서] 11대 기능별 상세 아키텍처 및 인수인계서
+├── docs/                       # [기술 문서] 기능별 상세 아키텍처, 프로토콜 규격 및 인수인계서
 │   ├── plans/                  # [기획 문서] 세션 센터, 런처 통합 등 구현 기획서 보관소
 │   ├── HANDOVER_GUIDE.md       # 종합 개발 및 운영 인수인계서 (6대 규정, 체크리스트)
 │   ├── AI_CODING_SESSIONS.md   # 통합 AI 코딩 세션 허브: Antigravity CLI & OpenCodex 듀얼 엔진 아키텍처
-│   ├── DATABASE_SCHEMA.md      # 중앙 SQLite DB(app.db) 16개 테이블 ERD 및 상세 스키마 명세
+│   ├── DATABASE_SCHEMA.md      # 중앙 SQLite DB(app.db) 21개 사용자 테이블 ERD 및 상세 스키마 명세
 │   ├── OCR_ENGINE_ARCHITECTURE.md # Windows Media OCR vs RapidOCR 벤치마크 및 아키텍처
 │   ├── REDMINE_INTEGRATION.md  # Redmine REST API 연동, 일감/위키, 주요 프로젝트⭐ 우선순위
-│   ├── EMAIL_ARCHIVE.md        # 대용량 이메일 아카이브 & 대화 스레드 타임라인 아키텍처
+│   ├── EMAIL_ARCHIVE.md        # 대용량 이메일 아카이브, IMAP 동기화 & 대화 스레드 타임라인 아키텍처
 │   ├── AI_SEMANTIC_SEARCH.md   # 로컬 ONNX 신경망 임베딩 및 AI 시맨틱 검색 엔진
 │   ├── MOCK_DATA_STUDIO.md     # 3-Pass 복합 가상 데이터 생성기 & 엑셀/CSV 스트리밍
 │   ├── IMAGE_SLICER.md         # Pillow 이미지 슬라이서, 다중 절단선 & 여백 감지
-│   ├── DATA_VIEWERS.md         # CSV/TSV 테이블 뷰어, Markdown Studio & Mermaid 렌더러
+│   ├── DATA_VIEWERS.md         # CSV/TSV 테이블 뷰어, Markdown Studio & Mermaid 3-Pane 렌더러
 │   ├── BACKUP_AND_RESTORE.md   # Zero-Memory 백엔드 스트리밍 백업 & 원자적 복원 엔진
-│   └── CORE_AND_UTILITIES.md   # 시스템 트레이, 위젯 시스템 제어, 전역 로깅 & 스레드 크래시 방어
+│   └── CORE_AND_UTILITIES.md   # 시스템 트레이, 엣지 위젯(주식/환율·시스템 제어), 전역 로깅 & 크래시 방어
 │
 ├── templates/                  # [기본 서식] 최초 실행 시 DB/설정 초기화용 템플릿 (*.example.json 8종)
 │
-├── data/                       # [사용자 데이터] SQLite 중앙 데이터베이스 (Git 제외)
-│   ├── app.db                  # 중앙 SQLite DB (16개 테이블, WAL 모드)
+├── data/                       # [사용자 데이터] SQLite 중앙 데이터베이스 및 로컬 설정 (Git 제외)
+│   ├── app.db                  # 중앙 SQLite DB (21개 사용자 테이블, WAL 모드)
 │   ├── browser_profile/        # [브라우저 격리] 독립 사용자 프로파일 디렉토리 (Git 제외)
-│   └── widget_config.json      # [위젯 영속화] 엣지 핸들 위치(edge, offset_ratio), 크기(handle_size)
+│   ├── widget_config.json      # [위젯 영속화] 엣지 핸들 위치(edge, offset_ratio), 크기(handle_size)
+│   ├── stock_config.json       # [주식/환율 설정] Toss API/Relay 연결, 그룹별 관심종목, 환율 캐시
+│   └── stock_master.json       # [종목 마스터] 동기화된 국내/미국 상장 종목 검색 캐시
 │
 ├── emails/                     # [개인 데이터] 로컬 저장된 원본 .eml 파일 보관소 (Git 제외)
 │
@@ -89,73 +91,90 @@ Util-Tools/
 │
 ├── core/                       # [코어 시스템]
 │   ├── __init__.py
-│   ├── paths.py                # 개발 모드 & 배포본(.exe) 중앙 표준 경로 관리자
+│   ├── paths.py                # 개발 모드 & 배포본(.exe) 중앙 표준 경로 관리자 (APP_VERSION: 0.22.10)
 │   ├── single_instance.py      # Windows Named Semaphore 기반 단일 인스턴스 중복 방지 매니저
 │   ├── edge_widget.py          # pywebview 단일 창 엣지 핸들 ↔ 380x620 퀵 위젯 생명주기 관리자
 │   ├── fullscreen_guard.py     # Win32 SetWinEventHook 기반 전체화면 감지 및 No-activate 복원
 │   ├── logger.py               # 전역 로거, stdout/stderr 가로채기, 스레드 크래시 방어 및 링 버퍼
-│   └── tray.py                 # pystray 트레이 아이콘, 윈도우 생명주기 및 트레이 알림 관리자
+│   └── tray.py                 # pystray 트레이 아이콘, 핸들 크기 서브메뉴, 윈도우 생명주기 및 알림 관리자
 │
-├── services/                   # [백엔드 서비스 모듈 (Python - 23종)]
+├── services/                   # [백엔드 서비스 모듈 (Python - 26종)]
 │   ├── __init__.py
 │   ├── agy_service.py          # 통합 AI 세션 컨트롤러, Antigravity CLI 파서, 감시 & 삭제 라우팅
 │   ├── opencodex_service.py    # OpenCodex(ocx) SQLite 세션 카탈로그, 5ms 파일 락, rollout 파서
+│   ├── stock_service.py        # Toss Open API/Relay 주가·환율 스트리밍, 전일 종가 보정 & 5단계 추세 연산
+│   ├── imap_service.py         # IMAP4_SSL 단방향 아카이빙, Google OAuth 2.0(XOAUTH2), 백그라운드 폴링
+│   ├── qr_service.py           # QR 포맷 자동 판별, 외부 URL 열기, PNG 저장 & SQLite 이력 CRUD
 │   ├── whisper_service.py      # faster-whisper 음성 전사, sherpa-onnx 화자 분리, Range 206 스트리밍
 │   ├── diff_service.py         # Myers 알고리즘 단어 단위 인라인 diff 엔진
 │   ├── ocr_service.py          # Windows Media OCR 네이티브 래퍼, Lanczos 리스케일링 및 히스토리
+│   ├── image_service.py        # Pillow 이미지 슬라이서, 다중 절단선, 여백 감지 & ZIP 내보내기
 │   ├── system_service.py       # 웹 UI 기반 서버 완전 종료, Hot Reload(재시작) 및 단일 인스턴스 락 인계
-│   ├── db_service.py           # 중앙 SQLite WAL 모드 커넥션 풀 & 스키마 관리자 (16개 테이블)
-│   ├── ai_search_service.py    # ONNX AI 시맨틱 검색 & 벡터 캐시 엔진
+│   ├── db_service.py           # 중앙 SQLite WAL 모드 커넥션 풀 & 스키마 관리자 (21개 사용자 테이블)
+│   ├── ai_search_service.py    # ONNX AI 시맨틱 검색 & 증분 벡터 캐시 엔진
 │   ├── email_service.py        # EML 파서, 스레드 정규화, 카테고리 분류 & 첨부파일 추출
 │   ├── redmine_service.py      # Redmine REST API 연동 (일감, 위키, 메타데이터, SQLite 캐시)
 │   ├── mock_data_service.py    # 3-Pass 모의 데이터 생성, 로마자 변환 & 엑셀/CSV 빌더
 │   ├── csv_service.py          # CSV/TSV 파서, 인코딩/구분자 자동 감지 및 저장
 │   ├── markdown_service.py     # Markdown 파일 열기/저장 및 인코딩 감지 백엔드
-│   ├── notes_service.py        # 빠른 메모/스크래치패드 SQLite CRUD
-│   ├── diagram_service.py      # Mermaid 다이어그램 SQLite CRUD
-│   ├── generator_service.py    # 커스텀 데이터 생성기 SQLite CRUD
+│   ├── notes_service.py        # 빠른 메모 & 보관함 카테고리(`note_categories`) SQLite CRUD
+│   ├── diagram_service.py      # Mermaid 다이어그램 SQLite CRUD (생성/수정/삭제)
+│   ├── generator_service.py    # 커스텀 데이터 생성기 & 실행 파라미터 스키마 SQLite CRUD
 │   ├── quick_launch_service.py # 빠른 실행/SSH/URL SQLite CRUD
 │   ├── shortcuts_service.py    # 폴더 바로가기 SQLite CRUD 및 터미널 런처
-│   ├── calendar_service.py     # 구글 캘린더 / iCal(ICS) 파싱 및 일정 동기화
-│   ├── settings_service.py     # 창 크기/테마/agy 연동 설정 영구 관리
+│   ├── calendar_service.py     # 구글 캘린더/iCal 파싱, 로컬 캐싱 및 30초 주기 알림 데몬
+│   ├── settings_service.py     # 창 크기/테마/agy·ocx 연동 설정 영구 관리
 │   ├── backup_service.py       # 전체 데이터 통합 JSON/ZIP 백업/복원 레지스트리
 │   └── dialog_service.py       # Tkinter 기반 파일/폴더 선택 대화상자
 │
 ├── web/                        # [프론트엔드 리소스]
 │   ├── index.html              # 메인 UI 마크업 (헤더 전원 제어, 드롭다운 메뉴, AI 세션 허브)
 │   ├── style.css               # 모던 다크 테마 CSS, AI 세션 뱃지, Live Tail & 헤더 스타일
-│   ├── widget.html             # 엣지 핸들 및 확장 퀵 위젯 전용 마크업 (시스템 탭 전원 제어)
-│   ├── widget.css              # 플러시 엣지 탭 및 다크 프레임리스 위젯 전용 스타일
+│   ├── widget.html             # 엣지 핸들 및 확장 퀵 위젯 전용 마크업 (주식/환율·시스템 제어 탭)
+│   ├── widget.css              # 플러시 엣지 탭, 주식 추세 뱃지 및 다크 프레임리스 위젯 스타일
 │   ├── utiltools.ico           # 브라우저 창 Favicon
-│   └── js/                     # [프론트엔드 모듈 (JavaScript - 26종)]
+│   └── js/                     # [프론트엔드 모듈 (JavaScript - 29종)]
 │       ├── app.js              # 탭 전환 네비게이션, 드롭다운 그룹 제어 및 공통 모달
-│       ├── widget.js           # 엣지 위젯 클라이언트 로직 (호버 Dwell, 드래그, 크기 메뉴, 시스템 제어)
+│       ├── widget.js           # 엣지 위젯 클라이언트 로직 (호버 Dwell, 주식/환율·드래그 정렬, 시스템 제어)
 │       ├── whisper.js          # 오디오 드래그앤드롭 업로드, Range 206 플레이어, 세그먼트 재생, 자막 내보내기
-│       ├── diff.js             # 텍스트 비교 UI, 좌우 분할/단일 뷰, 공백/대소문자 무시, 동기화 스크롤
+│       ├── diff_checker.js     # 텍스트 비교 UI, 좌우 분할/단일 뷰, 공백/대소문자 무시, 동기화 스크롤
 │       ├── ocr.js              # 대화형 캔버스 ROI 영역 선택, 다국어 OCR, 텍스트 복사 및 히스토리
+│       ├── qr_toolkit.js       # QR 스캐너(카메라/캡처/파일), 생성기, PNG 저장 & 이력 관리
+│       ├── jsqr.min.js         # 클라이언트 사이드 QR 코드 디코딩 라이브러리
+│       ├── qrcode.min.js       # 클라이언트 사이드 QR 코드 생성 라이브러리
+│       ├── image_slicer.js     # 이미지 슬라이서 인터랙티브 캔버스, 다중 절단선 & ZIP 내보내기
 │       ├── agy_sessions.js     # 통합 AI 세션 테이블, 듀얼 모드 알림, Live Tail 모달 & 영구 삭제
 │       ├── console.js          # 하단 로그창, 스플리터 조절기 & 고도화된 토스트(Toast) 알림
 │       ├── drag_drop.js        # 공통 마우스 드래그 앤 드롭 핸들러
-│       ├── email_viewer.js     # EML 아카이브, 대화 스레드 타임라인 & 온디맨드 뷰어
+│       ├── email_viewer.js     # EML 아카이브, IMAP 동기화/OAuth 모달, 트래킹 차단 가드 & 스레드 뷰어
 │       ├── redmine.js          # Redmine 일감 대시보드, 타임라인, 상태변경 & 위키 에디터
 │       ├── ai_search.js        # AI 문맥 검색 & 문장 의미 비교 모달 UI (Ctrl+K)
 │       ├── mock_data_studio.js # 3-Pass 모의 데이터 스튜디오 & 서식 엑셀/CSV 생성 UI
 │       ├── csv_viewer.js       # CSV/TSV 데이터 뷰어, 정렬, 검색, 변환/내보내기
 │       ├── markdown_viewer.js  # Markdown 실시간 뷰어/에디터, GFM/Mermaid 렌더러
-│       ├── notes.js            # 빠른 메모 / 스크래치패드 실시간 에디터 및 자동 저장
-│       ├── calendar.js         # 월간 캘린더, 일정 동기화, Agenda 및 구독 관리
-│       ├── mermaid_diagram.js  # Mermaid 렌더러, 줌/팬 인터랙션 및 SVG/PNG 내보내기
-│       ├── mermaid_templates.js # 다이어그램 템플릿 프리셋 모듈
-│       ├── generator.js        # 커스텀 데이터 생성기 스튜디오 UI
+│       ├── notes.js            # 빠른 메모 에디터, 카테고리 관리, 4종 정렬 & Tab/Shift+Tab 들여쓰기
+│       ├── calendar.js         # 월간 캘린더, 로컬 캐시 선렌더링, 일정 알림 드롭다운 & 차임벨
+│       ├── mermaid.min.js      # 오프라인 Mermaid 다이어그램 렌더링 엔진
+│       ├── mermaid_diagram.js  # Mermaid 3-Pane 스튜디오, 편집/수정, 줌/팬 & SVG/PNG 내보내기
+│       ├── mermaid_templates.js # 다이어그램 템플릿 프리셋 모듈 (16종)
+│       ├── generator.js        # 커스텀 데이터 생성기 스튜디오 & 동적 파라미터 입력 모달 UI
 │       ├── js_runner.js        # JS 플레이그라운드 (AsyncFunction 샌드박스 엔진)
 │       ├── quick_launch.js     # 빠른 실행 렌더링, 인라인 편집 & 파일 선택 연동
 │       ├── shortcuts.js        # 폴더 바로가기 렌더링, 인라인 편집 & 터미널 런처
 │       ├── backup.js           # 통합 백업/복원 모달 제어 (JSON/ZIP Export/Import)
 │       └── system.js           # 시스템 사양, 백엔드 전원 제어([🔄 재시작], [🚪 종료]) 연동
 │
-├── scripts/                    # [검증 및 자동화 하네스]
+├── scripts/                    # [검증 및 자동화 하네스 (14종)]
 │   ├── verify_integrity.py     # 🌟 5단계 동적 무결성 검증 하네스 (Zero-Maintenance)
-│   └── test_logging_crash_guard_functional.py # 로깅 및 스레드 크래시 가드 기능 테스트
+│   ├── test_logging_crash_guard_functional.py # 로깅 및 스레드 크래시 가드 기능 테스트
+│   ├── test_calendar_reminder_functional.py   # 캘린더 일정 알림 DB/데몬 기능 테스트
+│   ├── test_notes_category_functional.py      # 빠른 메모 카테고리 CRUD 기능 테스트
+│   ├── test_imap_functional.py                # IMAP 아카이브/정규화 기능 테스트
+│   ├── test_qr_functional.py                  # QR 포맷 판별 및 이력 기능 테스트
+│   ├── test_diff_functional.py                # 텍스트 Diff 알고리즘 기능 테스트
+│   ├── test_generator_service.py              # 커스텀 생성기 파라미터 기능 테스트
+│   ├── test_whisper_upload_functional.py      # Whisper 오디오 업로드 기능 테스트
+│   └── test_ocr_release_gate.py / benchmark_ocr_*.py # OCR 릴리즈 게이트 및 벤치마크 5종
 │
 └── .agents/                    # [AI 에이전트 스킬 및 규칙]
     ├── rules/
@@ -176,7 +195,7 @@ Python 3.10 이상 환경에서 아래 명령어를 실행하여 필수 의존�
 pip install -r requirements.txt
 ```
 
-*(핵심 패키지: `eel`, `pystray`, `pillow`, `openpyxl`, `numpy`, `onnxruntime`, `tokenizers`, `faster-whisper`, `sherpa-onnx`, `winocr`)*
+*(핵심 패키지: `eel`, `pystray`, `pillow`, `pywebview`, `pythonnet`, `websocket-client`, `openpyxl`, `numpy`, `onnxruntime`, `tokenizers`, `faster-whisper`, `sherpa-onnx`, `winocr`)*
 
 ---
 
@@ -212,33 +231,47 @@ python main.py
 * **AI 시맨틱 문맥 검색**:
   * `Ctrl + K`: 언제 어디서나 AI 시맨틱 검색 모달 즉시 호출
 * **통합 AI 코딩 세션 허브 (Antigravity & OpenCodex)**:
-  * 세션 행 **`[⚡ 실행]`**: 해당 프로젝트 디렉토리에서 대화형 터미널 즉시 오픈 또는 이미 열려 있는 콘솔 창 화면 전면 전환
+  * 세션 행 **`[⚡ 실행]`**: 해당 프로젝트 디렉토리에서 대화형 터미널 오픈 또는 이미 열려 있는 콘솔 창 화면 전면 전환
   * 세션 행 **`[🔍 보기]`**: 인앱 실시간 Live Tail 모달 호출 (프롬프트, 사고 과정, 도구 호출 및 결과 스트리밍 열람)
   * 세션 행 **`[🗑️]`**: 비활성 세션 영구 삭제 (비차단 확인 모달 후 정리, 실행 중인 활성 세션은 삭제 방어)
-  * 상단 필터 바: 엔진별(`전체`/`AGY`/`OpenCodex`) 라디오 필터 및 `📁 프로젝트 ▾` 멀티 체크박스 고속 필터링
+  * 상단 필터 바: 엔진별(`전체`/`AGY`/`OpenCodex`) 라디오 필터 및 `📁 프로젝트 ▾` 멀티 체크박스 필터링
   * 알림 종 모양 클릭: `1회 알림 (One-Shot)` vs `지속 알림 (Persistent)` 선택
+* **📈 데스크톱 엣지 퀵 위젯 — 주식 & 환율 탭**:
+  * 그룹 멀티 탭 전환, `⋮⋮` 드래그 핸들로 그룹 내 관심종목 카드 순서 변경
+  * 종목명 좌측 **단타 추세 아이콘**(1분봉 EMA5/20), 티커 좌측 **스윙 추세 아이콘**(일봉 MA5/20) 호버 시 상세 툴팁 확인
+  * 목표 수익률 프리셋(`0.5%`, `1%`, `2%`, `3%`, `5%`, 사용자 지정) 선택 시 매수/매도 수수료를 반영한 손익분기/목표 매도가 확인
+  * 설정 패널에서 `로컬 직접 연결(Toss Open API)` 또는 `개인 Relay 서버(relay)` 모드 전환
+* **📧 이메일 아카이브 & IMAP 동기화**:
+  * 툴바 **`[📥 IMAP 동기화]`**: 등록된 계정의 신규 메일만 단방향 누적 다운로드 후 AI 벡터 DB 자동 인덱싱
+  * 이메일 상세 뷰: 외부 이미지 및 트래킹 픽셀은 기본 차단되며, 필요 시 상단 배너에서 수동 허용 가능
+* **📱 QR 코드 도구**:
+  * 카메라 실시간 스캔, 이미지 붙여넣기(`Ctrl+V`) / 파일 드래그 앤 드롭 스캔, 텍스트·URL·Wi-Fi QR 생성 및 PNG 저장
+* **📝 빠른 메모**:
+  * `Tab` / `Shift + Tab`: 선택된 여러 줄 일괄 들여쓰기 / 내어쓰기
+  * 좌측 보관함에서 커스텀 카테고리 생성·관리 및 4종 정렬/고정(Pin) 전환
 * **🎙️ Whisper 음성 전사 & 화자 분리 Studio**:
   * 오디오/동영상 파일 드래그 앤 드롭: 파일 탐색기에서 파일을 드롭하면 자동 업로드 및 파형/플레이어 로드
-  * 전사 시작: 언어(자동/한국어/영어 등), 모델 크기(`base`/`small` 등), 화자 분리 활성화 토글 후 즉시 실행
-  * 세그먼트 클릭: 해당 발화 시작 지점으로 오디오 재생 바 즉시 이동
-  * 자막 내보내기: SRT, VTT, TXT 버튼으로 화자 태그가 포함된 자막 파일 즉시 다운로드
+  * 전사 시작: 언어(자동/한국어/영어 등), 모델 크기(`base`/`small` 등), 화자 분리 활성화 토글 후 실행
+  * 세그먼트 클릭: 해당 발화 시작 지점으로 오디오 재생 바 이동
+  * 자막 내보내기: SRT, VTT, TXT 버튼으로 화자 태그가 포함된 자막 파일 다운로드
 * **🔍 텍스트 비교 (Diff Checker)**:
   * 원본/수정본 입력: 텍스트 직접 입력 또는 파일 로드
   * 보기 모드 전환: `[나란히 보기 (Side-by-Side)]` vs `[단일 통합 보기 (Unified)]`
   * 옵션 토글: 공백 차이 무시, 영문 대소문자 차이 무시
 * **📷 Windows Media OCR Studio**:
-  * 이미지 붙여넣기(`Ctrl+V`) 또는 드래그 앤 드롭: 클립보드 스크린샷 즉시 인식
+  * 이미지 붙여넣기(`Ctrl+V`) 또는 드래그 앤 드롭: 클립보드 스크린샷 인식
   * 영역 지정(ROI): 마우스 드래그로 사각 영역을 그려 특정 텍스트 블록만 선별 인식
 * **웹 UI 백엔드 전원 제어**:
-  * 상단 헤더 및 퀵 위젯 **`[🔄 재시작]`**: SQLite WAL 동기화 및 세마포어 해제 후 수정된 파이썬 코드를 반영하여 즉시 재시동 (Hot Reload)
+  * 상단 헤더 및 퀵 위젯 **`[🔄 재시작]`**: SQLite WAL 동기화 및 세마포어 해제 후 수정된 파이썬 코드를 반영하여 재시동 (Hot Reload)
   * 상단 헤더 및 퀵 위젯 **`[🚪 종료]`**: 비차단 확인 후 백엔드 프로세스 및 시스템 트레이 완전 종료
 * **JS 실행기 단축키**:
-  * `Ctrl + Enter` (또는 `Cmd + Enter`): 작성한 자바스크립트 코드 즉시 실행
+  * `Ctrl + Enter` (또는 `Cmd + Enter`): 작성한 자바스크립트 코드 실행
   * `Tab` 키: 4칸 들여쓰기(`    `) 삽입
 * **목록 순서 변경**:
   * `[⚙️ 편집]` 팝업에서 각 항목의 `⋮⋮` 핸들을 마우스로 끌어서 원하는 위치에 드롭
 * **시스템 트레이**:
   * 작업표시줄 트레이 아이콘 **더블클릭** 또는 **우클릭 -> `[🛠️ 도구 모음 열기]`**: 프로그램 창 표시
+  * 트레이 우클릭 -> **`[📏 핸들 크기]`**: 엣지 퀵 위젯 도크 탭 크기 실시간 전환 (`슬림`/`기본`/`컴팩트`)
   * 트레이 우클릭 -> **`[🚪 완전히 종료]`**: 백그라운드 프로세스 완전 종료
 
 ---

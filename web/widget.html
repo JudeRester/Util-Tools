@@ -185,9 +185,9 @@
                 <div id="stock-key-notice" class="stock-key-notice" style="display: none;">
                     <div class="notice-content">
                         <span class="notice-icon">🔑</span>
-                        <span class="notice-text">Toss API 키를 등록하면 실시간 체결가를 수신합니다.</span>
+                        <span class="notice-text">Toss API 키 또는 릴레이 서버를 설정하면 실시간 시세를 수신합니다.</span>
                     </div>
-                    <button id="btn-stock-notice-config" class="btn-notice-action">등록</button>
+                    <button id="btn-stock-notice-config" class="btn-notice-action">설정</button>
                 </div>
 
                 <!-- 실시간 종목 카드 컨테이너 -->
@@ -229,33 +229,55 @@
             </div>
         </div>
 
-        <!-- 비차단 인레이어: Toss API 키 설정 모달 -->
+        <!-- 비차단 인레이어: Toss API / 개인 릴레이 연결 설정 모달 -->
         <div id="modal-stock-key" class="widget-modal-overlay" style="display: none;">
             <div class="widget-modal-dialog stock-modal-dialog">
                 <div class="widget-modal-header">
                     <span class="widget-modal-icon">🔑</span>
-                    <span class="widget-modal-title">Toss Open API 연동 키</span>
+                    <span class="widget-modal-title">주식 데이터 연결 설정</span>
                     <button id="btn-close-stock-key" class="modal-close-btn" title="닫기">✕</button>
                 </div>
                 <div class="stock-key-body">
-                    <div class="stock-ip-banner">
-                        <span class="ip-label">현재 공인 IP:</span>
-                        <span id="stock-current-ip" class="ip-value">조회 중...</span>
-                        <span class="ip-tip">(Toss 개발자센터 등록 필수)</span>
+                    <div class="stock-mode-toggle" id="stock-mode-toggle" role="tablist" aria-label="데이터 연결 방식">
+                        <button type="button" class="stock-mode-btn active" data-mode="local">로컬 직접</button>
+                        <button type="button" class="stock-mode-btn" data-mode="relay">개인 릴레이 서버</button>
                     </div>
-                    <div class="stock-input-group">
-                        <label for="input-stock-client-id">Client ID</label>
-                        <input type="text" id="input-stock-client-id" class="stock-form-input" placeholder="Toss OpenAPI Client ID">
+
+                    <div id="stock-pane-local" class="stock-mode-pane">
+                        <div class="stock-ip-banner">
+                            <span class="ip-label">현재 공인 IP:</span>
+                            <span id="stock-current-ip" class="ip-value">조회 중...</span>
+                            <span class="ip-tip">(Toss 개발자센터 등록 필수)</span>
+                        </div>
+                        <div class="stock-input-group">
+                            <label for="input-stock-client-id">Client ID</label>
+                            <input type="text" id="input-stock-client-id" class="stock-form-input" placeholder="Toss OpenAPI Client ID" autocomplete="off">
+                        </div>
+                        <div class="stock-input-group">
+                            <label for="input-stock-client-secret">Client Secret</label>
+                            <input type="password" id="input-stock-client-secret" class="stock-form-input" placeholder="Toss OpenAPI Client Secret" autocomplete="off">
+                        </div>
                     </div>
-                    <div class="stock-input-group">
-                        <label for="input-stock-client-secret">Client Secret</label>
-                        <input type="password" id="input-stock-client-secret" class="stock-form-input" placeholder="Toss OpenAPI Client Secret">
+
+                    <div id="stock-pane-relay" class="stock-mode-pane" style="display: none;">
+                        <div class="stock-relay-tip">
+                            개인 릴레이 서버가 Toss 실시간 시세·분봉 추세를 상시 유지하고 위젯으로 스트리밍합니다.
+                        </div>
+                        <div class="stock-input-group">
+                            <label for="input-stock-relay-url">Relay Server URL</label>
+                            <input type="url" id="input-stock-relay-url" class="stock-form-input" placeholder="https://relay.example.com" autocomplete="off">
+                        </div>
+                        <div class="stock-input-group">
+                            <label for="input-stock-relay-token">Access Token (Bearer)</label>
+                            <input type="password" id="input-stock-relay-token" class="stock-form-input" placeholder="릴레이 서버 인증 토큰" autocomplete="off">
+                        </div>
                     </div>
+
                     <div id="stock-key-status" class="stock-key-status"></div>
                 </div>
                 <div class="widget-modal-actions">
                     <button id="btn-stock-key-cancel" class="widget-modal-btn btn-cancel">취소</button>
-                    <button id="btn-stock-key-save" class="widget-modal-btn btn-confirm">저장 및 인증</button>
+                    <button id="btn-stock-key-save" class="widget-modal-btn btn-confirm">저장 및 연결</button>
                 </div>
             </div>
         </div>
