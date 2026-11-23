@@ -9,6 +9,7 @@ Toss Open API & Real-time Stock / FX Streaming Service Module
 """
 import os
 import sys
+import re
 import json
 import time
 import ssl
@@ -29,12 +30,13 @@ logger = core.logger
 # Global In-Memory State
 _widget_window = None
 _config_lock = threading.Lock()
-_cache_lock = threading.Lock()
+_cache_lock = threading.RLock()
 _token_lock = threading.Lock()
 _stream_lock = threading.Lock()
 _market_calendar_lock = threading.Lock()
 _toss_rate_lock = threading.Lock()
 _prev_close_backfill_lock = threading.Lock()
+_trend_backfill_lock = threading.Lock()
 
 _access_token: Optional[str] = None
 _token_expires_at: float = 0.0
@@ -49,11 +51,14 @@ _last_429_log_time: float = 0.0
 _last_403_log_time: float = 0.0
 _last_batch_price_time: float = 0.0
 _prev_close_inflight: set = set()
+_trend_inflight: set = set()
 
 _fx_cache: Dict[str, Any] = {"data": None, "expires_at": 0.0}
 _quote_cache: Dict[str, Dict[str, Any]] = {}
 _master_cache: List[Dict[str, Any]] = []
 _prev_close_cache: Dict[str, Dict[str, Any]] = {}
+_daily_trend_cache: Dict[str, Dict[str, Any]] = {}
+_intraday_trend_cache: Dict[str, Dict[str, Any]] = {}
 _market_calendar_cache: Dict[str, Dict[str, Any]] = {}
 
 
@@ -165,6 +170,16 @@ def load_stock_config() -> Dict[str, Any]:
 
         if "active_group_id" not in conf or not any(g.get("id") == conf.get("active_group_id") for g in conf["groups"]):
             conf["active_group_id"] = conf["groups"][0]["id"]
+            migrated = True
+
+        if conf.get("connection_mode") not in ("local", "relay"):
+            conf["connection_mode"] = "local"
+            migrated = True
+        if "relay_url" not in conf or not isinstance(conf.get("relay_url"), str):
+            conf["relay_url"] = ""
+            migrated = True
+        if "relay_token" not in conf or not isinstance(conf.get("relay_token"), str):
+            conf["relay_token"] = ""
             migrated = True
 
         if migrated:
@@ -813,6 +828,351 @@ def _schedule_prev_close_backfill(codes: List[str]) -> None:
     threading.Thread(target=_worker, name="StockPrevCloseBackfillThread", daemon=True).start()
 
 
+# -----------------------------------------------------------------------------
+# 5-Level Trend Engine (Swing: Daily MA5/MA20, Scalp: Intraday EMA5/EMA20)
+# -----------------------------------------------------------------------------
+
+TREND_EMOJI = {
+    "strong_up": "🚀",
+    "up": "📈",
+    "neutral": "➖",
+    "down": "📉",
+    "strong_down": "🔻",
+    "unknown": "·"
+}
+
+TREND_LABEL = {
+    "strong_up": "강한 상승",
+    "up": "상승",
+    "neutral": "횡보",
+    "down": "하락",
+    "strong_down": "강한 하락",
+    "unknown": "집계 중"
+}
+
+
+def _make_trend_obj(kind_label: str, level: str, detail: str = "") -> Dict[str, Any]:
+    lv = level if level in TREND_EMOJI else "unknown"
+    lbl = TREND_LABEL[lv]
+    tip = f"{kind_label} 추세: {lbl} ({detail})" if detail else f"{kind_label} 추세: {lbl}"
+    return {
+        "level": lv,
+        "emoji": TREND_EMOJI[lv],
+        "label": lbl,
+        "tooltip": tip
+    }
+
+
+def _format_trend_price(val: float, is_krw: bool) -> str:
+    if is_krw:
+        return f"{round(val):,}원"
+    return f"${val:,.2f}"
+
+
+def _compute_ema_series(closes: List[float], period: int) -> Optional[float]:
+    if not closes:
+        return None
+    k = 2.0 / (period + 1.0)
+    ema = float(closes[0])
+    for val in closes[1:]:
+        ema = float(val) * k + ema * (1.0 - k)
+    return ema
+
+
+def _fetch_daily_trend_base(symbol: str) -> Optional[Dict[str, Any]]:
+    """Fetch prior daily closes via Naver (KR) or Yahoo (US) without consuming Toss quota."""
+    clean = symbol.strip().upper()
+    is_kr = clean.isdigit() or clean.endswith(".KS") or clean.endswith(".KQ")
+    prior_closes: List[float] = []
+
+    try:
+        if is_kr:
+            clean_sym = clean.replace(".KS", "").replace(".KQ", "")
+            url = f"https://fchart.stock.naver.com/sise.nhn?symbol={urllib.parse.quote(clean_sym)}&timeframe=day&count=25&requestType=0"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                body = resp.read().decode("euc-kr", errors="replace")
+            rows = re.findall(r'data="([^"]+)"', body)
+            parsed = []
+            kst_today = time.strftime("%Y%m%d", time.gmtime(time.time() + 9 * 3600))
+            for row in rows:
+                parts = row.split("|")
+                if len(parts) >= 5:
+                    try:
+                        d_str = parts[0].strip()
+                        c_val = float(parts[4])
+                        if c_val > 0:
+                            parsed.append((d_str, c_val))
+                    except Exception:
+                        pass
+            if parsed and parsed[-1][0] == kst_today and len(parsed) >= 2:
+                parsed = parsed[:-1]
+            prior_closes = [p[1] for p in parsed]
+        else:
+            yahoo_sym = clean.replace(".", "-")
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(yahoo_sym)}?range=1mo&interval=1d"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=3.0, context=_SSL_CTX) as resp:
+                ydata = json.loads(resp.read().decode("utf-8"))
+            res_list = ydata.get("chart", {}).get("result") or []
+            if res_list:
+                res0 = res_list[0]
+                meta = res0.get("meta", {})
+                ts_list = res0.get("timestamp") or []
+                closes = ((res0.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
+                us_today = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 5 * 3600))
+                parsed = []
+                for ts, c in zip(ts_list, closes):
+                    if c is not None and float(c) > 0:
+                        d_str = time.strftime("%Y-%m-%d", time.gmtime(ts - 5 * 3600))
+                        parsed.append((d_str, float(c)))
+                if parsed and parsed[-1][0] == us_today and len(parsed) >= 2:
+                    parsed = parsed[:-1]
+                prior_closes = [p[1] for p in parsed]
+
+                # Opportunistically warm prev_close cache if absent
+                prev_c = meta.get("previousClose") or meta.get("chartPreviousClose")
+                if prev_c is not None and float(prev_c) > 0:
+                    with _cache_lock:
+                        if symbol not in _prev_close_cache:
+                            _prev_close_cache[symbol] = {
+                                "price": round(float(prev_c), 4),
+                                "expires_at": time.time() + 3600.0
+                            }
+    except Exception as e:
+        logger.log_debug("StockService", f"Daily trend fetch notice for {symbol}: {e}")
+        return None
+
+    if len(prior_closes) < 4:
+        return None
+
+    entry = {
+        "sum4": sum(prior_closes[-4:]),
+        "sum19": sum(prior_closes[-19:]) if len(prior_closes) >= 19 else None,
+        "count": len(prior_closes),
+        "expires_at": time.time() + 1800.0
+    }
+    with _cache_lock:
+        _daily_trend_cache[symbol] = entry
+    return entry
+
+
+def _fetch_intraday_trend_base(symbol: str) -> Optional[Dict[str, Any]]:
+    """Fetch recent 1m bars via Naver (KR) or Yahoo (US) to seed intraday EMA5/EMA20."""
+    clean = symbol.strip().upper()
+    is_kr = clean.isdigit() or clean.endswith(".KS") or clean.endswith(".KQ")
+    closes: List[float] = []
+
+    try:
+        if is_kr:
+            clean_sym = clean.replace(".KS", "").replace(".KQ", "")
+            url = f"https://api.stock.naver.com/chart/domestic/item/{urllib.parse.quote(clean_sym)}/minute?periodType=dayCandle"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                arr = json.loads(resp.read().decode("utf-8"))
+            if isinstance(arr, list):
+                for bar in arr[-36:]:
+                    val = bar.get("currentPrice")
+                    if val is not None and float(val) > 0:
+                        closes.append(float(val))
+        else:
+            yahoo_sym = clean.replace(".", "-")
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(yahoo_sym)}?range=1d&interval=1m&includePrePost=true"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=3.0, context=_SSL_CTX) as resp:
+                ydata = json.loads(resp.read().decode("utf-8"))
+            res_list = ydata.get("chart", {}).get("result") or []
+            if res_list:
+                raw_closes = ((res_list[0].get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
+                closes = [float(c) for c in raw_closes if c is not None and float(c) > 0][-36:]
+    except Exception as e:
+        logger.log_debug("StockService", f"Intraday trend fetch notice for {symbol}: {e}")
+        return None
+
+    if len(closes) < 6:
+        return None
+
+    prior = closes[:-1] if len(closes) >= 7 else closes
+    ema5_prev = _compute_ema_series(prior[-25:], 5)
+    ema20_prev = _compute_ema_series(prior[-35:], 20)
+    if ema5_prev is None or ema20_prev is None:
+        return None
+
+    entry = {
+        "ema5_prev": ema5_prev,
+        "ema20_prev": ema20_prev,
+        "bar_count": len(prior),
+        "expires_at": time.time() + 90.0
+    }
+    with _cache_lock:
+        _intraday_trend_cache[symbol] = entry
+    return entry
+
+
+def compute_swing_trend(symbol: str, price: float, is_krw: bool) -> Dict[str, Any]:
+    if not price or price <= 0:
+        return _make_trend_obj("스윙(일봉)", "unknown")
+
+    with _cache_lock:
+        base = _daily_trend_cache.get(symbol)
+    if not base or base.get("sum4") is None:
+        return _make_trend_obj("스윙(일봉)", "unknown", "일봉 집계 중")
+
+    ma5 = (float(base["sum4"]) + price) / 5.0
+    sum19 = base.get("sum19")
+    ma20 = (float(sum19) + price) / 20.0 if sum19 is not None else None
+
+    band = 0.002  # ±0.2% 중립 밴드
+    if ma20 is not None:
+        detail = f"현재 {_format_trend_price(price, is_krw)} · 5일 {_format_trend_price(ma5, is_krw)} · 20일 {_format_trend_price(ma20, is_krw)}"
+        if price > ma5 * (1.0 + band) and ma5 > ma20:
+            level = "strong_up"
+        elif price > ma5 * (1.0 + band) or (price > ma20 * (1.0 + band) and price >= ma5 * (1.0 - band)):
+            level = "up"
+        elif price < ma5 * (1.0 - band) and ma5 < ma20:
+            level = "strong_down"
+        elif price < ma5 * (1.0 - band) or (price < ma20 * (1.0 - band) and price <= ma5 * (1.0 + band)):
+            level = "down"
+        else:
+            level = "neutral"
+    else:
+        detail = f"현재 {_format_trend_price(price, is_krw)} · 5일 {_format_trend_price(ma5, is_krw)}"
+        if price > ma5 * 1.005:
+            level = "strong_up"
+        elif price > ma5 * (1.0 + band):
+            level = "up"
+        elif price < ma5 * 0.995:
+            level = "strong_down"
+        elif price < ma5 * (1.0 - band):
+            level = "down"
+        else:
+            level = "neutral"
+
+    return _make_trend_obj("스윙(일봉)", level, detail)
+
+
+def compute_scalp_trend(symbol: str, price: float, is_krw: bool) -> Dict[str, Any]:
+    if not price or price <= 0:
+        return _make_trend_obj("단타(1분봉)", "unknown")
+
+    with _cache_lock:
+        base = _intraday_trend_cache.get(symbol)
+    if not base or base.get("ema5_prev") is None or base.get("ema20_prev") is None:
+        return _make_trend_obj("단타(1분봉)", "unknown", "분봉 집계 중")
+
+    k5 = 2.0 / 6.0
+    k20 = 2.0 / 21.0
+    ema5_now = price * k5 + float(base["ema5_prev"]) * (1.0 - k5)
+    ema20_now = price * k20 + float(base["ema20_prev"]) * (1.0 - k20)
+    if ema20_now <= 0:
+        return _make_trend_obj("단타(1분봉)", "unknown")
+
+    diff_pct = (ema5_now - ema20_now) / ema20_now * 100.0
+    detail = f"EMA5 {_format_trend_price(ema5_now, is_krw)} · EMA20 {_format_trend_price(ema20_now, is_krw)} ({diff_pct:+.2f}%)"
+
+    if diff_pct >= 0.35 and price >= ema5_now:
+        level = "strong_up"
+    elif diff_pct >= 0.10:
+        level = "up"
+    elif diff_pct <= -0.35 and price <= ema5_now:
+        level = "strong_down"
+    elif diff_pct <= -0.10:
+        level = "down"
+    else:
+        level = "neutral"
+
+    return _make_trend_obj("단타(1분봉)", level, detail)
+
+
+def attach_trends_to_quote(symbol: str, quote_obj: Dict[str, Any]) -> None:
+    if not symbol or not isinstance(quote_obj, dict):
+        return
+    try:
+        price = float(quote_obj.get("price", 0.0) or 0.0)
+    except Exception:
+        price = 0.0
+    curr = quote_obj.get("currency", "KRW" if symbol.isdigit() else "USD")
+    is_krw = curr == "KRW" or quote_obj.get("market") == "KR" or symbol.isdigit()
+    if "swing_trend" not in quote_obj:
+        quote_obj["swing_trend"] = compute_swing_trend(symbol, price, is_krw)
+    if "scalp_trend" not in quote_obj:
+        quote_obj["scalp_trend"] = compute_scalp_trend(symbol, price, is_krw)
+
+
+def _schedule_trend_backfill(codes: List[str]) -> None:
+    """Refresh stale daily/intraday trend bases in background and push silent UI updates."""
+    now = time.time()
+    needed = []
+    with _cache_lock:
+        for c in codes:
+            if not c:
+                continue
+            d_c = _daily_trend_cache.get(c)
+            i_c = _intraday_trend_cache.get(c)
+            need_d = not d_c or now >= d_c.get("expires_at", 0.0)
+            need_i = not i_c or now >= i_c.get("expires_at", 0.0)
+            if need_d or need_i:
+                needed.append((c, need_d, need_i))
+
+    to_fetch = []
+    with _trend_backfill_lock:
+        for c, nd, ni in needed:
+            if c not in _trend_inflight:
+                _trend_inflight.add(c)
+                to_fetch.append((c, nd, ni))
+
+    if not to_fetch:
+        return
+
+    def _worker():
+        try:
+            for c, need_d, need_i in to_fetch:
+                if _stop_streaming_event.is_set():
+                    break
+                updated = False
+                if need_d and _fetch_daily_trend_base(c):
+                    updated = True
+                if need_i and _fetch_intraday_trend_base(c):
+                    updated = True
+
+                if updated:
+                    with _cache_lock:
+                        q = _quote_cache.get(c)
+                        q_snap = dict(q) if q else None
+                    if q_snap:
+                        p_val = float(q_snap.get("price", 0.0) or 0.0)
+                        curr = q_snap.get("currency", "KRW" if c.isdigit() else "USD")
+                        is_krw = curr == "KRW" or q_snap.get("market") == "KR" or c.isdigit()
+                        swing_t = compute_swing_trend(c, p_val, is_krw)
+                        scalp_t = compute_scalp_trend(c, p_val, is_krw)
+                        with _cache_lock:
+                            if c in _quote_cache:
+                                _quote_cache[c]["swing_trend"] = swing_t
+                                _quote_cache[c]["scalp_trend"] = scalp_t
+                        payload = {
+                            "code": c,
+                            "price": p_val,
+                            "prev_price": p_val,
+                            "tick_diff": 0.0,
+                            "change": q_snap.get("change", 0.0),
+                            "change_rate": q_snap.get("change_rate", 0.0),
+                            "session": q_snap.get("session", "REG"),
+                            "currency": curr,
+                            "formatted_price": q_snap.get("formatted_price"),
+                            "swing_trend": swing_t,
+                            "scalp_trend": scalp_t,
+                            "silent": True
+                        }
+                        broadcast_tick_update(payload)
+                time.sleep(0.04)
+        finally:
+            with _trend_backfill_lock:
+                for c, _, _ in to_fetch:
+                    _trend_inflight.discard(c)
+
+    threading.Thread(target=_worker, name="StockTrendBackfillThread", daemon=True).start()
+
+
 def fetch_initial_prices(symbols: List[Dict[str, Any]], force_refresh: bool = False) -> Dict[str, Dict[str, Any]]:
     """Fetch initial quotes using batch GET /api/v1/prices?symbols=... with rate-limit protection."""
     global _last_batch_price_time, _last_rest_quote_sync
@@ -907,10 +1267,15 @@ def fetch_initial_prices(symbols: List[Dict[str, Any]], force_refresh: bool = Fa
         cr_val = round((c_val / base_p * 100), 2) if base_p else 0.0
         results[c]["change"] = c_val
         results[c]["change_rate"] = cr_val
+        results[c].pop("swing_trend", None)
+        results[c].pop("scalp_trend", None)
+        attach_trends_to_quote(c, results[c])
 
     with _cache_lock:
         for c, q in results.items():
             _quote_cache[c] = q
+
+    _schedule_trend_backfill(code_list)
 
     _last_rest_quote_sync = time.time()
 
@@ -951,9 +1316,17 @@ def broadcast_tick_update(tick_data: Dict[str, Any]) -> None:
         if "tick_diff" not in tick_data:
             ref_p = tick_data.get("prev_price")
             tick_data["tick_diff"] = round(new_p - float(ref_p), 4) if (ref_p is not None and float(ref_p) > 0) else 0.0
+        attach_trends_to_quote(code, tick_data)
 
     now = time.time()
     is_silent = bool(tick_data.get("silent"))
+    if not is_silent:
+        swing_lvl = (tick_data.get("swing_trend") or {}).get("level")
+        scalp_lvl = (tick_data.get("scalp_trend") or {}).get("level")
+        if swing_lvl == "unknown" or scalp_lvl == "unknown":
+            if now - _last_broadcast_time.get(f"__trend_{code}", 0.0) >= 90.0:
+                _last_broadcast_time[f"__trend_{code}"] = now
+                _schedule_trend_backfill([code])
     if not is_silent and now - _last_broadcast_time.get(code, 0.0) < 0.1:
         with _cache_lock:
             if code in _quote_cache:
@@ -1051,10 +1424,299 @@ def _resync_quotes_on_reconnect() -> None:
         logger.log_warn("StockService", f"Reconnect REST resync failed: {e}")
 
 
+def _normalize_relay_url(raw_url: str) -> str:
+    url = (raw_url or "").strip().rstrip("/")
+    if not url:
+        return ""
+    if url.startswith("wss://"):
+        url = "https://" + url[6:]
+    elif url.startswith("ws://"):
+        url = "http://" + url[5:]
+    elif not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    return url.rstrip("/")
+
+
+def _is_relay_mode(conf: Optional[Dict[str, Any]] = None) -> bool:
+    if conf is None:
+        conf = load_stock_config()
+    return conf.get("connection_mode") == "relay" and bool(str(conf.get("relay_url") or "").strip())
+
+
+def _relay_ws_url(base_http_url: str, token: str = "") -> str:
+    norm = _normalize_relay_url(base_http_url)
+    if not norm:
+        return ""
+    if norm.startswith("https://"):
+        ws_base = "wss://" + norm[8:]
+    elif norm.startswith("http://"):
+        ws_base = "ws://" + norm[7:]
+    else:
+        ws_base = "wss://" + norm
+    ws_url = f"{ws_base}/ws/stream"
+    if token:
+        ws_url = f"{ws_url}?token={urllib.parse.quote(token)}"
+    return ws_url
+
+
+def _relay_http_json_request(
+    method: str,
+    path: str,
+    conf: Optional[Dict[str, Any]] = None,
+    body: Optional[Dict[str, Any]] = None,
+    timeout: float = 4.0
+) -> tuple:
+    """Perform HTTP JSON call against configured relay server. Returns (data, error_str)."""
+    if conf is None:
+        conf = load_stock_config()
+    base_url = _normalize_relay_url(conf.get("relay_url", ""))
+    if not base_url:
+        return None, "릴레이 서버 URL이 설정되지 않았습니다."
+
+    clean_path = path if path.startswith("/") else f"/{path}"
+    url = f"{base_url}{clean_path}"
+    token = str(conf.get("relay_token") or "").strip()
+
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "Util-Tools-Widget/1.0"
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    payload_bytes = None
+    if body is not None:
+        payload_bytes = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+
+    req = urllib.request.Request(url, data=payload_bytes, headers=headers, method=method.upper())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_SSL_CTX) as resp:
+            raw = resp.read().decode("utf-8", errors="replace").strip()
+            if not raw:
+                return {}, None
+            return json.loads(raw), None
+    except urllib.error.HTTPError as e:
+        err_msg = f"HTTP {e.code}"
+        if e.code in (401, 403):
+            err_msg = f"인증 실패 (HTTP {e.code})"
+        return None, err_msg
+    except Exception as e:
+        return None, str(e)
+
+
+def _build_relay_watchlist_payload(conf: Optional[Dict[str, Any]] = None) -> List[Dict[str, str]]:
+    if conf is None:
+        conf = load_stock_config()
+
+    meta_map: Dict[str, Dict[str, str]] = {}
+    ordered_codes: List[str] = []
+
+    for w in conf.get("watchlist", []):
+        code = str(w.get("code") or "").strip().upper()
+        if not code:
+            continue
+        mkt = str(w.get("market") or ("KR" if code.isdigit() else "US")).strip().upper()
+        name = str(w.get("name") or code).strip()
+        if code not in meta_map:
+            ordered_codes.append(code)
+        meta_map[code] = {"code": code, "name": name, "market": mkt}
+
+    for g in conf.get("groups", []):
+        for c in g.get("codes", []):
+            code = str(c or "").strip().upper()
+            if code and code not in meta_map:
+                ordered_codes.append(code)
+                meta_map[code] = {
+                    "code": code,
+                    "name": code,
+                    "market": "KR" if code.isdigit() else "US"
+                }
+
+    return [meta_map[c] for c in ordered_codes]
+
+
+def _sync_relay_watchlist(conf: Optional[Dict[str, Any]] = None, timeout: float = 3.0) -> bool:
+    if conf is None:
+        conf = load_stock_config()
+    if not _is_relay_mode(conf):
+        return False
+    payload = {"watchlist": _build_relay_watchlist_payload(conf)}
+    data, err = _relay_http_json_request("POST", "/api/watchlist", conf=conf, body=payload, timeout=timeout)
+    if err:
+        logger.log_debug("StockService", f"Relay watchlist sync notice: {err}")
+        return False
+    return data is not None
+
+
+def _sync_relay_watchlist_background(conf: Optional[Dict[str, Any]] = None) -> None:
+    snapshot_conf = dict(conf) if conf else load_stock_config()
+    if not _is_relay_mode(snapshot_conf):
+        return
+    threading.Thread(
+        target=_sync_relay_watchlist,
+        args=(snapshot_conf, 3.0),
+        name="StockRelayWatchlistSync",
+        daemon=True
+    ).start()
+
+
+def _normalize_relay_quote_item(raw: Dict[str, Any], meta_fallback: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+    if not isinstance(raw, dict):
+        return None
+    code = str(raw.get("code") or raw.get("symbol") or "").strip().upper()
+    if not code:
+        return None
+
+    fb = meta_fallback or {}
+    market = str(raw.get("market") or fb.get("market") or ("KR" if code.isdigit() else "US")).strip().upper()
+    curr = str(raw.get("currency") or ("KRW" if market == "KR" else "USD")).strip().upper()
+    is_krw = curr == "KRW" or market == "KR" or code.isdigit()
+
+    try:
+        p_val = float(raw.get("price", raw.get("lastPrice", 0.0)) or 0.0)
+    except Exception:
+        p_val = 0.0
+
+    try:
+        base_p = float(raw.get("base_price", 0.0) or 0.0)
+    except Exception:
+        base_p = 0.0
+
+    try:
+        c_val = float(raw.get("change", 0.0) or 0.0)
+    except Exception:
+        c_val = 0.0
+
+    try:
+        cr_val = float(raw.get("change_rate", 0.0) or 0.0)
+    except Exception:
+        cr_val = 0.0
+
+    formatted_p = raw.get("formatted_price")
+    if not formatted_p:
+        if p_val > 0:
+            formatted_p = f"{int(p_val):,}원" if is_krw else f"${p_val:,.2f}"
+        else:
+            formatted_p = "--"
+
+    item: Dict[str, Any] = {
+        "code": code,
+        "name": str(raw.get("name") or fb.get("name") or code),
+        "market": market,
+        "price": p_val,
+        "base_price": base_p if base_p > 0 else p_val,
+        "change": c_val,
+        "change_rate": cr_val,
+        "session": str(raw.get("session") or "REG").upper(),
+        "currency": curr,
+        "formatted_price": formatted_p
+    }
+
+    if isinstance(raw.get("swing_trend"), dict) and raw["swing_trend"].get("emoji"):
+        item["swing_trend"] = raw["swing_trend"]
+    if isinstance(raw.get("scalp_trend"), dict) and raw["scalp_trend"].get("emoji"):
+        item["scalp_trend"] = raw["scalp_trend"]
+
+    attach_trends_to_quote(code, item)
+    return item
+
+
+def _merge_relay_snapshot_payload(snap: Dict[str, Any], conf: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Normalize relay snapshot payload, update FX/quote caches, and return quotes_map + fx."""
+    if conf is None:
+        conf = load_stock_config()
+
+    fx_data = snap.get("fx")
+    if isinstance(fx_data, dict) and (fx_data.get("USD") or fx_data.get("JPY")):
+        with _cache_lock:
+            _fx_cache["data"] = fx_data
+            _fx_cache["expires_at"] = time.time() + 60.0
+
+    meta_by_code = {
+        str(w.get("code") or "").strip().upper(): w
+        for w in conf.get("watchlist", [])
+        if w.get("code")
+    }
+
+    raw_items: List[Dict[str, Any]] = []
+    if isinstance(snap.get("watchlist"), list):
+        raw_items = snap["watchlist"]
+    elif isinstance(snap.get("quotes"), dict):
+        for k, v in snap["quotes"].items():
+            if isinstance(v, dict):
+                copy_v = dict(v)
+                copy_v.setdefault("code", k)
+                raw_items.append(copy_v)
+    elif isinstance(snap.get("quotes"), list):
+        raw_items = snap["quotes"]
+
+    quotes_map: Dict[str, Dict[str, Any]] = {}
+    need_trend_codes: List[str] = []
+    for raw in raw_items:
+        code_key = str(raw.get("code") or raw.get("symbol") or "").strip().upper()
+        norm = _normalize_relay_quote_item(raw, meta_by_code.get(code_key))
+        if not norm:
+            continue
+        c = norm["code"]
+        quotes_map[c] = norm
+        if (norm.get("swing_trend", {}).get("level") == "unknown") or (norm.get("scalp_trend", {}).get("level") == "unknown"):
+            need_trend_codes.append(c)
+
+    if quotes_map:
+        with _cache_lock:
+            for c, q in quotes_map.items():
+                _quote_cache[c] = q
+
+    if need_trend_codes:
+        _schedule_trend_backfill(need_trend_codes)
+
+    return {"fx": fx_data, "quotes": quotes_map}
+
+
+def _fetch_relay_snapshot(conf: Optional[Dict[str, Any]] = None, timeout: float = 4.0) -> tuple:
+    """Fetch full FX + quotes snapshot from personal relay server. Returns (merged_dict, error_str)."""
+    if conf is None:
+        conf = load_stock_config()
+    data, err = _relay_http_json_request("GET", "/api/snapshot", conf=conf, timeout=timeout)
+    if err or not isinstance(data, dict):
+        return None, err or "잘못된 릴레이 응답입니다."
+    return _merge_relay_snapshot_payload(data, conf), None
+
+
+def _reset_active_ws() -> None:
+    global _active_ws
+    with _stream_lock:
+        ws = _active_ws
+        _active_ws = None
+    if ws:
+        try:
+            ws.close()
+        except Exception:
+            pass
+    _wake_event.set()
+
+
 def update_ws_subscriptions() -> bool:
     """Dynamically sends updated trade subscriptions (KR & US) to active WebSocket."""
     global _active_ws
-    sub_list = _build_ws_subscription_payload()
+    conf = load_stock_config()
+    if _is_relay_mode(conf):
+        _sync_relay_watchlist_background(conf)
+        with _stream_lock:
+            ws = _active_ws
+            paused = _is_paused
+        if ws:
+            try:
+                ws.send(json.dumps({"type": "subscribe", "watchlist": _build_relay_watchlist_payload(conf)}))
+                return True
+            except Exception:
+                pass
+        elif not paused:
+            resume_streaming()
+        return False
+
+    sub_list = _build_ws_subscription_payload(conf)
 
     with _stream_lock:
         ws = _active_ws
@@ -1083,6 +1745,197 @@ def update_ws_subscriptions() -> bool:
         return False
 
 
+def _run_relay_ws_iteration(conf: Dict[str, Any]) -> None:
+    """Single WebSocket session (or REST polling fallback) against personal relay server."""
+    global _backoff_delay, _active_ws, _consecutive_ws_failures
+
+    try:
+        import websocket
+        has_ws = True
+    except ImportError:
+        has_ws = False
+
+    if not has_ws:
+        merged, err = _fetch_relay_snapshot(conf, timeout=4.0)
+        if merged:
+            for q in merged.get("quotes", {}).values():
+                tick = dict(q)
+                tick["silent"] = True
+                broadcast_tick_update(tick)
+        elif err and not _is_paused and not _stop_streaming_event.is_set():
+            logger.log_warn("StockService", f"Relay snapshot polling notice: {err}")
+        _wake_event.clear()
+        if not _is_paused and not _stop_streaming_event.is_set():
+            _wake_event.wait(timeout=3.0)
+        return
+
+    ws_url = _relay_ws_url(conf.get("relay_url", ""), conf.get("relay_token", ""))
+    if not ws_url:
+        _wake_event.clear()
+        _wake_event.wait(timeout=3.0)
+        return
+
+    relay_token = str(conf.get("relay_token") or "").strip()
+    headers = [f"Authorization: Bearer {relay_token}"] if relay_token else []
+    conn_state = {
+        "opened": False,
+        "auth_error": False,
+        "ping_stop": threading.Event()
+    }
+
+    def _on_relay_reconnect_sync():
+        try:
+            _sync_relay_watchlist(conf, timeout=3.0)
+            merged, _ = _fetch_relay_snapshot(conf, timeout=4.0)
+            if merged:
+                for q in merged.get("quotes", {}).values():
+                    tick = dict(q)
+                    tick["silent"] = True
+                    broadcast_tick_update(tick)
+        except Exception as e:
+            logger.log_debug("StockService", f"Relay reconnect sync notice: {e}")
+
+    try:
+        def on_message(ws, msg):
+            try:
+                if isinstance(msg, bytes):
+                    msg = msg.decode("utf-8", errors="replace")
+                text = (msg or "").strip()
+                if not text or text.upper() == "PONG":
+                    return
+
+                data = json.loads(text)
+                if not isinstance(data, dict):
+                    return
+                msg_type = str(data.get("type") or "").lower()
+
+                if msg_type in ("pong", "ping", "heartbeat"):
+                    return
+
+                if msg_type == "error":
+                    err_code = str(data.get("code") or "")
+                    err_msg = str(data.get("message") or data.get("error") or "")
+                    if err_code in ("unauthorized", "auth-failed", "401", "403"):
+                        conn_state["auth_error"] = True
+                        try:
+                            ws.close()
+                        except Exception:
+                            pass
+                    logger.log_warn("StockService", f"Relay WS error [{err_code}]: {err_msg}")
+                    return
+
+                if msg_type == "snapshot":
+                    merged = _merge_relay_snapshot_payload(data, conf)
+                    for q in merged.get("quotes", {}).values():
+                        tick = dict(q)
+                        tick["silent"] = True
+                        broadcast_tick_update(tick)
+                    return
+
+                if msg_type == "fx" and isinstance(data.get("fx"), dict):
+                    with _cache_lock:
+                        _fx_cache["data"] = data["fx"]
+                        _fx_cache["expires_at"] = time.time() + 60.0
+                    return
+
+                raw_tick = data.get("data") if isinstance(data.get("data"), dict) and "code" not in data else data
+                if isinstance(raw_tick, dict) and (raw_tick.get("code") or raw_tick.get("symbol")):
+                    code = str(raw_tick.get("code") or raw_tick.get("symbol")).strip().upper()
+                    with _cache_lock:
+                        prev = dict(_quote_cache.get(code, {}))
+                    norm = _normalize_relay_quote_item(raw_tick, prev)
+                    if norm:
+                        p_val = float(norm.get("price", 0.0) or 0.0)
+                        prev_p = float(prev.get("price", 0.0) or 0.0) if prev.get("price") is not None else p_val
+                        if "prev_price" in raw_tick:
+                            norm["prev_price"] = float(raw_tick["prev_price"])
+                        elif prev_p > 0:
+                            norm["prev_price"] = prev_p
+                        if "tick_diff" in raw_tick:
+                            norm["tick_diff"] = float(raw_tick["tick_diff"])
+                        elif prev_p > 0:
+                            norm["tick_diff"] = round(p_val - prev_p, 4)
+                        if raw_tick.get("silent") or data.get("silent"):
+                            norm["silent"] = True
+                        broadcast_tick_update(norm)
+            except Exception as ex:
+                logger.log_warn("StockService", f"Relay WS message parse error: {ex}")
+
+        def on_open(ws):
+            global _backoff_delay, _active_ws, _consecutive_ws_failures
+            conn_state["opened"] = True
+            _backoff_delay = 1.0
+            _consecutive_ws_failures = 0
+            with _stream_lock:
+                _active_ws = ws
+            threading.Thread(
+                target=_ws_ping_worker,
+                args=(ws, conn_state["ping_stop"]),
+                name="StockRelayPingThread",
+                daemon=True
+            ).start()
+            threading.Thread(
+                target=_on_relay_reconnect_sync,
+                name="StockRelayReconnectSyncThread",
+                daemon=True
+            ).start()
+
+        def on_close(ws, status=None, msg=None):
+            global _active_ws
+            conn_state["ping_stop"].set()
+            with _stream_lock:
+                if _active_ws is ws:
+                    _active_ws = None
+            msg_str = str(msg or "")
+            if status in (401, 403) or "401" in msg_str or "403" in msg_str:
+                conn_state["auth_error"] = True
+            if not _is_paused and not _stop_streaming_event.is_set():
+                logger.log_info("StockService", f"Relay WebSocket closed: status={status}, msg={msg}")
+
+        def on_error(ws, err):
+            global _active_ws
+            with _stream_lock:
+                if _active_ws is ws:
+                    _active_ws = None
+            err_str = str(err or "")
+            if any(k in err_str.lower() for k in ("401", "403", "unauthorized", "forbidden")):
+                conn_state["auth_error"] = True
+            if not _is_paused and not _stop_streaming_event.is_set():
+                logger.log_warn("StockService", f"Relay WebSocket error: {err_str}")
+
+        ws_app = websocket.WebSocketApp(
+            ws_url,
+            header=headers,
+            on_open=on_open,
+            on_message=on_message,
+            on_error=on_error,
+            on_close=on_close
+        )
+        ws_app.run_forever(sslopt={"cert_reqs": ssl.CERT_NONE}, ping_interval=20, ping_timeout=10)
+    except Exception as e:
+        if not _is_paused and not _stop_streaming_event.is_set():
+            logger.log_warn("StockService", f"Relay WebSocket connection failed: {e}")
+    finally:
+        conn_state["ping_stop"].set()
+        with _stream_lock:
+            _active_ws = None
+
+    if _stop_streaming_event.is_set() or _is_paused:
+        return
+
+    if conn_state["auth_error"]:
+        _backoff_delay = max(_backoff_delay, 10.0)
+
+    if not conn_state["opened"]:
+        _consecutive_ws_failures += 1
+
+    wait_sec = _backoff_delay + random.uniform(0.0, 0.5)
+    _wake_event.clear()
+    if not _is_paused and not _stop_streaming_event.is_set():
+        _wake_event.wait(timeout=wait_sec)
+    _backoff_delay = min(30.0, _backoff_delay * 2.0)
+
+
 def _streaming_worker():
     global _is_streaming_active, _backoff_delay, _active_ws, _consecutive_ws_failures
     logger.log_info("StockService", "Stock streaming background thread started")
@@ -1095,13 +1948,17 @@ def _streaming_worker():
                     _wake_event.wait(timeout=1.0)
                 continue
 
+            conf = load_stock_config()
+            if _is_relay_mode(conf):
+                _run_relay_ws_iteration(conf)
+                continue
+
             token = get_valid_token(min_ttl=120.0)
             if not token:
                 _wake_event.clear()
                 _wake_event.wait(timeout=3.0)
                 continue
 
-            conf = load_stock_config()
             sub_list = _build_ws_subscription_payload(conf)
             if not sub_list:
                 _wake_event.clear()
@@ -1403,25 +2260,39 @@ def init_stock_service(edge_manager: Any = None) -> None:
 # Eel Exposed Functions
 # -----------------------------------------------------------------------------
 
-@eel.expose
-def get_stock_dashboard_data() -> Dict[str, Any]:
-    """Returns FX rates, watchlist quotes, and API configuration flag."""
-    conf = load_stock_config()
-    cid = conf.get("client_id", "").strip()
-    csec = conf.get("client_secret", "").strip()
-    api_configured = bool(cid and csec)
-
-    fx_data = fetch_exchange_rates()
+def _build_dashboard_payload(conf: Dict[str, Any], force_refresh: bool = False) -> Dict[str, Any]:
     watchlist = conf.get("watchlist", DEFAULT_WATCHLIST)
-    quotes_map = fetch_initial_prices(watchlist)
+    relay_mode = _is_relay_mode(conf)
+    relay_err: Optional[str] = None
+
+    if relay_mode:
+        api_configured = True
+        merged, relay_err = _fetch_relay_snapshot(conf, timeout=4.0)
+        _sync_relay_watchlist_background(conf)
+        if merged:
+            fx_data = merged.get("fx") or fetch_exchange_rates(force_refresh=force_refresh)
+            quotes_map = merged.get("quotes") or {}
+        else:
+            fx_data = fetch_exchange_rates(force_refresh=force_refresh)
+            with _cache_lock:
+                quotes_map = {k: dict(v) for k, v in _quote_cache.items()}
+    else:
+        cid = conf.get("client_id", "").strip()
+        csec = conf.get("client_secret", "").strip()
+        api_configured = bool(cid and csec)
+        fx_data = fetch_exchange_rates(force_refresh=force_refresh)
+        quotes_map = fetch_initial_prices(watchlist, force_refresh=force_refresh)
 
     items = []
+    missing_trend_codes = []
     for w in watchlist:
         code = w.get("code")
         if code in quotes_map:
-            items.append(quotes_map[code])
+            q_item = dict(quotes_map[code])
+            attach_trends_to_quote(code, q_item)
+            items.append(q_item)
         else:
-            items.append({
+            q_item = {
                 "code": code,
                 "name": w.get("name", code),
                 "market": w.get("market", "KR"),
@@ -1431,39 +2302,138 @@ def get_stock_dashboard_data() -> Dict[str, Any]:
                 "session": "CLOSE",
                 "currency": "KRW" if w.get("market") == "KR" else "USD",
                 "formatted_price": "--"
-            })
+            }
+            attach_trends_to_quote(code, q_item)
+            items.append(q_item)
+            if code:
+                missing_trend_codes.append(code)
 
-    return {
+    if relay_mode and missing_trend_codes:
+        _schedule_trend_backfill(missing_trend_codes)
+
+    res: Dict[str, Any] = {
         "status": "success",
         "api_configured": api_configured,
+        "connection_mode": "relay" if relay_mode else "local",
+        "relay_url": conf.get("relay_url", "") if relay_mode else "",
         "fx": fx_data,
         "watchlist": items,
         "groups": conf.get("groups", []),
         "active_group_id": conf.get("active_group_id", "g_default")
     }
+    if relay_err:
+        res["relay_error"] = relay_err
+    return res
 
 
 @eel.expose
-def save_stock_api_keys(client_id: str, client_secret: str) -> Dict[str, Any]:
-    """Saves API credentials and validates OAuth token."""
+def get_stock_dashboard_data() -> Dict[str, Any]:
+    """Returns FX rates, watchlist quotes, and API/relay configuration flag."""
+    conf = load_stock_config()
+    return _build_dashboard_payload(conf, force_refresh=False)
+
+
+@eel.expose
+def get_stock_connection_config() -> Dict[str, Any]:
+    """Returns current stock connection configuration (local Toss API vs personal relay server)."""
+    conf = load_stock_config()
+    return {
+        "connection_mode": conf.get("connection_mode", "local"),
+        "client_id": conf.get("client_id", ""),
+        "client_secret": conf.get("client_secret", ""),
+        "relay_url": conf.get("relay_url", ""),
+        "relay_token": conf.get("relay_token", "")
+    }
+
+
+@eel.expose
+def save_stock_connection_config(
+    mode: str = "local",
+    client_id: str = "",
+    client_secret: str = "",
+    relay_url: str = "",
+    relay_token: str = ""
+) -> Dict[str, Any]:
+    """Saves local Toss API or personal relay server connection settings and validates them."""
+    clean_mode = "relay" if str(mode or "").strip().lower() == "relay" else "local"
     cid = (client_id or "").strip()
     csec = (client_secret or "").strip()
+    r_url = _normalize_relay_url(relay_url)
+    r_tok = (relay_token or "").strip()
 
     conf = load_stock_config()
     conf["client_id"] = cid
     conf["client_secret"] = csec
+    conf["relay_url"] = r_url
+    conf["relay_token"] = r_tok
+
+    if clean_mode == "relay":
+        if not r_url:
+            return {"success": False, "error": "릴레이 서버 URL을 입력해주세요. (예: https://relay.example.com)"}
+
+        test_conf = dict(conf)
+        test_conf["connection_mode"] = "relay"
+        merged, err = _fetch_relay_snapshot(test_conf, timeout=4.0)
+        if err and "404" in err:
+            health_data, health_err = _relay_http_json_request("GET", "/api/health", conf=test_conf, timeout=4.0)
+            if health_data is not None and not health_err:
+                merged, err = {"fx": None, "quotes": {}}, None
+
+        if err:
+            return {"success": False, "error": f"릴레이 서버 연결 실패: {err}"}
+
+        conf["connection_mode"] = "relay"
+        save_stock_config(conf)
+        _sync_relay_watchlist_background(conf)
+        _reset_active_ws()
+        resume_streaming()
+        return {
+            "success": True,
+            "message": "개인 릴레이 서버 연결에 성공하였습니다.",
+            "configured": True,
+            "connection_mode": "relay"
+        }
+
+    conf["connection_mode"] = "local"
     save_stock_config(conf)
+    invalidate_access_token(reason="connection config updated")
+    _reset_active_ws()
 
     if not cid or not csec:
-        return {"success": True, "message": "API 키가 삭제되었습니다.", "configured": False}
+        return {
+            "success": True,
+            "message": "로컬 직접 모드로 저장되었습니다. (API 키 미등록)",
+            "configured": False,
+            "connection_mode": "local"
+        }
 
     token = _fetch_access_token(cid, csec)
     if token:
         sync_master_stocks_background()
         resume_streaming()
-        return {"success": True, "message": "Toss Open API 인증에 성공하였습니다.", "configured": True}
-    else:
-        return {"success": False, "error": "인증에 실패하였습니다. Client ID/Secret 및 허용 공인 IP를 확인해주세요."}
+        return {
+            "success": True,
+            "message": "Toss Open API 인증에 성공하였습니다.",
+            "configured": True,
+            "connection_mode": "local"
+        }
+    return {
+        "success": False,
+        "error": "인증에 실패하였습니다. Client ID/Secret 및 허용 공인 IP를 확인해주세요."
+    }
+
+
+@eel.expose
+def save_stock_api_keys(client_id: str, client_secret: str) -> Dict[str, Any]:
+    """Legacy wrapper: saves local Toss API credentials and switches to local mode."""
+    conf = load_stock_config()
+    return save_stock_connection_config(
+        mode="local",
+        client_id=client_id,
+        client_secret=client_secret,
+        relay_url=conf.get("relay_url", ""),
+        relay_token=conf.get("relay_token", "")
+    )
 
 
 @eel.expose
@@ -1599,8 +2569,17 @@ def add_stock_symbol(code: str, name: str, market: str, group_id: Optional[str] 
     conf["watchlist"] = watchlist
     save_stock_config(conf)
 
-    quotes = fetch_initial_prices([new_item])
-    quote_data = quotes.get(clean_code, new_item)
+    if _is_relay_mode(conf):
+        _sync_relay_watchlist(conf, timeout=2.5)
+        merged, _ = _fetch_relay_snapshot(conf, timeout=2.5)
+        quote_data = (merged.get("quotes") or {}).get(clean_code) if merged else None
+        if not quote_data:
+            quote_data = dict(new_item)
+            attach_trends_to_quote(clean_code, quote_data)
+            _schedule_trend_backfill([clean_code])
+    else:
+        quotes = fetch_initial_prices([new_item])
+        quote_data = quotes.get(clean_code, new_item)
 
     update_ws_subscriptions()
     return {
@@ -1747,37 +2726,4 @@ def search_stock_master(query: str) -> List[Dict[str, Any]]:
 def refresh_stock_data() -> Dict[str, Any]:
     """Forces immediate FX and price quotes refresh without duplicate REST calls."""
     conf = load_stock_config()
-    cid = conf.get("client_id", "").strip()
-    csec = conf.get("client_secret", "").strip()
-    api_configured = bool(cid and csec)
-
-    fx_data = fetch_exchange_rates(force_refresh=True)
-    watchlist = conf.get("watchlist", DEFAULT_WATCHLIST)
-    quotes_map = fetch_initial_prices(watchlist, force_refresh=True)
-
-    items = []
-    for w in watchlist:
-        code = w.get("code")
-        if code in quotes_map:
-            items.append(quotes_map[code])
-        else:
-            items.append({
-                "code": code,
-                "name": w.get("name", code),
-                "market": w.get("market", "KR"),
-                "price": 0.0,
-                "change": 0.0,
-                "change_rate": 0.0,
-                "session": "CLOSE",
-                "currency": "KRW" if w.get("market") == "KR" else "USD",
-                "formatted_price": "--"
-            })
-
-    return {
-        "status": "success",
-        "api_configured": api_configured,
-        "fx": fx_data,
-        "watchlist": items,
-        "groups": conf.get("groups", []),
-        "active_group_id": conf.get("active_group_id", "g_default")
-    }
+    return _build_dashboard_payload(conf, force_refresh=True)

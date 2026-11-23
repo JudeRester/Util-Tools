@@ -1129,8 +1129,31 @@ body.stock-reordering * {
 .stock-name-row {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     min-width: 0;
+}
+
+.stock-trend-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    font-size: 11px;
+    line-height: 1;
+    flex-shrink: 0;
+    cursor: help;
+    user-select: none;
+}
+
+.stock-trend-icon.trend-neutral {
+    opacity: 0.72;
+}
+
+.stock-trend-icon.trend-unknown {
+    color: var(--text-muted);
+    opacity: 0.5;
+    font-weight: 700;
 }
 
 .stock-name {
@@ -1164,7 +1187,7 @@ body.stock-reordering * {
 .stock-code-row {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
 }
 
 .stock-code {
@@ -1444,8 +1467,61 @@ body.stock-reordering * {
 .stock-key-body {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     margin-bottom: 14px;
+}
+
+.stock-mode-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 3px;
+    background: var(--bg-base);
+    border: 1px solid var(--border-color);
+    border-radius: 7px;
+}
+
+.stock-mode-btn {
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.stock-mode-btn:hover {
+    color: var(--text-main);
+}
+
+.stock-mode-btn.active {
+    background: rgba(99, 102, 241, 0.24);
+    color: #a5b4fc;
+}
+
+.stock-mode-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.stock-relay-tip {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: 6px;
+    padding: 7px 9px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: #6ee7b7;
+}
+
+.mini-action-btn.is-relay-active {
+    background: rgba(16, 185, 129, 0.16);
+    border-color: rgba(16, 185, 129, 0.45);
+    color: #6ee7b7;
 }
 
 .stock-ip-banner {
@@ -1494,6 +1570,7 @@ body.stock-reordering * {
     padding: 7px 9px;
     font-size: 12px;
     outline: none;
+    user-select: text;
 }
 
 .stock-form-input:focus {

@@ -707,6 +707,41 @@
         };
     }
 
+    function escapeAttr(str) {
+        return String(str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    function normalizeTrendInfo(trend, kind) {
+        const defaultTooltip = kind === 'scalp' ? '단타(1분봉): 집계 중' : '스윙(일봉): 집계 중';
+        if (!trend || typeof trend !== 'object') {
+            return { level: 'unknown', emoji: '·', tooltip: defaultTooltip };
+        }
+        return {
+            level: trend.level || 'unknown',
+            emoji: trend.emoji || '·',
+            tooltip: trend.tooltip || defaultTooltip
+        };
+    }
+
+    function applyTrendBadge(el, trend, kind) {
+        if (!el || !trend || typeof trend !== 'object') return;
+        const info = normalizeTrendInfo(trend, kind);
+        const nextClass = `stock-trend-icon stock-trend-${kind} trend-${info.level}`;
+        if (el.textContent !== info.emoji) {
+            el.textContent = info.emoji;
+        }
+        if (el.title !== info.tooltip) {
+            el.title = info.tooltip;
+        }
+        if (el.className !== nextClass) {
+            el.className = nextClass;
+        }
+    }
+
     window.onStockTickUpdate = function (tick) {
         if (!tick || !tick.code) return;
         const cached = stockWatchlistData.find(w => w.code === tick.code);
@@ -735,12 +770,21 @@
         const priceEl = card.querySelector('.stock-price');
         const changeEl = card.querySelector('.stock-change');
         const sessEl = card.querySelector('.session-badge');
+        const scalpEl = card.querySelector('.stock-trend-scalp');
+        const swingEl = card.querySelector('.stock-trend-swing');
         const breakevenRow = card.querySelector('.stock-sell-breakeven');
         const breakevenPriceEl = card.querySelector('.stock-breakeven-price');
         const targetRow = card.querySelector('.stock-sell-target');
         const targetTagEl = card.querySelector('.stock-target-tag');
         const targetPriceEl = card.querySelector('.stock-target-price');
         const isKrw = tick.currency === 'KRW' || (tick.code && /^\d+$/.test(tick.code));
+
+        if (scalpEl && tick.scalp_trend) {
+            applyTrendBadge(scalpEl, tick.scalp_trend, 'scalp');
+        }
+        if (swingEl && tick.swing_trend) {
+            applyTrendBadge(swingEl, tick.swing_trend, 'swing');
+        }
 
         if (priceEl && tick.formatted_price) {
             priceEl.textContent = tick.formatted_price;
@@ -836,10 +880,19 @@
             }
         }
 
-        // Key configuration notice
+        // Key configuration notice & mode button indicator
         const noticeEl = document.getElementById('stock-key-notice');
         if (noticeEl) {
             noticeEl.style.display = data.api_configured ? 'none' : 'flex';
+        }
+        const apiKeyBtn = document.getElementById('btn-stock-api-key');
+        if (apiKeyBtn) {
+            const isRelay = data.connection_mode === 'relay';
+            apiKeyBtn.textContent = isRelay ? '🔗 릴레이' : '🔑 API 키';
+            apiKeyBtn.title = isRelay
+                ? `개인 릴레이 서버 연결됨 (${data.relay_url || ''})`
+                : 'Toss API 키 / 릴레이 서버 설정';
+            apiKeyBtn.classList.toggle('is-relay-active', isRelay);
         }
 
         // Watchlist cards & Custom Group Tabs
@@ -1206,6 +1259,8 @@
                 (item.formatted_price && item.formatted_price !== '--') ? item.price : 0,
                 isKrw
             );
+            const scalpInfo = normalizeTrendInfo(item.scalp_trend, 'scalp');
+            const swingInfo = normalizeTrendInfo(item.swing_trend, 'swing');
 
             card.innerHTML = `
                 <button type="button" class="stock-drag-handle" title="드래그하여 순서 변경" aria-label="종목 순서 변경">
@@ -1220,21 +1275,23 @@
                 </button>
                 <div class="stock-card-left">
                     <div class="stock-name-row">
-                        <span class="stock-name" title="${item.name}">${item.name}</span>
+                        <span class="stock-trend-icon stock-trend-scalp trend-${escapeAttr(scalpInfo.level)}" title="${escapeAttr(scalpInfo.tooltip)}">${escapeAttr(scalpInfo.emoji)}</span>
+                        <span class="stock-name" title="${escapeAttr(item.name)}">${escapeAttr(item.name)}</span>
                         <span class="stock-market-tag ${mktClass}">${item.market}</span>
                     </div>
                     <div class="stock-code-row">
-                        <span class="stock-code">${item.code}</span>
+                        <span class="stock-trend-icon stock-trend-swing trend-${escapeAttr(swingInfo.level)}" title="${escapeAttr(swingInfo.tooltip)}">${escapeAttr(swingInfo.emoji)}</span>
+                        <span class="stock-code">${escapeAttr(item.code)}</span>
                         <span class="session-badge ${sessClass}">${item.session || 'REG'}</span>
                     </div>
                 </div>
                 <div class="stock-card-right">
                     <div class="stock-breakeven-col">
-                        <div class="stock-sell-row stock-sell-breakeven" title="${sellInfo.breakeven.tooltip}">
+                        <div class="stock-sell-row stock-sell-breakeven" title="${escapeAttr(sellInfo.breakeven.tooltip)}">
                             <span class="stock-sell-tag">본전</span>
                             <span class="stock-breakeven-price">${sellInfo.breakeven.formatted}</span>
                         </div>
-                        <div class="stock-sell-row stock-sell-target" title="${sellInfo.target.tooltip}">
+                        <div class="stock-sell-row stock-sell-target" title="${escapeAttr(sellInfo.target.tooltip)}">
                             <span class="stock-sell-tag stock-target-tag">+${sellInfo.targetLabel}%</span>
                             <span class="stock-target-price">${sellInfo.target.formatted}</span>
                         </div>
@@ -1360,10 +1417,58 @@
         const btnCloseKey = document.getElementById('btn-close-stock-key');
         const btnCancelKey = document.getElementById('btn-stock-key-cancel');
         const btnSaveKey = document.getElementById('btn-stock-key-save');
+        const modeToggleEl = document.getElementById('stock-mode-toggle');
+        const paneLocal = document.getElementById('stock-pane-local');
+        const paneRelay = document.getElementById('stock-pane-relay');
         const inputClientId = document.getElementById('input-stock-client-id');
         const inputClientSecret = document.getElementById('input-stock-client-secret');
+        const inputRelayUrl = document.getElementById('input-stock-relay-url');
+        const inputRelayToken = document.getElementById('input-stock-relay-token');
         const currentIpEl = document.getElementById('stock-current-ip');
         const keyStatus = document.getElementById('stock-key-status');
+        let activeConnectionMode = 'local';
+        let publicIpFetched = false;
+
+        async function refreshPublicIpIfNeeded() {
+            if (!currentIpEl || publicIpFetched) return;
+            currentIpEl.textContent = '조회 중...';
+            try {
+                const resp = await fetch('https://api.ipify.org?format=json');
+                const ipData = await resp.json();
+                if (ipData && ipData.ip) {
+                    currentIpEl.textContent = ipData.ip;
+                    publicIpFetched = true;
+                    return;
+                }
+            } catch (e) {}
+            currentIpEl.textContent = '확인 불가 (포털 확인 요망)';
+        }
+
+        function setStockConnectionMode(mode) {
+            activeConnectionMode = mode === 'relay' ? 'relay' : 'local';
+            if (modeToggleEl) {
+                modeToggleEl.querySelectorAll('.stock-mode-btn').forEach((btn) => {
+                    btn.classList.toggle('active', btn.getAttribute('data-mode') === activeConnectionMode);
+                });
+            }
+            if (paneLocal) paneLocal.style.display = activeConnectionMode === 'local' ? 'flex' : 'none';
+            if (paneRelay) paneRelay.style.display = activeConnectionMode === 'relay' ? 'flex' : 'none';
+            if (activeConnectionMode === 'local') {
+                refreshPublicIpIfNeeded();
+            }
+        }
+
+        if (modeToggleEl) {
+            modeToggleEl.querySelectorAll('.stock-mode-btn').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    setStockConnectionMode(btn.getAttribute('data-mode'));
+                    if (keyStatus) {
+                        keyStatus.textContent = '';
+                        keyStatus.className = 'stock-key-status';
+                    }
+                });
+            });
+        }
 
         if (btnStockRefresh) {
             btnStockRefresh.addEventListener('click', async () => {
@@ -1469,7 +1574,7 @@
             });
         }
 
-        // Key Modal
+        // Key / Connection Modal
         async function openStockKeyModal() {
             if (!modalKey) return;
             isModalOpen = true;
@@ -1479,18 +1584,22 @@
                 keyStatus.className = 'stock-key-status';
             }
 
-            if (currentIpEl) {
-                currentIpEl.textContent = '조회 중...';
+            if (window.eel && window.eel.get_stock_connection_config) {
                 try {
-                    const resp = await fetch('https://api.ipify.org?format=json');
-                    const ipData = await resp.json();
-                    if (ipData && ipData.ip) {
-                        currentIpEl.textContent = ipData.ip;
+                    const cfg = await window.eel.get_stock_connection_config()();
+                    if (cfg) {
+                        if (inputClientId) inputClientId.value = cfg.client_id || '';
+                        if (inputClientSecret) inputClientSecret.value = cfg.client_secret || '';
+                        if (inputRelayUrl) inputRelayUrl.value = cfg.relay_url || '';
+                        if (inputRelayToken) inputRelayToken.value = cfg.relay_token || '';
+                        setStockConnectionMode(cfg.connection_mode === 'relay' ? 'relay' : 'local');
+                        return;
                     }
                 } catch (e) {
-                    currentIpEl.textContent = '확인 불가 (포털 확인 요망)';
+                    console.error('Failed to load stock connection config:', e);
                 }
             }
+            setStockConnectionMode(activeConnectionMode);
         }
 
         function closeStockKeyModal() {
@@ -1508,33 +1617,43 @@
             btnSaveKey.addEventListener('click', async () => {
                 const cid = inputClientId ? inputClientId.value.trim() : '';
                 const csec = inputClientSecret ? inputClientSecret.value.trim() : '';
+                const rUrl = inputRelayUrl ? inputRelayUrl.value.trim() : '';
+                const rTok = inputRelayToken ? inputRelayToken.value.trim() : '';
+
                 if (keyStatus) {
-                    keyStatus.textContent = '인증 검증 중...';
+                    keyStatus.textContent = activeConnectionMode === 'relay'
+                        ? '릴레이 서버 연결 확인 중...'
+                        : '인증 검증 중...';
                     keyStatus.className = 'stock-key-status';
                 }
-                if (window.eel && window.eel.save_stock_api_keys) {
-                    try {
-                        const res = await window.eel.save_stock_api_keys(cid, csec)();
-                        if (res && res.success) {
-                            if (keyStatus) {
-                                keyStatus.textContent = res.message || '저장되었습니다.';
-                                keyStatus.className = 'stock-key-status success';
-                            }
-                            setTimeout(() => {
-                                closeStockKeyModal();
-                                loadStockDashboard();
-                            }, 800);
-                        } else {
-                            if (keyStatus) {
-                                keyStatus.textContent = (res && res.error) ? res.error : '인증 실패';
-                                keyStatus.className = 'stock-key-status error';
-                            }
-                        }
-                    } catch (err) {
+
+                try {
+                    let res = null;
+                    if (window.eel && window.eel.save_stock_connection_config) {
+                        res = await window.eel.save_stock_connection_config(activeConnectionMode, cid, csec, rUrl, rTok)();
+                    } else if (window.eel && window.eel.save_stock_api_keys) {
+                        res = await window.eel.save_stock_api_keys(cid, csec)();
+                    }
+
+                    if (res && res.success) {
                         if (keyStatus) {
-                            keyStatus.textContent = '네트워크/서버 오류';
+                            keyStatus.textContent = res.message || '저장되었습니다.';
+                            keyStatus.className = 'stock-key-status success';
+                        }
+                        setTimeout(() => {
+                            closeStockKeyModal();
+                            loadStockDashboard();
+                        }, 800);
+                    } else {
+                        if (keyStatus) {
+                            keyStatus.textContent = (res && res.error) ? res.error : '연결/인증 실패';
                             keyStatus.className = 'stock-key-status error';
                         }
+                    }
+                } catch (err) {
+                    if (keyStatus) {
+                        keyStatus.textContent = '네트워크/서버 오류';
+                        keyStatus.className = 'stock-key-status error';
                     }
                 }
             });
