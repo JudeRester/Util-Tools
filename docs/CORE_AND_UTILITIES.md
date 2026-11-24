@@ -104,14 +104,6 @@ stateDiagram-v2
 - **하단 섹션: 프로그램 & 도구 빠른 실행 (`quick_launch`)**:
   - 개발 서버 구동 스크립트(`.bat`), 데스크톱 실행 파일(`.exe`), 웹 관리자 페이지(URL), SSH 접속 명령어를 실행.
   - 전용 [⚙️ 편집] 모달을 통한 실시간 추가/수정/삭제 및 마우스 드래그 앤 드롭 카드 순서 변경 (`order_index`).
-- **통합 AI 코딩 세션 허브 (Unified AI Sessions Hub: Antigravity CLI & OpenCodex)**:
-  - `services/agy_service.py` 및 `services/opencodex_service.py` 기반으로 머신 내 Antigravity(`agy`)와 OpenCodex(`ocx`) 세션을 통합 수집 및 제어.
-  - **터미널 세션 실행 및 창 전환**: 자체 위젯 창 오인 포커스 방어 및 ConPTY/Windows Terminal 호스트 역추적 기반 활성 콘솔 창 전면 전환, 신규 CLI 세션 백그라운드 분기 실행.
-  - **5ms 논블로킹 활성 락 감지**: `msvcrt.locking` 파일 락 검사로 현재 실행 중인 세션 실시간 식별.
-  - **비차단 영구 삭제 및 모달 연동**: `showAppConfirm` 모달을 통해 비활성 세션을 영구 삭제하며, 실행 중인 세션은 삭제 방어.
-  - **실시간 Tail 인스펙터**: Rollout / Transcript 스트리밍으로 턴별 프롬프트, 도구 호출, 결과 확인.
-  - **스마트 세션 알림 구독**: 완료(`DONE`) 및 터미널 권한 승인 대기(`BypassSandbox`) 발생 시 Windows 트레이/토스트/차임벨 전송.
-  - *(※ 데이터 소스, 스키마, 락 메커니즘 등 상세 아키텍처는 [`docs/AI_CODING_SESSIONS.md`](AI_CODING_SESSIONS.md)를 참조하십시오.)*
 
 ---
 
@@ -182,7 +174,7 @@ stateDiagram-v2
 ```
 
 ### 8-1. pywebview 하이브리드 아키텍처 및 동적 리사이징 (`core/edge_widget.py`)
-- **Eel-pywebview 병렬 브리지**: Eel 메인 창과 pywebview 위젯 창이 동일한 백엔드 포트를 공유하며, `<script src="/eel.js"></script>`를 통해 26개 서비스의 RPC를 그대로 재사용합니다.
+- **Eel-pywebview 병렬 브리지**: Eel 메인 창과 pywebview 위젯 창이 동일한 백엔드 포트를 공유하며, `<script src="/eel.js"></script>`를 통해 24개 서비스의 RPC를 그대로 재사용합니다.
 - **단일 HWND 생명주기 관리**: 창을 파괴하고 다시 생성하지 않고, 단일 OS 네이티브 창의 크기를 `resize(width, height, fix_point)`로 전환합니다.
 - **수직/수평 FixPoint 동적 앵커**:
   - 수평 앵커: 우측 엣지(`FixPoint.EAST`, 좌측으로 확장) / 좌측 엣지(`FixPoint.WEST`, 우측으로 확장).

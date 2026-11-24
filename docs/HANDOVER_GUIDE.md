@@ -28,13 +28,12 @@ flowchart TD
     Eel <--> WebUI["프론트엔드 UI (Vanilla JS, CSS3 Dark)"]
     Core <--> EdgeWidget["엣지 퀵 위젯 (pywebview + FullscreenGuard)"]
     
-    subgraph BackendServices ["백엔드 서비스 레이어 (services/ - 26종)"]
+    subgraph BackendServices ["백엔드 서비스 레이어 (services/ - 24종)"]
         DB["SQLite 중앙 DB (data/app.db - 21개 사용자 테이블, WAL Mode)"]
         AI["로컬 AI 시맨틱 검색 (ONNX Transformer)"]
         Whisper["Whisper 음성전사 & 화자분리 (faster-whisper, sherpa-onnx)"]
         OCR["Windows Media OCR Studio (winocr, Lanczos ROI)"]
         Diff["Text Diff Checker (Myers 인라인 diff)"]
-        SessionHub["통합 AI 코딩 세션 허브 (Antigravity & OpenCodex)"]
         Stock["실시간 주식 & 환율 스트리밍 (Toss Open API / Relay)"]
         EmailImap["이메일 아카이브 & IMAP 단방향 동기화 (OAuth2 / App PW)"]
         Redmine["Redmine 2-Way 동기화 & 위키 뷰어"]
@@ -56,7 +55,7 @@ flowchart TD
 - **Text Diff & QR**: Python `difflib` (Myers 알고리즘 확장, 토큰 단위 인라인 diff), 클라이언트 사이드 QR 스캔(`jsqr.min.js`) 및 생성(`qrcode.min.js`)
 - **AI/ML**: `intfloat/multilingual-e5-small` 양자화(Quantized) ONNX 신경망 모델 (로컬 의미론적 문맥 검색)
 - **Logging & Crash Defense**: `core/logger.py` 전역 `LogStreamRedirector` (stdout/stderr 가로채기), 순환 링 버퍼, `threading.excepthook` 기반 백그라운드 스레드 크래시 방어
-- **Frontend**: Vanilla JavaScript (ES6+, 29개 모듈), HTML5, CSS3 다크 테마 (No-Framework, 제로 빌드 스텝)
+- **Frontend**: Vanilla JavaScript (ES6+, 28개 모듈), HTML5, CSS3 다크 테마 (No-Framework, 제로 빌드 스텝)
 - **Tooling**: Node.js (`node -c` 구문 검증용)
 
 ---
@@ -124,7 +123,7 @@ pip install -r requirements.txt
 - **`[🚪 종료]`** 버튼 클릭 시 트레이 아이콘 및 백엔드 프로세스가 종료됩니다.
 
 ### 5) 데스크톱 엣지 퀵 위젯, 주식/환율 스트리밍 & FullscreenGuard (pywebview 하이브리드)
-- **Eel-pywebview 병렬 브리지**: Eel 메인 창과 pywebview 위젯 창(`core/edge_widget.py`)이 동일한 백엔드 포트를 공유하여 26개 서비스의 RPC를 그대로 재사용합니다.
+- **Eel-pywebview 병렬 브리지**: Eel 메인 창과 pywebview 위젯 창(`core/edge_widget.py`)이 동일한 백엔드 포트를 공유하여 24개 서비스의 RPC를 그대로 재사용합니다.
 - **플러시 엣지 도크 탭 (Flush Edge Tab)**: 윈도우 사각 캔버스를 100% 채우는 밀착형 직각 탭(`border-radius: 0`)과 `background_color="#1e1e2d"` 동기화로 모서리 잔여물 없이 렌더링됩니다.
 - **3단계 크기 프리셋**: `slim`(12×70, 기본값), `default`(20×120), `compact`(8×50) 지원 및 헤더 📏 메뉴 / 트레이 메뉴를 통한 런타임 실시간 리사이징.
 - **실시간 주식 & 환율 탭 (`services/stock_service.py`)**:
@@ -182,10 +181,8 @@ Util-Tools/
 │   ├── stock_config.json       # Toss API / Relay 연결 설정, 그룹별 관심종목 및 환율 캐시
 │   └── stock_master.json       # 동기화된 국내/미국 상장 종목 유니버스 검색 캐시
 │
-├── services/                   # [백엔드 서비스 레이어] (@eel.expose 바인딩 모듈 26종)
+├── services/                   # [백엔드 서비스 레이어] (@eel.expose 바인딩 모듈 24종)
 │   ├── db_service.py           # 중앙 SQLite 커넥션 풀, WAL 모드, 테이블 초기화 (21개 사용자 테이블)
-│   ├── agy_service.py          # Google Antigravity CLI 세션 파싱, 감시 및 터미널 런처
-│   ├── opencodex_service.py    # OpenAI OpenCodex 세션, 5ms 파일 락, Live Tail 파서
 │   ├── stock_service.py        # Toss Open API/Relay 주가·환율 스트리밍, 전일 종가 보정, 5단계 추세
 │   ├── imap_service.py         # IMAP4_SSL 단방향 아카이브, Google OAuth 2.0(XOAUTH2), 폴링 데몬
 │   ├── qr_service.py           # QR 포맷 자동 판별, 외부 URL 오픈, PNG 저장 및 이력 CRUD
@@ -215,14 +212,13 @@ Util-Tools/
 │   ├── style.css               # 전역 다크 테마 디자인 시스템 및 컴포넌트 스타일
 │   ├── widget.html             # 엣지 핸들 및 확장 퀵 위젯 전용 마크업 (주식/환율·시스템 제어 탭)
 │   ├── widget.css              # 플러시 엣지 탭, 주식 추세 뱃지 및 다크 프레임리스 위젯 스타일
-│   └── js/                     # 기능별 프론트엔드 모듈 (29개 파일)
+│   └── js/                     # 기능별 프론트엔드 모듈 (28개 파일)
 │       ├── app.js              # 탭 전환, 토스트, 공통 인레이어 모달 엔진
 │       ├── widget.js           # 엣지 위젯 클라이언트 로직 (호버 Dwell, 주식/환율, 드래그, 시스템 제어)
 │       ├── whisper.js          # 오디오 드래그앤드롭 업로드, Range 206 플레이어, 세그먼트 재생, SRT/VTT/TXT
 │       ├── diff_checker.js     # 텍스트 비교 UI, 좌우 분할/단일 뷰, 공백/대소문자 토글, 동기화 스크롤
 │       ├── ocr.js              # 대화형 캔버스 ROI 영역 선택, 다국어 OCR, 텍스트 복사 및 히스토리
 │       ├── qr_toolkit.js       # QR 스캔/생성, jsqr.min.js / qrcode.min.js 연동 및 이력 관리
-│       ├── agy_sessions.js     # AI 세션 허브 대시보드, 필터, Live Tail 모달
 │       ├── redmine.js          # Redmine 일감/위키 대시보드 및 인라인 편집기
 │       ├── email_viewer.js     # 이메일 스레드 타임라인, IMAP OAuth/폴링 모달 & 외부 리소스 차단 가드
 │       ├── ai_search.js        # Ctrl+K 시맨틱 검색 팝업 & 문장 유사도 측정기
@@ -230,7 +226,7 @@ Util-Tools/
 │       ├── mermaid_diagram.js  # Mermaid 3-Pane 스튜디오, 편집/수정, 줌/팬 뷰포트
 │       ├── notes.js            # 빠른 메모, 카테고리 관리, 4종 정렬, Tab/Shift+Tab 들여쓰기
 │       ├── calendar.js         # 월간 캘린더, 선 캐시 렌더링, 일정 알림 설정 & 차임벨
-│       └── ...                 # (총 29개 JS 모듈)
+│       └── ...                 # (총 28개 JS 모듈)
 │
 ├── scripts/                    # [검증 및 자동화 하네스 (14종)]
 │   ├── verify_integrity.py     # 🌟 5단계 동적 무결성 검증 하네스 (Zero-Maintenance)
@@ -312,9 +308,9 @@ git status --short
 python scripts/verify_integrity.py
 ```
 - **검증 항목**:
-  1. `Step 1`: Python 전수 동적 컴파일 (`py_compile` - 52개 `.py`/`.pyw` 파일 바이트코드 검증)
-  2. `Step 2`: 백엔드 서비스 전수 동적 임포트 & SQLite DB 무결성 검증 (`services/*.py` 26종, `init_db` - 21개 사용자 테이블 / `sqlite_sequence` 포함 22개 테이블)
-  3. `Step 3`: 프론트엔드 JavaScript 전수 문법 검사 (`node -c` - 29개 모듈 AST 검증)
+  1. `Step 1`: Python 전수 동적 컴파일 (`py_compile` - `.py`/`.pyw` 파일 바이트코드 검증)
+  2. `Step 2`: 백엔드 서비스 전수 동적 임포트 & SQLite DB 무결성 검증 (`services/*.py` 24종, `init_db` - 21개 사용자 테이블 / `sqlite_sequence` 포함 22개 테이블)
+  3. `Step 3`: 프론트엔드 JavaScript 전수 문법 검사 (`node -c` - 28개 모듈 AST 검증)
   4. `Step 4`: 스타일시트 중괄호(`{ == }`) 짝 일치 검증 (`web/style.css`, `web/widget.css`)
   5. `Step 5`: 코어 진입점 및 시스템 트레이 아이콘 인스턴스화 검증 (`TrayManager`)
 - **성공 기준**: `ALL VERIFICATION CHECKS PASSED (5/5)` 및 `Exit Code 0`.
@@ -343,8 +339,7 @@ git commit -m "feat(module): 작업 내용 기술 (#이슈번호)"
 
 | 도메인 | 문서 경로 | 핵심 내용 |
 | :--- | :--- | :--- |
-| **통합 AI 세션 허브** | [`docs/AI_CODING_SESSIONS.md`](AI_CODING_SESSIONS.md) | Antigravity & OpenCodex 듀얼 세션 파싱, 5ms 파일 락, Live Tail, 터미널 전환 |
-| **중앙 데이터베이스** | [`docs/DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) | SQLite 21개 사용자 테이블 ERD, WAL 모드, JSON 설정 파일, 외부 CLI DB 규격 |
+| **중앙 데이터베이스** | [`docs/DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) | SQLite 21개 사용자 테이블 ERD, WAL 모드, JSON 설정 파일 규격 |
 | **OCR 엔진 아키텍처** | [`docs/OCR_ENGINE_ARCHITECTURE.md`](OCR_ENGINE_ARCHITECTURE.md) | Windows Media OCR vs RapidOCR 벤치마크, Lanczos 스케일링, ROI 대화형 인식 |
 | **Redmine 협업** | [`docs/REDMINE_INTEGRATION.md`](REDMINE_INTEGRATION.md) | Redmine REST API 2-Way 동기화, 일감/위키 캐싱, 관심 프로젝트 필터 |
 | **이메일 아카이브** | [`docs/EMAIL_ARCHIVE.md`](EMAIL_ARCHIVE.md) | 3,100+건 EML 아카이브, IMAP 단방향 동기화(OAuth2/App PW), 스레딩, 트래킹 차단 가드 |

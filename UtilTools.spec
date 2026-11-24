@@ -66,8 +66,6 @@ hidden_imports = [
     'services.mock_data_service',
     'services.redmine_service',
     'services.image_service',
-    'services.agy_service',
-    'services.opencodex_service',
     'services.whisper_service',
     'services.ocr_service',
     'services.diff_service',
