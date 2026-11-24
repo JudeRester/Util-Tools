@@ -157,13 +157,11 @@ function initTabOnDemand(tabName) {
 
     switch (tabName) {
         case 'system':
-            if (typeof initAgyIntegration === 'function') initAgyIntegration();
             break;
         case 'launch':
         case 'files':
             if (typeof loadFolderShortcuts === 'function') loadFolderShortcuts();
             if (typeof loadQuickLaunchItems === 'function') loadQuickLaunchItems();
-            if (typeof initAgyIntegration === 'function') initAgyIntegration();
             break;
         case 'generator':
             if (typeof loadGenerators === 'function') loadGenerators();
@@ -375,11 +373,6 @@ function switchTab(targetTab) {
 document.addEventListener('DOMContentLoaded', async () => {
     // 백엔드 app_settings.json 영구 설정 로드
     await loadAppSettings();
-
-    // agy-cli 세션 연동 환경 및 토글 상태 초기화
-    if (typeof initAgyIntegration === 'function') {
-        initAgyIntegration();
-    }
 
     // 탭 버튼 클릭 이벤트 바인딩
     const tabButtons = document.querySelectorAll('.tab-btn');

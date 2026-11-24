@@ -1,7 +1,7 @@
 # 🛠️ Utility Toolkit (유틸리티 도구 모음)
 
 Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스크톱 유틸리티 도구 모음입니다.  
-중앙 **SQLite DB(`data/app.db`)** 기반 데이터 영속화와 **로컬 AI 시맨틱 검색 엔진(Multilingual-E5 ONNX)**, **통합 AI 코딩 세션 허브(Antigravity CLI & OpenCodex)**를 내장하고 있으며, 백그라운드 시스템 트레이에 상주하여 다양한 개발 및 업무 도구를 간편하게 실행할 수 있습니다.
+중앙 **SQLite DB(`data/app.db`)** 기반 데이터 영속화와 **로컬 AI 시맨틱 검색 엔진(Multilingual-E5 ONNX)**을 내장하고 있으며, 백그라운드 시스템 트레이에 상주하여 다양한 개발 및 업무 도구를 간편하게 실행할 수 있습니다.
 
 ---
 
@@ -9,7 +9,6 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 
 | 카테고리 | 주요 제공 기능 |
 | :--- | :--- |
-| **🤖 통합 AI 코딩 세션 허브<br>(Antigravity & OpenCodex)** | • **듀얼 AI 에이전트 세션 통합 대시보드**: Google Antigravity(`agy`) 및 OpenAI OpenCodex(`ocx`) 세션을 통합 수집하여 타임스탬프 순 일원화 관리<br>• **터미널 실행 및 윈도우 전면 전환**: Alt 키 시뮬레이션 기반의 활성 콘솔 창 즉각 포커스 및 신규 대화형 터미널 백그라운드 분기 실행<br>• **5ms 논블로킹 활성 락 검사**: `msvcrt.locking` 파일 락 검사로 현재 터미널 실행 중인 세션을 실시간 감지<br>• **실시간 Live Tail 인스펙터**: Rollout JSONL 및 Transcript 스트리밍으로 턴별 프롬프트, 도구 호출, 결과 인앱 실시간 확인<br>• **비차단 영구 삭제**: `showAppConfirm` 모달을 통한 비활성 세션 영구 삭제 및 활성 세션 삭제 방어<br>• **클라우드 대화 필터링**: `codex-dev.db`의 웹 ChatGPT 동기화 내역을 배제하고 로컬 작업 워크스페이스 세션만 선별 노출<br>• **스마트 알림 파이프라인**: 턴 완료(`DONE`) 및 권한 승인 대기(`BypassSandbox`) 발생 시 Windows 트레이 알림 + 토스트 + 차임벨 전송 |
 | **🎙️ Whisper 음성 전사 & 화자 분리<br>(Whisper STT Studio)** | • **faster-whisper + sherpa-onnx 듀얼 엔진**: `faster-whisper`(CUDA/CPU int8) 고속 로컬 음성 전사와 `sherpa-onnx`(pyannote 3.0 VAD + 3D-Speaker 임베딩) 오프라인 화자 분리(Diarization)<br>• **Active Interval Sweep 정렬**: 전사 세그먼트와 화자 발화 구간 사이의 시간 오버랩을 수학적으로 정밀 스위핑하여 발화자 ID(예: `Speaker 01`) 자동 매핑<br>• **대용량 미디어 스트리밍**: HTTP Range 206 지원으로 100MB+ 음성/동영상 파일의 즉시 탐색 및 부분 버퍼링 재생<br>• **안전한 파일 업로드 & OOM 방어**: 오디오 드래그 앤 드롭 바이너리 업로드 감시견 및 GPU VRAM 부족 시 CPU 백오프 자동 전환<br>• **다양한 자막 내보내기**: 타임스탬프 및 화자 태그가 포함된 SRT, VTT, TXT 형식 내보내기 지원 |
 | **🔍 텍스트 비교 (Diff Checker)** | • **Myers 알고리즘 토큰 단위 Diff**: Python `difflib.SequenceMatcher` 기반 행 단위 및 단어/토큰 단위 인라인 변경(`+`, `-`, `~`) 정밀 하이라이트<br>• **Side-by-Side & Unified 뷰**: 좌우 분할 나란히 보기와 단일 통합 스트림 보기를 원클릭으로 전환<br>• **유연한 전처리 필터**: 공백 무시(`ignore_whitespace`) 및 대소문자 무시(`ignore_case`) 옵션 지원<br>• **동기화 스크롤**: 좌우 텍스트 에디터 및 결과 뷰포트 간의 비례 동기화 스크롤 엔진 내장 |
 | **📷 Windows Media OCR Studio** | • **네이티브 Windows Media OCR**: 외부 대용량 가중치 없이 Windows 10/11 내장 `winocr`(`winrt`) 엔진을 직접 호출하여 0.05~0.1초 초고속 텍스트 인식<br>• **적응형 Lanczos 리스케일링**: Pillow Lanczos 보간 필터 전처리를 통해 저해상도 및 비표준 종횡비 텍스트 인식률 극대화<br>• **대화형 HTML5 캔버스 ROI**: 마우스 드래그를 통한 관심 영역(ROI) 지정 인식, 다국어(한국어, 영어, 일본어, 중국어) 지원, SQLite 영구 히스토리 보관 |
@@ -34,8 +33,7 @@ Python **Eel**과 **HTML5/CSS/JavaScript** 기반의 모던 다크 테마 데스
 | 문서명 | 주요 다루는 기술 영역 및 아키텍처 | 바로가기 링크 |
 | :--- | :--- | :--- |
 | **🤝 Handover Guide (인수인계서)** | • **개발 환경 셋업, 핵심 수명주기 아키텍처, 6대 개발 규정, 작업 완료 전 무결성 검증 체크리스트**<br>• 경로 참조 원칙, 비차단 UI 규정, GitFlow 브랜치 보호 및 무결성 검증 파이프라인 | [📖 `docs/HANDOVER_GUIDE.md`](docs/HANDOVER_GUIDE.md) |
-| **🤖 AI Coding Sessions Hub** | • **통합 AI 세션 허브: Antigravity CLI(`agy`) & OpenCodex(`ocx`) 듀얼 엔진 아키텍처**<br>• **5ms 논블로킹 활성 락 검사**, `mode=ro` SQLite 카탈로그 조회, 실시간 Live Tail 파서, 창 전환 | [📖 `docs/AI_CODING_SESSIONS.md`](docs/AI_CODING_SESSIONS.md) |
-| **🗄️ Database Architecture & Schema** | • **중앙 SQLite DB(`data/app.db`) 21개 사용자 테이블(총 22개 SQLite 테이블) 전체 ERD & 스키마 명세**<br>• WAL 모드 및 성능 PRAGMA 최적화, 인덱스 커버리지, JSON 설정 파일 및 외부 AI CLI DB 연동 규격 | [📖 `docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) |
+| **🗄️ Database Architecture & Schema** | • **중앙 SQLite DB(`data/app.db`) 21개 사용자 테이블(총 22개 SQLite 테이블) 전체 ERD & 스키마 명세**<br>• WAL 모드 및 성능 PRAGMA 최적화, 인덱스 커버리지, JSON 설정 파일 연동 규격 | [📖 `docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) |
 | **📷 OCR Engine Architecture** | • **Windows Media OCR 네이티브 파이프라인 vs RapidOCR 정밀 벤치마크**<br>• Pillow Lanczos 적응형 리스케일링, 대화형 HTML5 ROI 캔버스, 다국어 텍스트 인식 | [📖 `docs/OCR_ENGINE_ARCHITECTURE.md`](docs/OCR_ENGINE_ARCHITECTURE.md) |
 | **🦊 Redmine Integration** | • **Redmine REST API 연동, 일감/위키 대시보드, SQLite 오프라인 캐시**<br>• **주요 관심 프로젝트(⭐ 즐겨찾기) 우선순위 필터링**, 백그라운드 폴링 & 트레이 알림 | [📖 `docs/REDMINE_INTEGRATION.md`](docs/REDMINE_INTEGRATION.md) |
 | **📧 Email Archive System** | • **3,100+건 대용량 이메일 아카이브, IMAP 단방향 누적 동기화(앱 비밀번호 / Google OAuth 2.0 `XOAUTH2`)**<br>• 비파괴적 제목 정규화 스레딩, 자동 AI 벡터 임베딩, HTML 외부 이미지/트래킹 픽셀 차단 가드 | [📖 `docs/EMAIL_ARCHIVE.md`](docs/EMAIL_ARCHIVE.md) |
@@ -63,7 +61,6 @@ Util-Tools/
 ├── docs/                       # [기술 문서] 기능별 상세 아키텍처, 프로토콜 규격 및 인수인계서
 │   ├── plans/                  # [기획 문서] 세션 센터, 런처 통합 등 구현 기획서 보관소
 │   ├── HANDOVER_GUIDE.md       # 종합 개발 및 운영 인수인계서 (6대 규정, 체크리스트)
-│   ├── AI_CODING_SESSIONS.md   # 통합 AI 코딩 세션 허브: Antigravity CLI & OpenCodex 듀얼 엔진 아키텍처
 │   ├── DATABASE_SCHEMA.md      # 중앙 SQLite DB(app.db) 21개 사용자 테이블 ERD 및 상세 스키마 명세
 │   ├── OCR_ENGINE_ARCHITECTURE.md # Windows Media OCR vs RapidOCR 벤치마크 및 아키텍처
 │   ├── REDMINE_INTEGRATION.md  # Redmine REST API 연동, 일감/위키, 주요 프로젝트⭐ 우선순위
@@ -91,17 +88,15 @@ Util-Tools/
 │
 ├── core/                       # [코어 시스템]
 │   ├── __init__.py
-│   ├── paths.py                # 개발 모드 & 배포본(.exe) 중앙 표준 경로 관리자 (APP_VERSION: 0.22.10)
+│   ├── paths.py                # 개발 모드 & 배포본(.exe) 중앙 표준 경로 관리자 (APP_VERSION: 0.23.0)
 │   ├── single_instance.py      # Windows Named Semaphore 기반 단일 인스턴스 중복 방지 매니저
 │   ├── edge_widget.py          # pywebview 단일 창 엣지 핸들 ↔ 380x620 퀵 위젯 생명주기 관리자
 │   ├── fullscreen_guard.py     # Win32 SetWinEventHook 기반 전체화면 감지 및 No-activate 복원
 │   ├── logger.py               # 전역 로거, stdout/stderr 가로채기, 스레드 크래시 방어 및 링 버퍼
 │   └── tray.py                 # pystray 트레이 아이콘, 핸들 크기 서브메뉴, 윈도우 생명주기 및 알림 관리자
 │
-├── services/                   # [백엔드 서비스 모듈 (Python - 26종)]
+├── services/                   # [백엔드 서비스 모듈 (Python - 24종)]
 │   ├── __init__.py
-│   ├── agy_service.py          # 통합 AI 세션 컨트롤러, Antigravity CLI 파서, 감시 & 삭제 라우팅
-│   ├── opencodex_service.py    # OpenCodex(ocx) SQLite 세션 카탈로그, 5ms 파일 락, rollout 파서
 │   ├── stock_service.py        # Toss Open API/Relay 주가·환율 스트리밍, 전일 종가 보정 & 5단계 추세 연산
 │   ├── imap_service.py         # IMAP4_SSL 단방향 아카이빙, Google OAuth 2.0(XOAUTH2), 백그라운드 폴링
 │   ├── qr_service.py           # QR 포맷 자동 판별, 외부 URL 열기, PNG 저장 & SQLite 이력 CRUD
@@ -123,17 +118,17 @@ Util-Tools/
 │   ├── quick_launch_service.py # 빠른 실행/SSH/URL SQLite CRUD
 │   ├── shortcuts_service.py    # 폴더 바로가기 SQLite CRUD 및 터미널 런처
 │   ├── calendar_service.py     # 구글 캘린더/iCal 파싱, 로컬 캐싱 및 30초 주기 알림 데몬
-│   ├── settings_service.py     # 창 크기/테마/agy·ocx 연동 설정 영구 관리
+│   ├── settings_service.py     # 창 크기/테마/레이아웃 설정 영구 관리
 │   ├── backup_service.py       # 전체 데이터 통합 JSON/ZIP 백업/복원 레지스트리
 │   └── dialog_service.py       # Tkinter 기반 파일/폴더 선택 대화상자
 │
 ├── web/                        # [프론트엔드 리소스]
-│   ├── index.html              # 메인 UI 마크업 (헤더 전원 제어, 드롭다운 메뉴, AI 세션 허브)
-│   ├── style.css               # 모던 다크 테마 CSS, AI 세션 뱃지, Live Tail & 헤더 스타일
+│   ├── index.html              # 메인 UI 마크업 (헤더 전원 제어, 드롭다운 메뉴)
+│   ├── style.css               # 모던 다크 테마 CSS & 헤더 스타일
 │   ├── widget.html             # 엣지 핸들 및 확장 퀵 위젯 전용 마크업 (주식/환율·시스템 제어 탭)
 │   ├── widget.css              # 플러시 엣지 탭, 주식 추세 뱃지 및 다크 프레임리스 위젯 스타일
 │   ├── utiltools.ico           # 브라우저 창 Favicon
-│   └── js/                     # [프론트엔드 모듈 (JavaScript - 29종)]
+│   └── js/                     # [프론트엔드 모듈 (JavaScript - 28종)]
 │       ├── app.js              # 탭 전환 네비게이션, 드롭다운 그룹 제어 및 공통 모달
 │       ├── widget.js           # 엣지 위젯 클라이언트 로직 (호버 Dwell, 주식/환율·드래그 정렬, 시스템 제어)
 │       ├── whisper.js          # 오디오 드래그앤드롭 업로드, Range 206 플레이어, 세그먼트 재생, 자막 내보내기
@@ -143,7 +138,6 @@ Util-Tools/
 │       ├── jsqr.min.js         # 클라이언트 사이드 QR 코드 디코딩 라이브러리
 │       ├── qrcode.min.js       # 클라이언트 사이드 QR 코드 생성 라이브러리
 │       ├── image_slicer.js     # 이미지 슬라이서 인터랙티브 캔버스, 다중 절단선 & ZIP 내보내기
-│       ├── agy_sessions.js     # 통합 AI 세션 테이블, 듀얼 모드 알림, Live Tail 모달 & 영구 삭제
 │       ├── console.js          # 하단 로그창, 스플리터 조절기 & 고도화된 토스트(Toast) 알림
 │       ├── drag_drop.js        # 공통 마우스 드래그 앤 드롭 핸들러
 │       ├── email_viewer.js     # EML 아카이브, IMAP 동기화/OAuth 모달, 트래킹 차단 가드 & 스레드 뷰어
@@ -230,12 +224,6 @@ python main.py
 
 * **AI 시맨틱 문맥 검색**:
   * `Ctrl + K`: 언제 어디서나 AI 시맨틱 검색 모달 즉시 호출
-* **통합 AI 코딩 세션 허브 (Antigravity & OpenCodex)**:
-  * 세션 행 **`[⚡ 실행]`**: 해당 프로젝트 디렉토리에서 대화형 터미널 오픈 또는 이미 열려 있는 콘솔 창 화면 전면 전환
-  * 세션 행 **`[🔍 보기]`**: 인앱 실시간 Live Tail 모달 호출 (프롬프트, 사고 과정, 도구 호출 및 결과 스트리밍 열람)
-  * 세션 행 **`[🗑️]`**: 비활성 세션 영구 삭제 (비차단 확인 모달 후 정리, 실행 중인 활성 세션은 삭제 방어)
-  * 상단 필터 바: 엔진별(`전체`/`AGY`/`OpenCodex`) 라디오 필터 및 `📁 프로젝트 ▾` 멀티 체크박스 필터링
-  * 알림 종 모양 클릭: `1회 알림 (One-Shot)` vs `지속 알림 (Persistent)` 선택
 * **📈 데스크톱 엣지 퀵 위젯 — 주식 & 환율 탭**:
   * 그룹 멀티 탭 전환, `⋮⋮` 드래그 핸들로 그룹 내 관심종목 카드 순서 변경
   * 종목명 좌측 **단타 추세 아이콘**(1분봉 EMA5/20), 티커 좌측 **스윙 추세 아이콘**(일봉 MA5/20) 호버 시 상세 툴팁 확인
